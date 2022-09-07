@@ -1,18 +1,14 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { FilmsController } from './films/films.controller';
-import { SeriesController } from './series/series.controller';
-import { SearchController } from './search/search.controller';
-import { ContributorsController } from './contributors/contributors.controller';
-import { FilmsService } from './films/films.service';
-import { SeriesService } from './series/series.service';
-import { ContributorsService } from './contributors/contributors.service';
-import { SearchService } from './search/search.service';
+import { SeriesModule } from './series/series.module';
+import { FilmsModule } from './films/films.module';
+import { SearchModule } from './search/search.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
-  imports: [],
-  controllers: [AppController, FilmsController, SeriesController, SearchController, ContributorsController],
-  providers: [AppService, FilmsService, SeriesService, ContributorsService, SearchService],
+  imports: [SeriesModule, FilmsModule, SearchModule, UsersModule],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
