@@ -7,6 +7,10 @@ import { SeriesModule } from './series/series.module';
 import { FilmsModule } from './films/films.module';
 import { SearchModule } from './search/search.module';
 import { UsersModule } from './users/users.module';
+import { PlatformsModule } from './platforms/platforms.module';
+import { PeopleModule } from './people/people.module';
+import { StillsModule } from './stills/stills.module';
+import { CompaniesModule } from './companies/companies.module';
 
 
 @Module({
@@ -30,7 +34,11 @@ import { UsersModule } from './users/users.module';
         synchronize: true
       }),
       inject: [ConfigService]
-    })
+    }),
+    PlatformsModule,
+    PeopleModule,
+    StillsModule,
+    CompaniesModule
   ],
   controllers: [AppController],
   providers: [AppService],
