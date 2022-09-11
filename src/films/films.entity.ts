@@ -1,4 +1,10 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany, ManyToMany , JoinTable  } from 'typeorm';
+import { Company } from '../companies/companies.entity';
+import { Role } from '../people/people.entity';
+import { WatchLink } from '../platforms/platforms.entity';
+import { Still } from '../stills/stills.entity';
+import { User } from '../users/users.entity';
+
 
 @Entity()
 export class Film{
@@ -6,31 +12,16 @@ export class Film{
 	id: number;
 
 	@Column()
-	currentDraft: number;
-
-	@Column()
-	status: string
-
-	@OneToMany((type) => FilmDraft, (filmDraft) => filmDraft.film)
-	drafts: FilmDraft[];
-}
-
-
-@Entity()
-export class FilmDraft{
-	@PrimaryGeneratedColumn()
-	id: number;
+	status: string;
 
 	@Column({
-		type: 'int',
-		nullable: false,
-		unique: true
+		type: 'datetime',
+		default: Date.now()
 	})
-	draftNumber: number;
+	dateCreated: string;
 
 	@Column({
-		type: 'varchar',
-		nullable: false
+		type: 'varchar'
 	})
 	name: string;
 
@@ -44,68 +35,166 @@ export class FilmDraft{
 		type: 'varchar',
 		nullable: true
 	})
-	trailerUrl: string
+	trailerUrl: string;
 
 	@Column({
-		type: 'varchar',
-		nullable: false
+		type: 'varchar'
 	})
-	filmType: string
+	filmType: string;
 
 	@Column({
-		type: 'varchar',
-		nullable: false
+		type: 'varchar'
 	})
-	productionStage: string
+	productionStage: string;
 
 	@Column({
 		type: 'int',
 		nullable: true
 	})
-	runtime: number
+	runtime: number;
 
 	@Column({
-		type: 'text',
-		nullable: false
+		type: 'text'
 	})
-	logline: string
+	logline: string;
 
 	@Column({
 		type: 'text',
 		nullable: true
 	})
-	plotSummary
+	plotSummary: string;
 
 	@Column({
-		type: 'date',
+		type: 'datetime',
 		nullable: true
 	})
-	releaseDate: string
+	releaseDate: string;
 
 	@Column({
 		type: 'varchar',
 		nullable: true
 	})
-	initialPlatform: string
+	initialPlatform: string;
+
+	@OneToMany((type) => WatchLink, (WatchLink) => WatchLink.film)
+	currentPlatforms: WatchLink[]
+
+	@ManyToMany((type) => Company, (company) => company.filmsProduced)
+	@JoinTable()
+	productionCompanies: Company[]
+
+	@ManyToMany((type) => Company, (company) => company.filmsDistributed)
+	@JoinTable()
+	distributionCompanies: Company[]
+
+	@OneToMany((type) => Still, (still) => still.film)
+	stillFrames: Still[]
+
+	@ManyToMany((type) => User, (user) => user.filmContributions)
+	@JoinTable()
+	authors: User[]
+
+	@OneToMany((type) => Role, (role) => role.film)
+	credits: Role[]
+
+	@OneToMany((type) => FilmHistory, (filmHistory) => filmHistory.film)
+	history: FilmHistory[]
+}
+
+// A table to track the primary changes of the film table
+@Entity()
+export class FilmHistory{
+	@PrimaryGeneratedColumn()
+	id: number;
+
+	@ManyToOne((type) => Film, (film) => film.history)
+	film: Film
+
+	@Column({
+		nullable: true
+	})
+	status: string;
+
+	@Column({
+		type: 'datetime',
+		default: Date.now(),
+		nullable: true
+	})
+	dateCreated: string;
 
 	@Column({
 		type: 'varchar',
 		nullable: true
 	})
-	currentPlatforms: string
+	name: string;
+
+	@Column({
+		type: 'varchar',
+		nullable: true
+	})
+	posterUrl: string;
+
+	@Column({
+		type: 'varchar',
+		nullable: true
+	})
+	trailerUrl: string;
+
+	@Column({
+		type: 'varchar',
+		nullable: true
+	})
+	filmType: string;
+
+	@Column({
+		type: 'varchar',
+		nullable: true
+	})
+	productionStage: string;
+
+	@Column({
+		type: 'int',
+		nullable: true
+	})
+	runtime: number;
+
+	@Column({
+		type: 'text',
+		nullable: true
+	})
+	logline: string;
+
+	@Column({
+		type: 'text',
+		nullable: true
+	})
+	plotSummary: string;
+
+	@Column({
+		type: 'datetime',
+		nullable: true
+	})
+	releaseDate: string;
+
+	@Column({
+		type: 'varchar',
+		nullable: true
+	})
+	initialPlatform: string;
+
+	// Columns for record keeping
+	@Column()
+	action: string
 
 	@Column()
-	productionCompanies: string
+	userId: string
+
+	@Column({
+		type: 'datetime',
+		default: Date.now()
+	})
+	dateSaved: string;
 
 	@Column()
-	distributionCompanies: string
-
-	@Column()
-	stillFrames: string
-
-	@Column()
-	authors: string
-
-	@ManyToOne((type) => Film, (film) => film.drafts)
-	film: Film;
+	revision: number
 }
