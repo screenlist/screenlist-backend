@@ -5,7 +5,6 @@ import { WatchLink } from '../platforms/platforms.entity';
 import { Still } from '../stills/stills.entity';
 import { User } from '../users/users.entity';
 
-
 @Entity()
 export class Film{
 	@PrimaryGeneratedColumn()
@@ -16,9 +15,9 @@ export class Film{
 
 	@Column({
 		type: 'datetime',
-		default: Date.now()
+		default: () => 'NOW()'
 	})
-	dateCreated: string;
+	dateCreated: Date;// needs work
 
 	@Column({
 		type: 'varchar'
@@ -64,11 +63,11 @@ export class Film{
 	})
 	plotSummary: string;
 
-	@Column({
-		type: 'datetime',
-		nullable: true
-	})
-	releaseDate: string;
+	// @Column({
+	// 	type: 'datetime',
+	// 	nullable: true
+	// })
+	// releaseDate: string;
 
 	@Column({
 		type: 'varchar',
@@ -115,12 +114,12 @@ export class FilmHistory{
 	})
 	status: string;
 
-	@Column({
-		type: 'datetime',
-		default: Date.now(),
-		nullable: true
-	})
-	dateCreated: string;
+	// @Column({
+	// 	type: 'datetime',
+	// 	default: Date.now(),
+	// 	nullable: true
+	// })
+	// dateCreated: string;
 
 	@Column({
 		type: 'varchar',
@@ -170,11 +169,11 @@ export class FilmHistory{
 	})
 	plotSummary: string;
 
-	@Column({
-		type: 'datetime',
-		nullable: true
-	})
-	releaseDate: string;
+	// @Column({
+	// 	type: 'datetime',
+	// 	nullable: true
+	// })
+	// releaseDate: string;
 
 	@Column({
 		type: 'varchar',
@@ -189,11 +188,11 @@ export class FilmHistory{
 	@Column()
 	userId: string
 
-	@Column({
-		type: 'datetime',
-		default: Date.now()
-	})
-	dateSaved: string;
+	// @Column({
+	// 	type: 'datetime',
+	// 	default: Date.now()
+	// })
+	// dateSaved: string;
 
 	@Column()
 	revision: number
