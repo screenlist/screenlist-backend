@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
-import { Platform } from './platforms.entity'
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Platform, WatchLink } from './platforms.entity'
 
 @Module({
-	imports: []
+	imports: [TypeOrmModule.forFeature([Platform, WatchLink])]
 })
 export class PlatformsModule {}

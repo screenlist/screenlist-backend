@@ -1,4 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany, ManyToMany } from 'typeorm';
+import { Film } from '../films/films.entity';
 
 @Entity()
 export class Platform{
@@ -6,9 +7,19 @@ export class Platform{
 	id: number
 
 	@Column({
-		type: 'varchar'
+		type: 'varchar',
+		unique: true
 	})
-	name: string
+	name: string;
+
+	@OneToMany((type) => WatchLink, (watchLink) => watchLink.platform)
+	watchLinks: WatchLink[]
+}
+
+@Entity()
+export class WatchLink{
+	@PrimaryGeneratedColumn()
+	id: number;
 
 	@Column({
 		type: 'varchar'
@@ -19,5 +30,11 @@ export class Platform{
 		type: 'varchar',
 		nullable: true
 	})
-	url: string
+	url: string;
+
+	@ManyToOne((type) => Film, (film) => film.currentPlatforms)
+	film: Film
+
+	@ManyToOne((type) => Platform, (platform) => platform.watchLinks)
+	platform: Platform;
 }
