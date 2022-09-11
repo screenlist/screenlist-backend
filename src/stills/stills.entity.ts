@@ -1,4 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany } from 'typeorm';
+import { Film } from '../films/films.entity'
 
 @Entity()
 export class Still{
@@ -6,7 +7,7 @@ export class Still{
 	id: string
 
 	@Column()
-	name: string
+	fileName: string
 
 	@Column()
 	description: string
@@ -16,4 +17,7 @@ export class Still{
 		nullable: false
 	})
 	url: string
+
+	@ManyToOne((type) => Film, (film) => film.stillFrames)
+	film: Film
 }
