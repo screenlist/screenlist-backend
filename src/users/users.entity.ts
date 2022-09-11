@@ -1,4 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany, ManyToMany, JoinTable } from 'typeorm';
+import { Film } from '../films/films.entity';
 
 @Entity()
 export class User{
@@ -25,8 +26,8 @@ export class User{
 	})
 	username: string;
 
-	@Column()
-	filmContribution: string;
+	@ManyToMany((type) => Film, (film) => film.authors)
+	filmContributions: string;
 
 	@Column()
 	seriesContribution: string;
