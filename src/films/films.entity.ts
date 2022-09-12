@@ -17,7 +17,7 @@ export class Film{
 		type: 'datetime',
 		default: () => 'NOW()'
 	})
-	dateCreated: Date;// needs work
+	dateCreated: Date;
 
 	@Column({
 		type: 'varchar'
@@ -63,11 +63,11 @@ export class Film{
 	})
 	plotSummary: string;
 
-	// @Column({
-	// 	type: 'datetime',
-	// 	nullable: true
-	// })
-	// releaseDate: string;
+	@Column({
+		type: 'datetime',
+		nullable: true
+	})
+	releaseDate: Date;
 
 	@Column({
 		type: 'varchar',
@@ -114,12 +114,11 @@ export class FilmHistory{
 	})
 	status: string;
 
-	// @Column({
-	// 	type: 'datetime',
-	// 	default: Date.now(),
-	// 	nullable: true
-	// })
-	// dateCreated: string;
+	@Column({
+		type: 'datetime',
+		nullable: true
+	})
+	dateCreated: Date;
 
 	@Column({
 		type: 'varchar',
@@ -169,11 +168,11 @@ export class FilmHistory{
 	})
 	plotSummary: string;
 
-	// @Column({
-	// 	type: 'datetime',
-	// 	nullable: true
-	// })
-	// releaseDate: string;
+	@Column({
+		type: 'datetime',
+		nullable: true
+	})
+	releaseDate: Date;
 
 	@Column({
 		type: 'varchar',
@@ -188,11 +187,11 @@ export class FilmHistory{
 	@Column()
 	userId: string
 
-	// @Column({
-	// 	type: 'datetime',
-	// 	default: Date.now()
-	// })
-	// dateSaved: string;
+	@Column({
+		type: 'datetime',
+		default: () => 'NOW()'
+	})
+	dateSaved: Date;
 
 	@Column()
 	revision: number
