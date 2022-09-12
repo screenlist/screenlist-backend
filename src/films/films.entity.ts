@@ -28,13 +28,13 @@ export class Film{
 		type: 'varchar',
 		nullable: true
 	})
-	posterUrl: string;
+	posterUrl?: string;
 
 	@Column({
 		type: 'varchar',
 		nullable: true
 	})
-	trailerUrl: string;
+	trailerUrl?: string;
 
 	@Column({
 		type: 'varchar'
@@ -50,7 +50,7 @@ export class Film{
 		type: 'int',
 		nullable: true
 	})
-	runtime: number;
+	runtime?: number;
 
 	@Column({
 		type: 'text'
@@ -61,22 +61,22 @@ export class Film{
 		type: 'text',
 		nullable: true
 	})
-	plotSummary: string;
+	plotSummary?: string;
 
 	@Column({
 		type: 'datetime',
 		nullable: true
 	})
-	releaseDate: Date;
+	releaseDate?: Date;
 
 	@Column({
 		type: 'varchar',
 		nullable: true
 	})
-	initialPlatform: string;
+	initialPlatform?: string;
 
 	@OneToMany((type) => WatchLink, (WatchLink) => WatchLink.film)
-	currentPlatforms: WatchLink[]
+	currentPlatforms?: WatchLink[]
 
 	@ManyToMany((type) => Company, (company) => company.filmsProduced)
 	@JoinTable()
@@ -84,10 +84,10 @@ export class Film{
 
 	@ManyToMany((type) => Company, (company) => company.filmsDistributed)
 	@JoinTable()
-	distributionCompanies: Company[]
+	distributionCompanies?: Company[]
 
 	@OneToMany((type) => Still, (still) => still.film)
-	stillFrames: Still[]
+	stillFrames?: Still[]
 
 	@ManyToMany((type) => User, (user) => user.filmContributions)
 	@JoinTable()
