@@ -20,7 +20,7 @@ export class Film{
 	dateCreated: Date;
 
 	@Column({
-		type: 'varchar'
+		type: 'varchar',
 	})
 	name: string;
 
@@ -39,7 +39,7 @@ export class Film{
 	@Column({
 		type: 'varchar'
 	})
-	filmType: string;
+	type: string;
 
 	@Column({
 		type: 'varchar'
@@ -74,6 +74,9 @@ export class Film{
 		nullable: true
 	})
 	initialPlatform?: string;
+
+	@Column()
+	slug: string;
 
 	@OneToMany((type) => WatchLink, (WatchLink) => WatchLink.film)
 	currentPlatforms?: WatchLink[]
