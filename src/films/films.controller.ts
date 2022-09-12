@@ -28,11 +28,12 @@ export class FilmsController {
 	}
 
 	@Post('create')
-	async create(films: Film[]): Promise<InsertResult | HttpException>{
+	async create(@Body() film: Film): Promise<InsertResult | HttpException>{
 		try{
-			return await this.filmsService.create(films)
-		} catch {
-			throw new HttpException("Not Found", 404)
+			return await this.filmsService.create(film)
+		} catch(err: unknown) {
+			console.log(err)
+			throw new HttpException(err, 404)
 		}
 	}
 }

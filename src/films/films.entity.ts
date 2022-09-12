@@ -75,7 +75,9 @@ export class Film{
 	})
 	initialPlatform?: string;
 
-	@Column()
+	@Column({
+		unique: true
+	})
 	slug: string;
 
 	@OneToMany((type) => WatchLink, (WatchLink) => WatchLink.film)
@@ -182,6 +184,11 @@ export class FilmHistory{
 		nullable: true
 	})
 	initialPlatform: string;
+
+	@Column({
+		unique: true
+	})
+	slug: string;
 
 	// Columns for record keeping
 	@Column()
