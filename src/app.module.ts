@@ -11,6 +11,7 @@ import { PlatformsModule } from './platforms/platforms.module';
 import { PeopleModule } from './people/people.module';
 import { StillsModule } from './stills/stills.module';
 import { CompaniesModule } from './companies/companies.module';
+import { PostersModule } from './posters/posters.module';
 
 
 @Module({
@@ -38,7 +39,8 @@ import { CompaniesModule } from './companies/companies.module';
     PlatformsModule,
     PeopleModule,
     StillsModule,
-    CompaniesModule
+    CompaniesModule,
+    PostersModule
   ],
   controllers: [AppController],
   providers: [AppService],
