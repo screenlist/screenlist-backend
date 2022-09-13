@@ -16,6 +16,7 @@ export class Poster{
 	})
 	url: string;
 
-	@OneToOne((type) => Film, (film) => film.stillFrames)
+	@OneToOne((type) => Film)
+	@JoinColumn()
 	film: Film;
 }
