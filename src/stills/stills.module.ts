@@ -5,6 +5,7 @@ import { StillsService } from './stills.service';
 
 @Module({
 	imports: [TypeOrmModule.forFeature([Still])],
-	providers: [StillsService]
+	providers: [StillsService],
+	exports: [TypeOrmModule]
 })
 export class StillsModule {}
