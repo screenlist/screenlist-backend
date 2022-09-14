@@ -1,16 +1,19 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany, ManyToMany , JoinTable  } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany, ManyToMany, OneToOne, JoinTable  } from 'typeorm';
 import { Company } from '../companies/companies.entity';
 import { Role } from '../people/people.entity';
 import { WatchLink } from '../platforms/platforms.entity';
 import { Still } from '../stills/stills.entity';
 import { User } from '../users/users.entity';
+import { Poster } from '../posters/posters.entity'
 
 @Entity()
 export class Film{
 	@PrimaryGeneratedColumn()
 	id: number;
 
-	@Column()
+	@Column({
+		default: 'public'
+	})
 	status: string;
 
 	@Column({
@@ -28,13 +31,7 @@ export class Film{
 		type: 'varchar',
 		nullable: true
 	})
-	posterUrl?: string;
-
-	@Column({
-		type: 'varchar',
-		nullable: true
-	})
-	trailerUrl?: string;
+	trailerUrl: string;
 
 	@Column({
 		type: 'varchar'
@@ -50,7 +47,7 @@ export class Film{
 		type: 'int',
 		nullable: true
 	})
-	runtime?: number;
+	runtime: number;
 
 	@Column({
 		type: 'text'
@@ -61,19 +58,19 @@ export class Film{
 		type: 'text',
 		nullable: true
 	})
-	plotSummary?: string;
+	plotSummary: string;
 
 	@Column({
 		type: 'datetime',
 		nullable: true
 	})
-	releaseDate?: Date;
+	releaseDate: Date;
 
 	@Column({
 		type: 'varchar',
 		nullable: true
 	})
-	initialPlatform?: string;
+	initialPlatform: string;
 
 	@Column({
 		unique: true
@@ -81,28 +78,28 @@ export class Film{
 	slug: string;
 
 	@OneToMany((type) => WatchLink, (WatchLink) => WatchLink.film)
-	currentPlatforms?: WatchLink[]
+	currentPlatforms: WatchLink[];
 
 	@ManyToMany((type) => Company, (company) => company.filmsProduced)
 	@JoinTable()
-	productionCompanies: Company[]
+	productionCompanies: Company[];
 
 	@ManyToMany((type) => Company, (company) => company.filmsDistributed)
 	@JoinTable()
-	distributionCompanies?: Company[]
+	distributionCompanies: Company[];
 
 	@OneToMany((type) => Still, (still) => still.film)
-	stillFrames?: Still[]
+	stillFrames: Still[];
 
 	@ManyToMany((type) => User, (user) => user.filmContributions)
 	@JoinTable()
-	authors: User[]
+	authors: User[];
 
 	@OneToMany((type) => Role, (role) => role.film)
-	credits: Role[]
+	credits: Role[];
 
 	@OneToMany((type) => FilmHistory, (filmHistory) => filmHistory.film)
-	history: FilmHistory[]
+	history: FilmHistory[];
 }
 
 // A table to track the primary changes of the film table
@@ -130,12 +127,6 @@ export class FilmHistory{
 		nullable: true
 	})
 	name: string;
-
-	@Column({
-		type: 'varchar',
-		nullable: true
-	})
-	posterUrl: string;
 
 	@Column({
 		type: 'varchar',

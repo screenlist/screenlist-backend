@@ -13,6 +13,7 @@ import {
 import { InsertResult } from 'typeorm';
 import { FilmsService } from './films.service'
 import { Film, FilmHistory } from './films.entity';
+import { CreateFilmDto, UpdateFilmDto } from './films.dto';
 
 @Controller('films')
 export class FilmsController {
@@ -28,9 +29,9 @@ export class FilmsController {
 	}
 
 	@Post('create')
-	async create(@Body() film: Film): Promise<InsertResult | HttpException>{
+	async create(@Body() film: CreateFilmDto): Promise<void>{
 		try{
-			return await this.filmsService.create(film)
+			await this.filmsService.create(film)
 		} catch(err: unknown) {
 			console.log(err)
 			throw new HttpException(err, 404)
