@@ -12,6 +12,7 @@ import { PeopleModule } from './people/people.module';
 import { StillsModule } from './stills/stills.module';
 import { CompaniesModule } from './companies/companies.module';
 import { PostersModule } from './posters/posters.module';
+import { FilesModule } from './files/files.module';
 
 
 @Module({
@@ -40,7 +41,8 @@ import { PostersModule } from './posters/posters.module';
     PeopleModule,
     StillsModule,
     CompaniesModule,
-    PostersModule
+    PostersModule,
+    FilesModule
   ],
   controllers: [AppController],
   providers: [AppService],
