@@ -28,7 +28,7 @@ export class Role{
 	subtitle: string;
 
 	@Column()
-	cast: boolean;
+	category: string;
 
 	@Column({
 		nullable: true
@@ -39,9 +39,6 @@ export class Role{
 		nullable: true
 	})
 	characterDescription: string;
-
-	@Column()
-	crew: boolean;
 
 	@ManyToOne((type) => Film, (film) => film.credits)
 	film: Film;
