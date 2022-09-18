@@ -11,20 +11,30 @@ export class CreateFilmDto {
 		initialPlatform?: string;
 		slug: string;
 	};
-	posterUrl?: string;
+	posters?: [{
+		url: string;
+		originalName: string;
+		description: string;
+		quality: string;
+	}];
 	currentPlatforms?: [{
 		accessType: string;
 		url: string;
 		name: string;
 	}];
 	productionCompanies: [{
-		name: string
+		name: string;
+		website?: string;
 	}];
 	distributionCompanies?: [{
-		name: string
+		name: string;
+		website?: string;
 	}];
 	stillFrames?: [{
 		url: string;
+		description: string;
+		originalName: string;
+		quality: string;
 	}];
 	credits: [{
 		name: string;
