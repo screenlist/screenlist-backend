@@ -6,6 +6,11 @@ export class Poster{
 	@PrimaryGeneratedColumn()
 	id: string;
 
+	@Column({
+		unique: true
+	})
+	originalName: string;
+
 	@Column()
 	description: string;
 
@@ -16,7 +21,11 @@ export class Poster{
 	})
 	url: string;
 
-	@OneToOne((type) => Film)
-	@JoinColumn()
+	@Column({
+		unique: true
+	})
+	quality: string;
+
+	@ManyToOne((type) => Film, (film) => film.posters)
 	film: Film;
 }

@@ -11,7 +11,7 @@ export class Person{
 	})
 	names: string;
 
-	@ManyToOne((type) => Role, (role) => role.people)
+	@ManyToOne((type) => Role, (role) => role.person)
 	roles: string;	
 }
 
@@ -44,5 +44,5 @@ export class Role{
 	film: Film;
 
 	@OneToMany((type) => Person, (person) => person.roles)
-	people: Person;
+	person: Person;
 }

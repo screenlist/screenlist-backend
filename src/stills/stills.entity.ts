@@ -6,16 +6,24 @@ export class Still{
 	@PrimaryGeneratedColumn()
 	id: string;
 
+	@Column({
+		unique: true
+	})
+	originalName: string;
+
 	@Column()
 	description: string;
 
 	@Column({
-		type: 'varchar',
-		nullable: false,
 		unique: true
 	})
 	url: string;
 
-	@ManyToOne((type) => Film, (film) => film.stillFrames)
-	film: Film;
+	@Column({
+		unique: true
+	})
+	quality: string
+
+	// @ManyToOne((type) => Film, (film) => film.stillFrames)
+	// film: Film;
 }

@@ -5,6 +5,7 @@ import { Storage } from '@google-cloud/storage';
 import * as sharp from 'sharp';
 import * as path from 'path';
 import { Poster } from '../posters/posters.entity';
+import { UploadedFileDto } from './stills.dto'
 
 @Injectable()
 export class StillsService {
@@ -15,14 +16,31 @@ export class StillsService {
 		keyFilename: path.join(__dirname, '../../cloud-keys.json')
 	})
 
-	async uploadPoster(poster: Express.Multer.File):Promise<any>{
+	async uploadPoster(poster: Express.Multer.File):Promise<UploadedFileDto[]>{
 		if(poster.mimetype === 'image/png' || poster.mimetype === 'image/jpeg'){
 			const posterBucket = this.storage.bucket(this.configService.get('STORAGE_POSTERS'));
-			const blob = posterBucket.file(poster.originalname.replace(/[^0-9a-z]/gi, ''));
+
+			const blobHighDef = posterBucket.file(poster.originalname.replace(/[^0-9a-z]/gi, '').concat('HD'));
+			const blobStandardDef = posterBucket.file(poster.originalname.replace(/[^0-9a-z]/gi, '').concat('SD'));
 			try{
-				const buffer = await sharp(poster.buffer).resize(1000, 1500).toBuffer()
-				await blob.save(buffer, {contentType: poster.mimetype})
-				return {originalName: blob.name, url: `https://storage.googleapis.com/${posterBucket.name}/${blob.name}`}
+				// Process to High Definition
+				const bufferHighDef = await sharp(poster.buffer).resize(1000, 1500).toBuffer()
+				await blobHighDef.save(bufferHighDef, {contentType: poster.mimetype})
+				// Process to Standard Definition
+				const bufferStandardDef = await sharp(poster.buffer).resize(480, 720).toBuffer()
+				await blobStandardDef.save(bufferStandardDef, {contentType: poster.mimetype})
+				return [
+					{
+						originalName: blobHighDef.name, 
+						quality: "HD",
+						url: `https://storage.googleapis.com/${posterBucket.name}/${blobHighDef.name}`
+					}, 
+					{
+						originalName: blobStandardDef.name, 
+						quality: "SD",
+						url: `https://storage.googleapis.com/${posterBucket.name}/${blobStandardDef.name}`
+					}
+				]
 			} catch(err: any) {
 				throw new BadRequestException(err?.message)
 			}
@@ -30,12 +48,22 @@ export class StillsService {
 		throw new BadRequestException("Unrecognised file extension")
 	}
 
-	async uploadStill(still: Express.Multer.File): Promise<any>{
-		const stillBucket = this.storage.bucket(this.configService.get('STORAGE_STILLS'));
-		const blob = stillBucket.file(still.originalname);
-		const blobStream = blob.createWriteStream({
-		  resumable: false,
-		});
-		blobStream.on('finish', () => {console.log(`https://storage.googleapis.com/${stillBucket.name}/${blob.name}`)})
+	async uploadStill(still: Express.Multer.File): Promise<UploadedFileDto>{
+		if(still.mimetype === 'image/png' || still.mimetype === 'image/jpeg'){
+			const stillBucket = this.storage.bucket(this.configService.get('STORAGE_STILLS'));
+			const blobHighDef = stillBucket.file(still.originalname.replace(/[^0-9a-z]/gi, '').concat('HD'));
+			try{
+				const bufferHighDef = await sharp(still.buffer).resize(1920, 1080).toBuffer()
+				await blobHighDef.save(bufferHighDef, {contentType: still.mimetype})
+				return {
+					originalName: blobHighDef.name, 
+					quality: "HD",
+					url: `https://storage.googleapis.com/${stillBucket.name}/${blobHighDef.name}`
+				}
+			} catch(err: any){
+				throw new BadRequestException(err?.message)
+			}
+		}
+		throw new BadRequestException("Unrecognised file extension")
 	}
 }
