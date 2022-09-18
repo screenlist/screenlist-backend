@@ -16,9 +16,9 @@ export class Company{
 	})
 	website: string
 
-	@ManyToMany((type) => Film, (film) => film.distributionCompanies)
-	filmsDistributed: Film
+	// @ManyToMany((type) => Film, (film) => film.distributionCompanies)
+	// filmsDistributed: Film[]
 
-	@ManyToMany((type) => Film, (film) => film.productionCompanies)
-	filmsProduced: Film
+	// @ManyToMany((type) => Film, (film) => film.productionCompanies)
+	// filmsProduced: Film[]
 }
