@@ -11,6 +11,7 @@ import { PeopleModule } from './people/people.module';
 import { StillsModule } from './stills/stills.module';
 import { CompaniesModule } from './companies/companies.module';
 import { PostersModule } from './posters/posters.module';
+import { DatabaseModule } from './database/database.module';
 
 
 @Module({
@@ -26,7 +27,8 @@ import { PostersModule } from './posters/posters.module';
     PeopleModule,
     StillsModule,
     CompaniesModule,
-    PostersModule
+    PostersModule,
+    DatabaseModule
   ],
   controllers: [AppController],
   providers: [AppService],
