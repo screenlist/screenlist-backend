@@ -14,24 +14,29 @@ import { Datastore } from '@google-cloud/datastore';
 import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
 import { InsertResult } from 'typeorm';
-import { FilmsService } from './films.service'
+import { FilmsService } from './films.service';
 import { Film, FilmHistory } from './films.entity';
 import { CreateFilmDto, UpdateFilmDto } from './films.dto';
+import { DatabaseService } from '../database/database.service';
 
 @Controller('films')
 export class FilmsController {
-	constructor(private filmsService: FilmsService, private configService: ConfigService){}
+	constructor(
+		private filmsService: FilmsService, 
+		private configService: ConfigService,
+		private datastore: DatabaseService
+	){
+		this.datastore = new DatabaseService(configService)
+	}
 
 	@Get()
 	async findOne() {
-		const datastore = new Datastore({
-			projectId: this.configService.get('PROJECT_ID'),
-			keyFilename: path.join(__dirname, '../../db.json')
-		})
 		try{
-			const taskKey = datastore.key(['Task']);
-			console.log(taskKey)
-			return await datastore.get(taskKey);
+			// const taskKey = datastore.key(['Task', +'5646488461901824']);
+			// console.log(taskKey)  
+			const query = this.datastore.createQuery('Task');
+			const result = await this.datastore.runQuery(query)
+			return result[0]
 		} catch(err: any) {
 			throw new HttpException(err.message, 404)
 		}
@@ -39,17 +44,13 @@ export class FilmsController {
 
 	@Post()
 	async makeSome() {
-		const datastore = new Datastore({
-			projectId: this.configService.get('PROJECT_ID'),
-			keyFilename: path.join(__dirname, '../../db.json')
-		})
 		try{
-			const taskKey = datastore.key('Task');
+			const taskKey = this.datastore.key('Task');
 			const task = {
 			  category: 'Personal',
 			  done: false,
-			  priority: 4,
-			  description: 'Learn Cloud Datastore',
+			  priority: 6,
+			  description: 'Do Not Learn Cloud Datastore',
 			};
 
 			const entity = {
@@ -57,7 +58,7 @@ export class FilmsController {
 			  data: task,
 			};
 
-			const result = await datastore.upsert(entity);
+			const result = await this.datastore.upsert(entity);
 			// Task inserted successfully.
 			return {key: taskKey, result}
 		} catch(err:any){
