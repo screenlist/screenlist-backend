@@ -9,7 +9,7 @@ export class CreateFilmDto {
 		plotSummary?: string;
 		releaseDate?: Date;
 		initialPlatform?: string;
-		slug: string;
+		slug?: string;
 	};
 	posters?: [{
 		url: string;
@@ -96,7 +96,7 @@ export class GetFilmDto {
 		plotSummary?: string;
 		releaseDate?: Date;
 		initialPlatform?: string;
-		slug: string;
+		slug?: string;
 	};
 	posters?: [{
 		originalName: string;
@@ -111,7 +111,7 @@ export class GetFilmDto {
 		name: string;
 		film: string;
 	}];
-	productionCompanies: [{
+	productionCompanies?: [{
 		name: string;
 		website?: string;
 		film: string;
@@ -128,7 +128,7 @@ export class GetFilmDto {
 		quality: string;
 		film: string;
 	}];
-	credits: [{
+	credits?: [{
 		name: string;
 		title: string;
 		subtitle: string;
