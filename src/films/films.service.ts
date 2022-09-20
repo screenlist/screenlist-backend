@@ -25,18 +25,17 @@ export class FilmsService {
 
 	async findAll(): Promise<GetFilmDto[]>{
 		const query = this.datastore.createQuery('Film').limit(20)
+		const results: GetFilmDto[] = []
 		try {
 			const films = await this.datastore.runQuery(query)
-			const results: Promise<GetFilmDto[]> = films[0].map(async (film: FilmDetails) => {
+			films[0].forEach(async (film: FilmDetails) => {
 				const posterQuery = this.datastore.createQuery('Poster').filter('film', '=', film.name).limit(2);
-				const productionQuery = this.datastore.createQuery('Production').filter('film', '=', film.name).limit(5);
-				const productionCompanies = await this.datastore.runQuery(productionQuery);
 				const posters = await this.datastore.runQuery(posterQuery);
 				const wholeFilm: GetFilmDto = {
 					details: film,
-					posters: posters[0] as GetFilmDto.posters[]
+					posters: posters[0] as GetFilmDto["posters"]
 				}
-				return wholeFilm
+				results.push(wholeFilm)
 			})
 			return results
 		} catch {
