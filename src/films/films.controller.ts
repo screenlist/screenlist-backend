@@ -31,15 +31,21 @@ export class FilmsController {
 
 	@Get()
 	async findOne() {
-		try{
-			// const taskKey = datastore.key(['Task', +'5646488461901824']);
-			// console.log(taskKey)  
+		return new Promise<any[]>((resolve, reject) => {
 			const query = this.datastore.createQuery('Task');
-			const result = await this.datastore.runQuery(query)
-			return result[0]
-		} catch(err: any) {
-			throw new HttpException(err.message, 404)
-		}
+			this.datastore.runQuery(query, async (err, entities) => {
+				// console.log(entities)
+				if(err){
+					reject(new HttpException(err, 404))
+				} else {
+					resolve(entities.map(obj => {
+						obj.id = obj[this.datastore.KEY]
+						console.log(obj.id)
+						return obj
+					}))
+				}
+			})
+		})
 	}
 
 	@Post()
@@ -76,3 +82,4 @@ export class FilmsController {
 		}
 	}
 }
+
