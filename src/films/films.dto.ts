@@ -10,39 +10,53 @@ export class CreateFilmDto {
 		releaseDate?: Date;
 		initialPlatform?: string;
 		slug?: string;
+		lastUpdated?: Date;
+		created?: Date;
 	};
 	posters?: [{
 		url: string;
 		originalName: string;
 		description: string;
 		quality: string;
+		lastUpdated?: Date;
+		created?: Date;
 	}];
 	currentPlatforms?: [{
 		accessType: string;
 		url: string;
-		name: string;
+		platformName: string;
+		platformId: number;
+		lastUpdated?: Date;
+		created?: Date;
 	}];
-	productionCompanies: [{
-		name: string;
+	companies: [{
+		companyName: string;
+		companyId?: number;
 		website?: string;
-	}];
-	distributionCompanies?: [{
-		name: string;
-		website?: string;
+		type: string;
+		lastUpdated?: Date;
+		created?: Date;
+		film?: string;
 	}];
 	stillFrames?: [{
 		url: string;
 		description: string;
 		originalName: string;
 		quality: string;
+		lastUpdated?: Date;
+		created?: Date;
 	}];
 	credits: [{
-		name: string;
+		personName: string;
+		personId?: number;
 		title: string;
 		subtitle: string;
 		category: string;
 		characterName?: string;
 		characterDescription?: string;
+		lastUpdated?: Date;
+		created?: Date;
+		film?: string;
 	}]
 }
 
@@ -97,6 +111,8 @@ export class GetFilmDto {
 		releaseDate?: Date;
 		initialPlatform?: string;
 		slug?: string;
+		lastUpdated: Date;
+		created: Date;
 	};
 	posters?: [{
 		originalName: string;
@@ -104,12 +120,16 @@ export class GetFilmDto {
 		url: string;
 		quality: string;
 		film: string;
+		lastUpdated: Date;
+		created: Date;
 	}];
 	currentPlatforms?: [{
 		accessType: string;
 		url: string;
-		name: string;
+		platformName: string;
 		film: string;
+		lastUpdated: Date;
+		created: Date;
 	}];
 	productionCompanies?: [{
 		name: string;
@@ -127,8 +147,10 @@ export class GetFilmDto {
 		url: string;
 		quality: string;
 		film: string;
+		lastUpdated: Date;
+		created: Date;
 	}];
-	credits?: [{
+	actors?: [{
 		name: string;
 		title: string;
 		subtitle: string;
@@ -136,37 +158,18 @@ export class GetFilmDto {
 		characterName?: string;
 		characterDescription?: string;
 		film: string;
+		lastUpdated: Date;
+		created: Date;
+	}];
+	crew?: [{
+		name: string;
+		title: string;
+		subtitle: string;
+		category: string;
+		characterName?: string;
+		characterDescription?: string;
+		film: string;
+		lastUpdated: Date;
+		created: Date;
 	}]
-}
-
-export class StillDto {
-	originalName: string;
-	description: string;
-	url: string;
-	quality: string;
-}
-
-export class PosterDto {
-	originalName: string;
-	description: string;
-	url: string;
-	quality: string;
-}
-
-export class Role {
-	name: string;
-	title: string;
-	subtitle: string;
-	category: string;
-	characterName?: string;
-	characterDescription?: string;
-}
-
-export class Person {
-	name: string;
-}
-
-export class Company {
-	name: string;
-	website?: string;
 }
