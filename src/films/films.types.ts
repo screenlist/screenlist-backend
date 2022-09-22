@@ -32,12 +32,14 @@ export interface PersonRole {
 
 export interface Person {
 	name: string;
+	nameEditable: boolean;
 	lastUpdated: Date;
 	created: Date;
 }
 
 export interface Company {
 	name: string;
+	nameEditable: boolean;
 	website?: string;
 	lastUpdated: Date;
 	created: Date;
@@ -55,12 +57,14 @@ export interface CompanyRole {
 
 export interface Platform {
 	name: string;
+	nameEditable: boolean;
 	website?: string;
 	lastUpdated: Date;
 	created: Date;
 }
 
 export interface Link {
+	id: number;
 	accessType: string;
 	url: string;
 	platformName: string;
@@ -70,7 +74,9 @@ export interface Link {
 }
 
 export interface FilmDetails {
+	id: number;
 	name: string;
+	nameEditable: boolean;
 	trailerUrl?: string;
 	type: string;
 	productionStage: string;

@@ -1,7 +1,9 @@
 export class CreateFilmDto {
 	details: {
 		name: string;
+		nameEditable?: boolean;
 		trailerUrl?: string;
+		status?: string;
 		type: string;
 		productionStage: string;
 		runtime?: number;
@@ -62,8 +64,9 @@ export class CreateFilmDto {
 
 export class UpdateFilmDto {
 	details: {
-		name: string;
-		posterUrl?: string;
+		id: number;
+		name?: string;
+		nameEditable?: boolean;
 		trailerUrl?: string;
 		type?: string;
 		productionStage?: string;
@@ -72,35 +75,63 @@ export class UpdateFilmDto {
 		plotSummary?: string;
 		releaseDate?: Date;
 		initialPlatform?: string;
+		slug?: string;
+		lastUpdated?: Date;
+		created?: Date;
 	};
-	currentPlatforms?: [{
-		accessType: string;
+	posters?: [{
 		url: string;
-		name: string;
+		originalName?: string;
+		description?: string;
+		quality?: string;
+		lastUpdated?: Date;
+		created?: Date;
 	}];
-	productionCompanies?: [{
-		name: string
+	currentPlatforms?: [{
+		id: number;
+		accessType?: string;
+		url?: string;
+		platformName?: string;
+		platformId?: number;
+		lastUpdated?: Date;
+		created?: Date;
 	}];
-	distributionCompanies?: [{
-		name: string
+	companies?: [{
+		id: number;
+		companyName?: string;
+		companyId?: number;
+		website?: string;
+		type?: string;
+		lastUpdated?: Date;
+		created?: Date;
+		film?: string;
 	}];
 	stillFrames?: [{
-		fileName: string;
 		url: string;
-		description: string;
+		description?: string;
+		originalName?: string;
+		quality?: string;
+		lastUpdated?: Date;
+		created?: Date;
 	}];
 	credits?: [{
-		name: string;
-		title: string;
-		subtitle: string;
-		category: string;
+		id: number;
+		personName?: string;
+		personId?: number;
+		title?: string;
+		subtitle?: string;
+		category?: string;
 		characterName?: string;
 		characterDescription?: string;
+		lastUpdated?: Date;
+		created?: Date;
+		film?: string;
 	}]
 }
 
 export class GetFilmDto {
 	details: {
+		id: number;
 		name: string;
 		trailerUrl?: string;
 		type: string;
@@ -124,6 +155,7 @@ export class GetFilmDto {
 		created: Date;
 	}];
 	currentPlatforms?: [{
+		id: number;
 		accessType: string;
 		url: string;
 		platformName: string;
@@ -132,16 +164,18 @@ export class GetFilmDto {
 		created: Date;
 	}];
 	productionCompanies?: [{
+		id: number;
 		name: string;
 		website?: string;
 		film: string;
 	}];
 	distributionCompanies?: [{
+		id: number;
 		name: string;
 		website?: string;
 		film: string;
 	}];
-		stillFrames?: [{
+	stillFrames?: [{
 		originalName: string;
 		description: string;
 		url: string;
@@ -151,6 +185,7 @@ export class GetFilmDto {
 		created: Date;
 	}];
 	actors?: [{
+		id: number;
 		name: string;
 		title: string;
 		subtitle: string;
@@ -162,6 +197,7 @@ export class GetFilmDto {
 		created: Date;
 	}];
 	crew?: [{
+		id: number;
 		name: string;
 		title: string;
 		subtitle: string;
