@@ -1,4 +1,4 @@
-import { Injectable, ParseFileOptions, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, ParseFileOptions, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ConfigService } from '@nestjs/config';
 import { CreateFilmDto, UpdateFilmDto, GetFilmDto } from './films.dto';
@@ -31,20 +31,25 @@ export class FilmsService {
 			const films = await this.datastore.runQuery(query)
 			// Loop through each film to retrieve its poster
 			films[0].forEach(async (film: FilmDetails) => {
+				film.id = film[this.datastore.KEY]['id']
 				const posterQuery = this.datastore.createQuery('Poster')
 					.filter('film', '=', film.name)
 					.filter('quality', '=', 'SD')
 					.limit(1);
 				const posters = await this.datastore.runQuery(posterQuery);
+				posters[0].map(obj => {
+					obj.id = obj[this.datastore.KEY]['id']
+					return obj
+				})
 				const wholeFilm: GetFilmDto = {
 					details: film,
-					posters: posters[0] as GetFilmDto["posters"]
+					posters: posters[0] as GetFilmDto['posters']
 				}
 				results.push(wholeFilm);
 			})
 			return results
 		} catch {
-			throw new NotFoundException("Encountered trouble while trying to retrieve");
+			throw new NotFoundException('Encountered trouble while trying to retrieve');
 		}
 	}
 
@@ -92,6 +97,32 @@ export class FilmsService {
 			const actors = await this.datastore.runQuery(actorsQuery);
 			const crew = await this.datastore.runQuery(crewQuery);
 
+			// Extact the entity id/name from query to expose to the client
+			details[0].map(obj => {
+				obj.id = obj[this.datastore.KEY]["id"]
+				return obj
+			})
+			platformLinks[0].map(obj => {
+				obj.id = obj[this.datastore.KEY]['id']
+				return obj
+			})
+			distributors[0].map(obj => {
+				obj.id = obj[this.datastore.KEY]['id']
+				return obj
+			})
+			producers[0].map(obj => {
+				obj.id = obj[this.datastore.KEY]['id']
+				return obj
+			})
+			actors[0].map(obj => {
+				obj.id = obj[this.datastore.KEY]['id']
+				return obj
+			})
+			crew[0].map(obj => {
+				obj.id = obj[this.datastore.KEY]['id']
+				return obj
+			})
+
 			const film = {
 				details: details,
 				posters: poster,
@@ -109,7 +140,7 @@ export class FilmsService {
 		}
 	}
 
-	async create(film: CreateFilmDto){
+	async createOne(film: CreateFilmDto){
 		const transactionId = (new Date()).toISOString().concat("-create-film-"+film.details.name);
 		// A variable to house all entities created
 		let entities = []
@@ -120,13 +151,15 @@ export class FilmsService {
 		film.details.slug = filmName.concat("-"+filmKey.id.toString());
 		film.details.lastUpdated = time;
 		film.details.created = time;
+		film.details.status = "public"
+		film.details.nameEditable = true;
 		entities.push({
 			key: filmKey,
 			data: film.details
 		})
 		// Creates poster entities
 		film.posters.forEach(poster => {
-			const posterKey = this.datastore.key(['Film', filmKey.id, 'Poster', poster.originalName]);
+			const posterKey = this.datastore.key(['Film', filmKey.id, 'Poster', poster.url]);
 			poster.lastUpdated = time;
 			poster.created = time;
 			entities.push({
@@ -136,7 +169,7 @@ export class FilmsService {
 		})
 		// Creates still frame entities
 		film.stillFrames.forEach(frame => {
-			const stillKey = this.datastore.key(['Film', filmKey.id, 'Poster', frame.originalName]);
+			const stillKey = this.datastore.key(['Film', filmKey.id, 'Still', frame.url]);
 			frame.lastUpdated = time;
 			frame.created = time;
 			entities.push({
@@ -149,6 +182,9 @@ export class FilmsService {
 			role.lastUpdated = time;
 			role.created = time;
 			role.film = filmName
+			if(!role.category){
+				throw new BadRequestException("Role category cannot be empty")
+			}
 			// Checks whether the person in question already exists
 			if(role.personId){
 				// Checks whether the person id real or bogus
@@ -157,6 +193,7 @@ export class FilmsService {
 				if(person.length >= 1 && isNaN(person[0])){
 					// Creates the role for this existing person
 					const roleKey = this.datastore.key(['Person', personKey.id,'Film', filmKey.id, 'PersonRole']);
+					delete role.personId;
 					entities.push({
 						key: roleKey,
 						data: role
@@ -167,6 +204,7 @@ export class FilmsService {
 				const personKey = this.datastore.key('Person')
 				const personEntity: Person = {
 					name: role.personName,
+					nameEditable: true,
 					lastUpdated: time,
 					created: time,
 				}
@@ -186,6 +224,9 @@ export class FilmsService {
 			role.lastUpdated = time;
 			role.created = time;
 			role.film = filmName;
+			if(!role.type){
+				throw new BadRequestException("Role type cannot be empty")
+			}
 			// Checks whether the company in question already exist
 			if(role.companyId){
 				// Checks whether the company id real or bogus
@@ -193,6 +234,7 @@ export class FilmsService {
 				const company = await this.datastore.get(companyKey);
 				if(company.length >= 1 && isNaN(company[0])){
 					const roleKey = this.datastore.key(['Company', companyKey.id,'Film', filmKey.id, 'CompanyRole']);
+					delete role.companyId;
 					entities.push({
 						key: companyKey,
 						data: role
@@ -203,6 +245,7 @@ export class FilmsService {
 				const companyKey = this.datastore.key(['Company', role.companyId]);
 				const companyEntity: Company = {
 					name: role.companyName,
+					nameEditable: true,
 					website: role.website,
 					lastUpdated: time,
 					created: time,
@@ -212,8 +255,9 @@ export class FilmsService {
 					data: companyEntity
 				})
 				const roleKey = this.datastore.key(['Company', companyKey.id,'Film', filmKey.id, 'CompanyRole']);
+				delete role.companyId;
 				entities.push({
-					key: companyKey,
+					key: roleKey,
 					data: role
 				})
 			}
@@ -222,6 +266,9 @@ export class FilmsService {
 		film.currentPlatforms.forEach(async (link) => {
 			link.lastUpdated = time;
 			link.created = time;
+			if(!link.url){
+				throw new BadRequestException("Link URL cannot be empty")
+			}
 			// Checks whether the platform in question already exist
 			if(link.platformId){
 				// Checks whether the platform id real or bogus
@@ -229,6 +276,7 @@ export class FilmsService {
 				const platform = await this.datastore.get(platformKey);
 				if(platform.length >= 1 && isNaN(platform[0])){
 					const linkKey = this.datastore.key(['Platform', platformKey.id, 'Film', filmKey.id, 'Link']);
+					delete link.platformId;
 					entities.push({
 						key: linkKey,
 						data: link
@@ -239,6 +287,7 @@ export class FilmsService {
 				const platformKey = this.datastore.key('Platform');
 				const platform: Platform = {
 					name: link.platformName,
+					nameEditable: true,
 					lastUpdated: time,
 					created: time
 				}
@@ -254,6 +303,247 @@ export class FilmsService {
 		try {
 			await this.datastore.transaction({ id: transactionId }).insert(entities);
 			return {"status": "successfully created"}
+		} catch(err: any){
+			throw new BadRequestException(err.message);
+		}
+	}
+
+	async updateOne(film: UpdateFilmDto){
+		const transactionId = (new Date()).toISOString().concat('-updated-film-'+film.details.name);
+		const time = new Date()
+		let entities = [] // Where to put all entities needing an update
+		const filmKey = this.datastore.key(['Film', film.details.id]);
+		const state = await this.datastore.get(filmKey) // to check if the film really exists
+		if(state.length !>= 1 && isNaN(state[0]) == false){
+			throw new NotFoundException('This film does not exist')
+		}
+		if(film.details.name && state[0].nameEditable == false){
+			throw new UnauthorizedException('You are not authorised to edit the film name');
+		}
+		if(film.details.slug){
+			throw new UnauthorizedException('You are not authorised to edit the slug');
+		}
+		delete film.details.id; // deletes the id from entity
+		if(Object.keys(film.details).length >= 1){
+			film.details.lastUpdated = time
+			entities.push({
+				key: filmKey,
+				data: film.details
+			})
+		}
+
+		if(film.posters && film.posters.length <= 2){
+			film.posters.forEach((poster) => {
+				const posterKey = this.datastore.key(['Film', filmKey.id, 'Poster', poster.url]);
+				poster.lastUpdated = time;
+				entities.push({
+					key: posterKey,
+					data: poster
+				})
+			})
+		}
+
+		if(film.stillFrames && film.stillFrames.length <= 3){
+			film.stillFrames.forEach((still) => {
+				const stillKey = this.datastore.key(['Film', filmKey.id, 'Still', still.url]);
+				still.lastUpdated = time;
+				entities.push({
+					key: stillKey,
+					data: still
+				})
+			})
+		}
+
+		if(film.companies){
+			film.companies.forEach(async (role) => {
+				// For company role of an existing company
+				// Doesn't allow to edit the name of an existing company
+				if(!role.companyName && role.companyId){
+					const companyKey = this.datastore.key(['Company', role.companyId]);
+					const company = await this.datastore.get(companyKey);
+					if(company.length >= 1 && isNaN(company[0])){
+						if(role.id){
+							// Edits an existing company role of an exsiting company
+							const roleKey = this.datastore.key(['Company', companyKey.id,'Film', filmKey.id,'CompanyRole', role.id])
+							delete role.id;
+							delete role.companyId;
+							role.lastUpdated = time;
+							entities.push({
+								key: roleKey,
+								data: role
+							})
+						} else if(!role.id){
+							// Adds a new company role of an exisiting compny
+							const roleKey = this.datastore.key(['Company', companyKey.id,'Film', filmKey.id, 'CompanyRole']);
+							delete role.companyId;
+							role.created = time;
+							role.lastUpdated = time;
+							entities.push({
+								key: roleKey,
+								data: role
+							})
+						}
+					} 
+				} else if(role.companyName && !role.companyId && !role.id && role.type){
+					// Creates a new company and a new company role
+					// That's only if the role has a type
+					const companyKey = this.datastore.key('Company');
+					const companyEntity: Company = {
+						name: role.companyName,
+						nameEditable: true,
+						website: role.website,
+						lastUpdated: time,
+						created: time,
+					}
+					entities.push({
+						key: companyKey,
+						data: companyEntity
+					})
+					const roleKey = this.datastore.key(['Company', companyKey.id,'Film', filmKey.id,'CompanyRole'])
+					role.created = time;
+					role.lastUpdated = time;
+					entities.push({
+						key: roleKey,
+						data: role
+					})
+				} else {
+					throw new BadRequestException("Something is not right in this edit, make sure you've filled all required fields")
+				}
+			})
+		}
+
+		if(film.credits){
+			film.credits.forEach(async (role) => {
+				// For person role of an existing person
+				// Doesn't allow to edit the name of an existing person
+				if(!role.personName && role.personId){
+					const personKey = this.datastore.key(['Person', role.personId]);
+					const person = await this.datastore.get(personKey);
+					if(person.length >= 1 && isNaN(person[0])){
+						if(role.id){
+							// Edits an existing person role of an exsiting person
+							const roleKey = this.datastore.key(['Person', personKey.id,'Film', filmKey.id,'PersonRole', role.id])
+							delete role.id;
+							delete role.personId;
+							role.lastUpdated = time;
+							entities.push({
+								key: roleKey,
+								data: role
+							})
+						} else if(!role.id){
+							// Adds a new person role of an exisiting person
+							const roleKey = this.datastore.key(['Person', personKey.id,'Film', filmKey.id, 'PersonRole']);
+							delete role.personId;
+							role.created = time;
+							role.lastUpdated = time;
+							entities.push({
+								key: roleKey,
+								data: role
+							})
+						}
+					} 
+				} else if(role.personName && !role.personId && !role.id && role.category){
+					// Creates a new person and a new person role
+					// That's only if the role has a category
+					const personKey = this.datastore.key('Person');
+					const personEntity: Person = {
+						name: role.personName,
+						nameEditable: true,
+						lastUpdated: time,
+						created: time,
+					}
+					entities.push({
+						key: personKey,
+						data: personEntity
+					})
+					const roleKey = this.datastore.key(['Person', personKey.id,'Film', filmKey.id,'PersonRole'])
+					role.created = time;
+					role.lastUpdated = time;
+					entities.push({
+						key: roleKey,
+						data: role
+					})
+				} else {
+					throw new BadRequestException("Something is not right in this edit, make sure you've filled all required fields")
+				}
+			})
+		}
+
+		if(film.currentPlatforms){
+			film.currentPlatforms.forEach(async (link) => {
+				// For link of an existing platform
+				// Doesn't allow to edit the name of an existing platform
+				if(!link.platformName && link.platformId){
+					const platformKey = this.datastore.key(['Platform', link.platformId]);
+					const platform = await this.datastore.get(platformKey);
+					if(platform.length >= 1 && isNaN(platform[0])){
+						if(link.id){
+							// Edits an existing link of an exsiting platform
+							const linkKey = this.datastore.key(['Platform', platformKey.id,'Film', filmKey.id,'Link', link.id])
+							delete link.id;
+							delete link.platformId;
+							link.lastUpdated = time;
+							entities.push({
+								key: linkKey,
+								data: link
+							})
+						} else if(!link.id){
+							// Adds a new link of an exisiting platform
+							const linkKey = this.datastore.key(['Platform', platformKey.id,'Film', filmKey.id, 'Link']);
+							delete link.platformId;
+							link.created = time;
+							link.lastUpdated = time;
+							entities.push({
+								key: linkKey,
+								data: link
+							})
+						}
+					} 
+				} else if(link.platformName && !link.platformId && !link.id && link.url){
+					// Creates a new platform and a new link
+					// That's only if the link has a url
+					const platformKey = this.datastore.key('Platform');
+					const platformEntity: Platform = {
+						name: link.platformName,
+						nameEditable: true,
+						lastUpdated: time,
+						created: time
+					}
+					entities.push({
+						key: platformKey,
+						data: platformEntity
+					})
+					const roleKey = this.datastore.key(['Platform', platformKey.id,'Film', filmKey.id,'Link'])
+					link.created = time;
+					link.lastUpdated = time;
+					entities.push({
+						key: roleKey,
+						data: link
+					})
+				} else {
+					throw new BadRequestException("Something is not right in this edit, make sure you've filled all required fields")
+				}
+			})
+		}
+
+		try{
+			await this.datastore.transaction({id: transactionId}).upsert(entities)
+		} catch(err: any){
+			throw new BadRequestException(err.message)
+		}
+	}
+
+	async softDeleteFilm(id: number){
+		const filmKey = this.datastore.key(['Film', id]);
+		const entity = {
+			key: filmKey,
+			data: {
+				status: "hidden"
+			}
+		}
+		try {
+			await this.datastore.update(entity)
+			return {'status': 'deleted'}
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
