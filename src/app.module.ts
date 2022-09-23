@@ -12,6 +12,7 @@ import { StillsModule } from './stills/stills.module';
 import { CompaniesModule } from './companies/companies.module';
 import { PostersModule } from './posters/posters.module';
 import { DatabaseModule } from './database/database.module';
+import { SessionModule } from './session/session.module';
 
 
 @Module({
@@ -28,7 +29,8 @@ import { DatabaseModule } from './database/database.module';
     StillsModule,
     CompaniesModule,
     PostersModule,
-    DatabaseModule
+    DatabaseModule,
+    SessionModule
   ],
   controllers: [AppController],
   providers: [AppService],
