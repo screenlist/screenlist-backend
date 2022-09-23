@@ -136,10 +136,10 @@ export class FilmHistory{
 
 	// Columns for record keeping
 	@Column()
-	action: string
+	action: string;
 
 	@Column()
-	userId: string
+	userId: string;
 
 	@Column({
 		type: 'datetime',
@@ -148,5 +148,5 @@ export class FilmHistory{
 	dateSaved: Date;
 
 	@Column()
-	revision: number
+	revision: number;
 }
