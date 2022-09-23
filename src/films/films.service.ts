@@ -416,6 +416,7 @@ export class FilmsService {
 
 	async updateOne(film: UpdateFilmDto, user: string){
 		const transactionId = (new Date()).toISOString().concat('-updated-film-'+film.details.name);
+		const transactionHistoryId = transactionId+"-history";
 		const time = new Date()
 		let history = [] // Where to put all history entities
 		let entities = [] // Where to put all entities needing an update
@@ -768,6 +769,7 @@ export class FilmsService {
 
 		try{
 			await this.datastore.transaction({id: transactionId}).upsert(entities)
+			await this.datastore.transaction({id: transactionHistoryId}).insert(history)
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
