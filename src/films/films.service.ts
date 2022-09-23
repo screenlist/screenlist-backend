@@ -24,8 +24,8 @@ export class FilmsService {
 		this.datastore = new DatabaseService(configService)
 	}
 
-	async findAll(): Promise<GetFilmDto[]>{
-		const query = this.datastore.createQuery('Film').limit(20)
+	async findAll(user: string): Promise<GetFilmDto[]>{
+		const query = this.datastore.createQuery('Film').filter('status', '=', 'public').limit(20)
 		const results: GetFilmDto[] = []
 		try {
 			const films = await this.datastore.runQuery(query)
@@ -53,7 +53,7 @@ export class FilmsService {
 		}
 	}
 
-	async findOne(id: number): Promise<any>{
+	async findOne(id: number, user: string): Promise<any>{
 		const filmKey = this.datastore.key(['Film', id]);
 		// Create queries
 		const postersQuery = this.datastore.createQuery('Poster')
@@ -84,11 +84,15 @@ export class FilmsService {
 		const crewQuery = this.datastore.createQuery('PersonRole')
 			.hasAncestor(filmKey)
 			.filter('category', '=', 'crew')
-			.order('title')
+			.order('title');
 
 		try {
 			// Run queries
 			const details = await this.datastore.get(filmKey);
+			// Check whether the film is public or deleted before continuing
+			if(details[0].status != "public"){
+				throw new NotFoundException("Not available");
+			}
 			const platformLinks =  await this.datastore.runQuery(linksQuery);
 			const poster = await this.datastore.runQuery(postersQuery);
 			const stills = await this.datastore.runQuery(stillsQuery);
@@ -140,7 +144,7 @@ export class FilmsService {
 		}
 	}
 
-	async createOne(film: CreateFilmDto){
+	async createOne(film: CreateFilmDto, user: string){
 		const transactionId = (new Date()).toISOString().concat("-create-film-"+film.details.name);
 		// A variable to house all entities created
 		let entities = []
@@ -157,6 +161,16 @@ export class FilmsService {
 			key: filmKey,
 			data: film.details
 		})
+		// Write film action into history
+		const detailsHistory = this.datastore.formulateHistory(
+			film.details,
+			'Film',
+			filmKey.id,
+			user,
+			'create'
+		)
+		entities.push(detailsHistory)
+
 		// Creates poster entities
 		film.posters.forEach(poster => {
 			const posterKey = this.datastore.key(['Film', filmKey.id, 'Poster', poster.url]);
@@ -166,6 +180,15 @@ export class FilmsService {
 				key: posterKey,
 				data: poster
 			})
+			// Write poster action into history
+			const posterHistory = this.datastore.formulateHistory(
+				poster,
+				'Poster',
+				posterKey.name,
+				user,
+				'create'
+			)
+			entities.push(posterHistory)
 		})
 		// Creates still frame entities
 		film.stillFrames.forEach(frame => {
@@ -176,6 +199,14 @@ export class FilmsService {
 				key: stillKey,
 				data: frame
 			})
+			// Write film action into history
+			const stillHistory = this.datastore.formulateHistory(
+				frame,
+				'Still',
+				stillKey.name,
+				user,
+				'create'
+			)
 		})
 		// Creates person role entities
 		film.credits.forEach(async (role) => {
@@ -198,6 +229,14 @@ export class FilmsService {
 						key: roleKey,
 						data: role
 					})
+					// Create history
+					entities.push(this.datastore.formulateHistory(
+						role,
+						'PersonRole',
+						roleKey.id,
+						user,
+						'create'
+					))
 				}
 			} else {
 				// Creates the role and a new person
@@ -217,6 +256,21 @@ export class FilmsService {
 					key: roleKey,
 					data: role
 				})
+				// Create history for both actions
+				entities.push(this.datastore.formulateHistory(
+					personEntity,
+					'Person',
+					personKey.id,
+					user,
+					'create'
+				))
+				entities.push(this.datastore.formulateHistory(
+					role,
+					'PersonRole',
+					roleKey.id,
+					user,
+					'create'
+				))
 			}
 		})
 		// Creates company role entities
@@ -239,6 +293,14 @@ export class FilmsService {
 						key: companyKey,
 						data: role
 					})
+					// Create history
+					entities.push(this.datastore.formulateHistory(
+						role,
+						'CompanyRole',
+						roleKey.id,
+						user,
+						'create'
+					))
 				}
 			} else {
 				// Create the role and a new company
@@ -260,6 +322,22 @@ export class FilmsService {
 					key: roleKey,
 					data: role
 				})
+
+				// Create histories for actions
+				entities.push(this.datastore.formulateHistory(
+					companyEntity,
+					'Company',
+					companyKey.id,
+					user,
+					'create'
+				))
+				entities.push(this.datastore.formulateHistory(
+					role,
+					'CompanyRole',
+					roleKey.id,
+					user,
+					'create'
+				))
 			}
 		})
 
@@ -281,6 +359,15 @@ export class FilmsService {
 						key: linkKey,
 						data: link
 					})
+
+					// Create history
+					entities.push(this.datastore.formulateHistory(
+						link,
+						'Link',
+						linkKey.id,
+						user,
+						'create'
+					))
 				}
 			} else {
 				// Creates a link and a new platform
@@ -291,12 +378,31 @@ export class FilmsService {
 					lastUpdated: time,
 					created: time
 				}
-				entities.push(platform)
+				entities.push({
+					key: platformKey,
+					data: platform
+				})
 				const linkKey = this.datastore.key(['Platform', platformKey.id, 'Film', filmKey.id, 'Link']);
 				entities.push({
 					key: linkKey,
 					data: link
 				})
+
+				// Create histories for both actions
+				entities.push(this.datastore.formulateHistory(
+					platform,
+					'Platform',
+					platformKey.id,
+					user,
+					'create'
+				))
+				entities.push(this.datastore.formulateHistory(
+					link,
+					'Link',
+					linkKey.id,
+					user,
+					'create'
+				))
 			}
 		})
 
@@ -308,9 +414,10 @@ export class FilmsService {
 		}
 	}
 
-	async updateOne(film: UpdateFilmDto){
+	async updateOne(film: UpdateFilmDto, user: string){
 		const transactionId = (new Date()).toISOString().concat('-updated-film-'+film.details.name);
 		const time = new Date()
+		let history = [] // Where to put all history entities
 		let entities = [] // Where to put all entities needing an update
 		const filmKey = this.datastore.key(['Film', film.details.id]);
 		const state = await this.datastore.get(filmKey) // to check if the film really exists
@@ -330,8 +437,18 @@ export class FilmsService {
 				key: filmKey,
 				data: film.details
 			})
+
+			// Create history
+			history.push(this.datastore.formulateHistory(
+				film.details,
+				'Film',
+				filmKey.id,
+				user,
+				'update'
+			))
 		}
 
+		// Updates posters
 		if(film.posters && film.posters.length <= 2){
 			film.posters.forEach((poster) => {
 				const posterKey = this.datastore.key(['Film', filmKey.id, 'Poster', poster.url]);
@@ -340,9 +457,19 @@ export class FilmsService {
 					key: posterKey,
 					data: poster
 				})
+
+				// Create history
+				history.push(this.datastore.formulateHistory(
+					poster,
+					'Poster',
+					posterKey.name,
+					user,
+					'update'
+				))
 			})
 		}
 
+		// Updates stills
 		if(film.stillFrames && film.stillFrames.length <= 3){
 			film.stillFrames.forEach((still) => {
 				const stillKey = this.datastore.key(['Film', filmKey.id, 'Still', still.url]);
@@ -351,9 +478,18 @@ export class FilmsService {
 					key: stillKey,
 					data: still
 				})
+
+				history.push(this.datastore.formulateHistory(
+					still,
+					'Still',
+					stillKey.name,
+					user,
+					'update'
+				))
 			})
 		}
 
+		// Updates company roles
 		if(film.companies){
 			film.companies.forEach(async (role) => {
 				// For company role of an existing company
@@ -372,6 +508,15 @@ export class FilmsService {
 								key: roleKey,
 								data: role
 							})
+
+							// Creates history
+							history.push(this.datastore.formulateHistory(
+								role,
+								'CompanyRole',
+								roleKey.id,
+								user,
+								'update'
+							))
 						} else if(!role.id){
 							// Adds a new company role of an exisiting compny
 							const roleKey = this.datastore.key(['Company', companyKey.id,'Film', filmKey.id, 'CompanyRole']);
@@ -382,6 +527,15 @@ export class FilmsService {
 								key: roleKey,
 								data: role
 							})
+
+							// Creates history
+							history.push(this.datastore.formulateHistory(
+								role,
+								'CompanyRole',
+								roleKey.id,
+								user,
+								'update'
+							))
 						}
 					} 
 				} else if(role.companyName && !role.companyId && !role.id && role.type){
@@ -406,12 +560,29 @@ export class FilmsService {
 						key: roleKey,
 						data: role
 					})
+
+					// Creates history for both actions
+					history.push(this.datastore.formulateHistory(
+						companyEntity,
+						'Company',
+						companyKey.id,
+						user,
+						'create'
+					))
+					history.push(this.datastore.formulateHistory(
+						role,
+						'CompanyRole',
+						roleKey.id,
+						user,
+						'update'
+					))
 				} else {
 					throw new BadRequestException("Something is not right in this edit, make sure you've filled all required fields")
 				}
 			})
 		}
 
+		// Updates person roles
 		if(film.credits){
 			film.credits.forEach(async (role) => {
 				// For person role of an existing person
@@ -430,6 +601,15 @@ export class FilmsService {
 								key: roleKey,
 								data: role
 							})
+
+							// Creates history
+							history.push(this.datastore.formulateHistory(
+								role,
+								'PersonRole',
+								roleKey.id,
+								user,
+								'update'
+							))
 						} else if(!role.id){
 							// Adds a new person role of an exisiting person
 							const roleKey = this.datastore.key(['Person', personKey.id,'Film', filmKey.id, 'PersonRole']);
@@ -440,6 +620,15 @@ export class FilmsService {
 								key: roleKey,
 								data: role
 							})
+
+							// Creates history
+							history.push(this.datastore.formulateHistory(
+								role,
+								'PersonRole',
+								roleKey.id,
+								user,
+								'update'
+							))
 						}
 					} 
 				} else if(role.personName && !role.personId && !role.id && role.category){
@@ -463,12 +652,29 @@ export class FilmsService {
 						key: roleKey,
 						data: role
 					})
+
+					// Creates history for both actions
+					history.push(this.datastore.formulateHistory(
+						personEntity,
+						'Person',
+						personKey.id,
+						user,
+						'create'
+					))
+					history.push(this.datastore.formulateHistory(
+						role,
+						'PersonRole',
+						roleKey.id,
+						user,
+						'update'
+					))
 				} else {
 					throw new BadRequestException("Something is not right in this edit, make sure you've filled all required fields")
 				}
 			})
 		}
 
+		// Updates watch links
 		if(film.currentPlatforms){
 			film.currentPlatforms.forEach(async (link) => {
 				// For link of an existing platform
@@ -487,6 +693,15 @@ export class FilmsService {
 								key: linkKey,
 								data: link
 							})
+
+							// Creates history
+							history.push(this.datastore.formulateHistory(
+								link,
+								'Link',
+								linkKey.id,
+								user,
+								'update'
+							))
 						} else if(!link.id){
 							// Adds a new link of an exisiting platform
 							const linkKey = this.datastore.key(['Platform', platformKey.id,'Film', filmKey.id, 'Link']);
@@ -497,6 +712,15 @@ export class FilmsService {
 								key: linkKey,
 								data: link
 							})
+
+							// Creates history
+							history.push(this.datastore.formulateHistory(
+								link,
+								'Link',
+								linkKey.id,
+								user,
+								'update'
+							))
 						}
 					} 
 				} else if(link.platformName && !link.platformId && !link.id && link.url){
@@ -513,13 +737,29 @@ export class FilmsService {
 						key: platformKey,
 						data: platformEntity
 					})
-					const roleKey = this.datastore.key(['Platform', platformKey.id,'Film', filmKey.id,'Link'])
+					const linkKey = this.datastore.key(['Platform', platformKey.id,'Film', filmKey.id,'Link'])
 					link.created = time;
 					link.lastUpdated = time;
 					entities.push({
-						key: roleKey,
+						key: linkKey,
 						data: link
 					})
+
+					// Creates history for both actions
+					entities.push(this.datastore.formulateHistory(
+						platformEntity,
+						'Platform',
+						platformKey.id,
+						user,
+						'create'
+					))
+					history.push(this.datastore.formulateHistory(
+						link,
+						'Link',
+						linkKey.id,
+						user,
+						'update'
+					))
 				} else {
 					throw new BadRequestException("Something is not right in this edit, make sure you've filled all required fields")
 				}
@@ -533,7 +773,7 @@ export class FilmsService {
 		}
 	}
 
-	async softDeleteFilm(id: number){
+	async softDeleteFilm(id: number, user: string){
 		const filmKey = this.datastore.key(['Film', id]);
 		const entity = {
 			key: filmKey,
@@ -541,8 +781,19 @@ export class FilmsService {
 				status: "hidden"
 			}
 		}
+
+		// Write action into history
+		const historyEntity = this.datastore.formulateHistory(
+			{status: 'hidden'},
+			filmKey.id,
+			'Film',
+			user,
+			'softDelete'
+		)
+
 		try {
 			await this.datastore.update(entity)
+			await this.datastore.insert(historyEntity)
 			return {'status': 'deleted'}
 		} catch(err: any){
 			throw new BadRequestException(err.message)
