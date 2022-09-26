@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { Datastore } from '@google-cloud/datastore';
+import { Datastore, Query } from '@google-cloud/datastore';
 import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
 import { 
@@ -13,6 +13,7 @@ import {
 	Link,
 	Platform
 } from '../films/films.types'
+import { CreateFilmDto, UpdateFilmDto, GetFilmDto } from '../films/films.dto';
 
 @Injectable()
 export class DatabaseService extends Datastore{
@@ -23,7 +24,17 @@ export class DatabaseService extends Datastore{
 		})
 	}
 
-	// Entities formulators
+	// Runs the runQuery method but explicity exposes entity id in return
+	async runQueryFull(query: Query){
+		const objects = await this.runQuery(query)
+		objects[0].map(obj => {
+			obj.id = obj[this.datastore.KEY]["id"]
+			return obj
+		})
+		return objects
+	}
+
+	// History methods
 	formulateHistory(data: any, kind: string, id: number|string, user: string, action: string){
 		const key = this.key('History');
 		const history = data;
@@ -49,11 +60,29 @@ export class DatabaseService extends Datastore{
 		}
 	}
 
+	updateStillEntity(data: any, id: number|string, time: Date, kind: string){
+		const stillKey = this.key([kind, id, 'Still', data.url]);
+		data.lastUpdated = time;
+		return {
+			key: stillKey,
+			data: data
+		}
+	}
+
 	// Poster methods
 	createPosterEntity(data: any, id: number|string, time: Date, kind){
 		const stillKey = this.key([kind, id, 'Poster', data.url]);
 		data.lastUpdated = time;
 		data.created = time;
+		return {
+			key: stillKey,
+			data: data
+		}
+	}
+
+	updatePosterEntity(data: any, id: number|string, time: Date, kind){
+		const stillKey = this.key([kind, id, 'Poster', data.url]);
+		data.lastUpdated = time;
 		return {
 			key: stillKey,
 			data: data
@@ -106,11 +135,51 @@ export class DatabaseService extends Datastore{
 				history.push(this.formulateHistory(personEntity, 'Person', personKey.id, user, 'create'));
 				history.push(this.formulateHistory(data, 'PersonRole', roleKey.id, user, 'create'));
 			}
-		}else {
-			throw new BadRequestException("Role category cannot be empty");
 		}
+
 		// Return enitity the arrays
 		return {entities, history}
+	}
+
+	async updatePersonRoleEntity(data: UpdateFilmDto['credits'][0], parentId: number|string, time: Date, user: string, parentKind: string){
+		const entities = [];
+		const history = [];
+		if(data.personId && data.id){
+			const personKey = this.datastore.key(['Person', data.personId]);
+			const person = await this.datastore.get(personKey);
+			if(person.length >= 1 && isNaN(person[0])){
+				// Edits an existing person role of an exsiting person
+				const roleKey = this.key(['Person', personKey.id, parentKind, parentId,'PersonRole', data.id])
+				delete data.id;
+				delete data.personId;
+				data.lastUpdated = time;
+				entities.push({
+					key: roleKey,
+					data: data
+				})
+
+				// Creates history
+				history.push(this.formulateHistory(data, 'PersonRole', roleKey.id, user, 'update'));
+
+				// Updates the the parent kind if there's a change
+				if(data.personName){
+					const updateData = {
+						lastUpdated: time
+					}
+					data.personName && person[0].nameEditable == true ? updateData['name'] = data.personName : null;
+					
+					entities.push({
+						key: personKey,
+						data: updateData
+					})
+
+					// Creates history
+					history.push(this.formulateHistory(updateData, 'Person', personKey.id, user, 'update'));
+				}
+			} 
+		}
+
+		return { entities, history }
 	}
 
 	// Company methods
@@ -161,13 +230,51 @@ export class DatabaseService extends Datastore{
 				history.push(this.formulateHistory(companyEntity, 'Company', companyKey.id, user, 'create'));
 				history.push(this.formulateHistory(data, 'CompanyRole', roleKey.id, user, 'create'));
 			}
-		} else {
-			throw new BadRequestException("Role type cannot be empty");
 		}
 
 		return { entities, history}
 	}
 
+	async updateCompanyRoleEntity(data: any, parentId: number|string, time: Date, user: string, parentKind: string){
+		const entities = [];
+		const history = [];
+		if(data.companyId && data.id){
+			const companyKey = this.datastore.key(['Company', data.companyId]);
+			const company = await this.datastore.get(companyKey);
+			if(company.length >= 1 && isNaN(company[0])){
+				// Edits an existing company role of an exsiting company
+				const roleKey = this.datastore.key(['Company', companyKey.id, parentKind, parentId,'CompanyRole', data.id]);
+				delete data.id;
+				delete data.companyId;
+				data.lastUpdated = time;
+				entities.push({
+					key: roleKey,
+					data: data
+				})
+
+				// Creates history
+				history.push(this.formulateHistory(data, 'CompanyRole', roleKey.id, user, 'update'));
+
+				// Updates the the parent kind if there's a change
+				if(data.companyName || data.website){
+					const updateData = {
+						lastUpdated: time
+					}
+					data.companyName && company[0].nameEditable == true ? updateData['name'] = data.companyName : null
+					data.website ? updateData['website'] = data.website : null
+					entities.push({
+						key: companyKey,
+						data: updateData
+					})
+
+					// Creates history
+					history.push(this.formulateHistory(updateData, 'Company', companyKey.id, user, 'update'));
+				}
+			} 
+		}
+
+		return { entities, history }
+	}
 	// Platform methods
 
 	// Link methods
@@ -216,8 +323,46 @@ export class DatabaseService extends Datastore{
 				history.push(this.formulateHistory(platform, 'Platform', platformKey.id, user, 'create'));
 				history.push(this.formulateHistory(data, 'Link', linkKey.id, user, 'create'));
 			}
-		} else {
-			throw new BadRequestException("Link URL cannot be empty");
+		}
+
+		return { entities, history }
+	}
+
+	async updateLinkEntity(data: UpdateFilmDto['currentPlatforms'][0], parentId: number|string, time: Date, user: string, parentKind: string){
+		const entities = [];
+		const history = [];
+		if(data.platformId && data.id){
+			const platformKey = this.key(['Platform', data.platformId]);
+			const platform = await this.get(platformKey);
+			if(platform.length >= 1 && isNaN(platform[0])){
+				// Edits an existing link of an exsiting platform
+				const linkKey = this.key(['Platform', platformKey.id, parentKind, parentId,'Link', data.id]);
+				delete data.id;
+				delete data.platformId;
+				data.lastUpdated = time;
+				entities.push({
+					key: linkKey,
+					data: data
+				})
+
+				// Creates history
+				history.push(this.formulateHistory(data, 'Link', linkKey.id, user, 'update'));
+
+				// Updates the the parent kind if there's a change
+				if(data.platformName){
+					const updateData = {
+						lastUpdated: time
+					}
+					data.platformName && platform[0].nameEditable == true ? updateData['name'] = data.platformName : null
+					entities.push({
+						key: platformKey,
+						data: updateData
+					})
+
+					// Creates history
+					history.push(this.formulateHistory(updateData, 'Platform', platformKey.id, user, 'update'));
+				}
+			}
 		}
 
 		return { entities, history }
