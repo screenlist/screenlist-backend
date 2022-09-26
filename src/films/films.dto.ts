@@ -27,7 +27,7 @@ export class CreateFilmDto {
 		accessType: string;
 		url: string;
 		platformName: string;
-		platformId: number;
+		platformId?: number;
 		lastUpdated?: Date;
 		created?: Date;
 	}];
