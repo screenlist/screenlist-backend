@@ -162,248 +162,39 @@ export class FilmsService {
 			data: film.details
 		})
 		// Write film action into history
-		const detailsHistory = this.datastore.formulateHistory(
-			film.details,
-			'Film',
-			filmKey.id,
-			user,
-			'create'
-		)
-		entities.push(detailsHistory)
+		entities.push(this.datastore.formulateHistory(film.details, 'Film',	filmKey.id,	user,	'create'));
 
 		// Creates poster entities
 		film.posters.forEach(poster => {
-			const posterKey = this.datastore.key(['Film', filmKey.id, 'Poster', poster.url]);
-			poster.lastUpdated = time;
-			poster.created = time;
-			entities.push({
-				key: posterKey,
-				data: poster
-			})
+			const posterEntity = this.datastore.createPosterEntity(poster, filmKey.id, time, 'Film');
+			entities.push(posterEntity)
 			// Write poster action into history
-			const posterHistory = this.datastore.formulateHistory(
-				poster,
-				'Poster',
-				posterKey.name,
-				user,
-				'create'
-			)
-			entities.push(posterHistory)
+			entities.push(this.datastore.formulateHistory(poster,	'Poster',	posterEntity.key.name,	user,	'create'));
 		})
 		// Creates still frame entities
 		film.stillFrames.forEach(frame => {
-			const stillKey = this.datastore.key(['Film', filmKey.id, 'Still', frame.url]);
-			frame.lastUpdated = time;
-			frame.created = time;
-			entities.push({
-				key: stillKey,
-				data: frame
-			})
+			const still = this.datastore.createStillEntity(frame, filmKey.id, time, 'Film');
+			entities.push(still)
 			// Write film action into history
-			const stillHistory = this.datastore.formulateHistory(
-				frame,
-				'Still',
-				stillKey.name,
-				user,
-				'create'
-			)
+			entities.push(this.datastore.formulateHistory(frame, 'Still', still.key.name, user, 'create'));
 		})
 		// Creates person role entities
 		film.credits.forEach(async (role) => {
-			role.lastUpdated = time;
-			role.created = time;
-			role.film = filmName
-			if(!role.category){
-				throw new BadRequestException("Role category cannot be empty")
-			}
-			// Checks whether the person in question already exists
-			if(role.personId){
-				// Checks whether the person id real or bogus
-				const personKey = this.datastore.key(['Person', role.personId])
-				const person = await this.datastore.get(personKey)
-				if(person.length >= 1 && isNaN(person[0])){
-					// Creates the role for this existing person
-					const roleKey = this.datastore.key(['Person', personKey.id,'Film', filmKey.id, 'PersonRole']);
-					delete role.personId;
-					entities.push({
-						key: roleKey,
-						data: role
-					})
-					// Create history
-					entities.push(this.datastore.formulateHistory(
-						role,
-						'PersonRole',
-						roleKey.id,
-						user,
-						'create'
-					))
-				}
-			} else {
-				// Creates the role and a new person
-				const personKey = this.datastore.key('Person')
-				const personEntity: Person = {
-					name: role.personName,
-					nameEditable: true,
-					lastUpdated: time,
-					created: time,
-				}
-				entities.push({
-					key: personKey,
-					data: personEntity
-				})
-				const roleKey = this.datastore.key(['Person', personKey.id,'Film', filmKey.id, 'PersonRole']);
-				entities.push({
-					key: roleKey,
-					data: role
-				})
-				// Create history for both actions
-				entities.push(this.datastore.formulateHistory(
-					personEntity,
-					'Person',
-					personKey.id,
-					user,
-					'create'
-				))
-				entities.push(this.datastore.formulateHistory(
-					role,
-					'PersonRole',
-					roleKey.id,
-					user,
-					'create'
-				))
-			}
+			const data = await this.datastore.createPersonRoleEntity(role, filmKey.id, time, user, 'Film');
+			entities.push(...data.entities);
+			entities.push(...data.history);
 		})
 		// Creates company role entities
 		film.companies.forEach(async (role) => {
-			role.lastUpdated = time;
-			role.created = time;
-			role.film = filmName;
-			if(!role.type){
-				throw new BadRequestException("Role type cannot be empty")
-			}
-			// Checks whether the company in question already exist
-			if(role.companyId){
-				// Checks whether the company id real or bogus
-				const companyKey = this.datastore.key(['Company', role.companyId]);
-				const company = await this.datastore.get(companyKey);
-				if(company.length >= 1 && isNaN(company[0])){
-					const roleKey = this.datastore.key(['Company', companyKey.id,'Film', filmKey.id, 'CompanyRole']);
-					delete role.companyId;
-					entities.push({
-						key: companyKey,
-						data: role
-					})
-					// Create history
-					entities.push(this.datastore.formulateHistory(
-						role,
-						'CompanyRole',
-						roleKey.id,
-						user,
-						'create'
-					))
-				}
-			} else {
-				// Create the role and a new company
-				const companyKey = this.datastore.key(['Company', role.companyId]);
-				const companyEntity: Company = {
-					name: role.companyName,
-					nameEditable: true,
-					website: role.website,
-					lastUpdated: time,
-					created: time,
-				} 
-				entities.push({
-					key: companyKey,
-					data: companyEntity
-				})
-				const roleKey = this.datastore.key(['Company', companyKey.id,'Film', filmKey.id, 'CompanyRole']);
-				delete role.companyId;
-				entities.push({
-					key: roleKey,
-					data: role
-				})
-
-				// Create histories for actions
-				entities.push(this.datastore.formulateHistory(
-					companyEntity,
-					'Company',
-					companyKey.id,
-					user,
-					'create'
-				))
-				entities.push(this.datastore.formulateHistory(
-					role,
-					'CompanyRole',
-					roleKey.id,
-					user,
-					'create'
-				))
-			}
+			const data = await this.datastore.createCompanyRoleEntity(role, filmKey.id, time, user, 'Film');
+			entities.push(...data.entities);
+			entities.push(...data.history);
 		})
 
 		film.currentPlatforms.forEach(async (link) => {
-			link.lastUpdated = time;
-			link.created = time;
-			if(!link.url){
-				throw new BadRequestException("Link URL cannot be empty")
-			}
-			// Checks whether the platform in question already exist
-			if(link.platformId){
-				// Checks whether the platform id real or bogus
-				const platformKey = this.datastore.key(['Platform', link.platformId]);
-				const platform = await this.datastore.get(platformKey);
-				if(platform.length >= 1 && isNaN(platform[0])){
-					const linkKey = this.datastore.key(['Platform', platformKey.id, 'Film', filmKey.id, 'Link']);
-					delete link.platformId;
-					entities.push({
-						key: linkKey,
-						data: link
-					})
-
-					// Create history
-					entities.push(this.datastore.formulateHistory(
-						link,
-						'Link',
-						linkKey.id,
-						user,
-						'create'
-					))
-				}
-			} else {
-				// Creates a link and a new platform
-				const platformKey = this.datastore.key('Platform');
-				const platform: Platform = {
-					name: link.platformName,
-					nameEditable: true,
-					lastUpdated: time,
-					created: time
-				}
-				entities.push({
-					key: platformKey,
-					data: platform
-				})
-				const linkKey = this.datastore.key(['Platform', platformKey.id, 'Film', filmKey.id, 'Link']);
-				entities.push({
-					key: linkKey,
-					data: link
-				})
-
-				// Create histories for both actions
-				entities.push(this.datastore.formulateHistory(
-					platform,
-					'Platform',
-					platformKey.id,
-					user,
-					'create'
-				))
-				entities.push(this.datastore.formulateHistory(
-					link,
-					'Link',
-					linkKey.id,
-					user,
-					'create'
-				))
-			}
+			const data = await this.datastore.createLinkEntity(link, filmKey.id, time, user, 'Film');
+			entities.push(...data.entities);
+			entities.push(...data.history);
 		})
 
 		try {
@@ -440,13 +231,7 @@ export class FilmsService {
 			})
 
 			// Create history
-			history.push(this.datastore.formulateHistory(
-				film.details,
-				'Film',
-				filmKey.id,
-				user,
-				'update'
-			))
+			history.push(this.datastore.formulateHistory(film.details, 'Film', filmKey.id, user, 'update'));
 		}
 
 		// Updates posters
