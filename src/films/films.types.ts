@@ -19,7 +19,9 @@ export interface Poster {
 }
 
 export interface PersonRole {
+	id: string;
 	personName: string;
+	personId?: string;
 	title: string;
 	subtitle: string;
 	category: string;
@@ -31,6 +33,7 @@ export interface PersonRole {
 }
 
 export interface Person {
+	id: string;
 	name: string;
 	nameEditable: boolean;
 	lastUpdated: Date;
@@ -38,6 +41,7 @@ export interface Person {
 }
 
 export interface Company {
+	id: string;
 	name: string;
 	nameEditable: boolean;
 	website?: string;
@@ -46,8 +50,10 @@ export interface Company {
 }
 
 export interface CompanyRole {
+	id: string;
 	film: string;
 	companyName: string;
+	companyId?: string;
 	year?: string;
 	type: string;
 	website?: string;
@@ -56,6 +62,7 @@ export interface CompanyRole {
 }
 
 export interface Platform {
+	id: string;
 	name: string;
 	nameEditable: boolean;
 	website?: string;
@@ -64,17 +71,18 @@ export interface Platform {
 }
 
 export interface Link {
-	id: number;
+	id: string;
 	accessType: string;
 	url: string;
 	platformName: string;
-	film: string;
+	platformId?: string;
+	film?: string;
 	lastUpdated: Date;
 	created: Date;
 }
 
 export interface FilmDetails {
-	id: number;
+	id: string;
 	name: string;
 	nameEditable: boolean;
 	trailerUrl?: string;
@@ -85,7 +93,19 @@ export interface FilmDetails {
 	plotSummary?: string;
 	releaseDate?: Date;
 	initialPlatform?: string;
+	genres?: [string];
 	slug: string;
 	lastUpdated: Date;
 	created: Date;
+}
+
+export interface FilmType {
+	details: FilmDetails;
+	posters?: Poster[];
+	stills?: Still[];
+	actors?: PersonRole[];
+	crew?: PersonRole[];
+	platforms?: Link[];
+	distributors?: CompanyRole[];
+	producers?: CompanyRole[]
 }
