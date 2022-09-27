@@ -12,59 +12,20 @@ export class CreateFilmDto {
 		releaseDate?: Date;
 		initialPlatform?: string;
 		slug?: string;
+		genres?: [string];
 		lastUpdated?: Date;
 		created?: Date;
 	};
-	posters?: [{
-		url: string;
-		originalName: string;
-		description: string;
-		quality: string;
-		lastUpdated?: Date;
-		created?: Date;
-	}];
-	currentPlatforms?: [{
-		accessType: string;
-		url: string;
-		platformName: string;
-		platformId?: number;
-		lastUpdated?: Date;
-		created?: Date;
-	}];
-	companies: [{
-		companyName: string;
-		companyId?: number;
-		website?: string;
-		type: string;
-		lastUpdated?: Date;
-		created?: Date;
-		film?: string;
-	}];
-	stillFrames?: [{
-		url: string;
-		description: string;
-		originalName: string;
-		quality: string;
-		lastUpdated?: Date;
-		created?: Date;
-	}];
-	credits: [{
-		personName: string;
-		personId?: number;
-		title: string;
-		subtitle: string;
-		category: string;
-		characterName?: string;
-		characterDescription?: string;
-		lastUpdated?: Date;
-		created?: Date;
-		film?: string;
-	}]
+	posters?: CreatePosterDto[];
+	currentPlatforms?: CreateLinkDto[];
+	companies: CreateCompanyRoleDto[];
+	stillFrames?: CreateStillDto[];
+	credits: CreatePersonRoleDto[]
 }
 
 export class UpdateFilmDto {
 	details: {
-		id: number;
+		id: string;
 		name?: string;
 		nameEditable?: boolean;
 		trailerUrl?: string;
@@ -79,54 +40,11 @@ export class UpdateFilmDto {
 		lastUpdated?: Date;
 		created?: Date;
 	};
-	posters?: [{
-		url: string;
-		originalName?: string;
-		description?: string;
-		quality?: string;
-		lastUpdated?: Date;
-		created?: Date;
-	}];
-	currentPlatforms?: [{
-		id: number;
-		accessType?: string;
-		url?: string;
-		platformName?: string;
-		platformId?: number;
-		lastUpdated?: Date;
-		created?: Date;
-	}];
-	companies?: [{
-		id: number;
-		companyName?: string;
-		companyId?: number;
-		website?: string;
-		type?: string;
-		lastUpdated?: Date;
-		created?: Date;
-		film?: string;
-	}];
-	stillFrames?: [{
-		url: string;
-		description?: string;
-		originalName?: string;
-		quality?: string;
-		lastUpdated?: Date;
-		created?: Date;
-	}];
-	credits?: [{
-		id: number;
-		personName?: string;
-		personId?: number;
-		title?: string;
-		subtitle?: string;
-		category?: string;
-		characterName?: string;
-		characterDescription?: string;
-		lastUpdated?: Date;
-		created?: Date;
-		film?: string;
-	}]
+	posters?: UpdatePosterDto[];
+	currentPlatforms?: UpdateLinkDto[];
+	companies?: UpdateCompanyRoleDto[];
+	stillFrames?: UpdateStillDto[];
+	credits?: UpdatePersonRoleDto[]
 }
 
 export class GetFilmDto {
@@ -192,7 +110,6 @@ export class GetFilmDto {
 		category: string;
 		characterName?: string;
 		characterDescription?: string;
-		film: string;
 		lastUpdated: Date;
 		created: Date;
 	}];
@@ -204,8 +121,113 @@ export class GetFilmDto {
 		category: string;
 		characterName?: string;
 		characterDescription?: string;
-		film: string;
 		lastUpdated: Date;
 		created: Date;
 	}]
+}
+
+// Still
+export class CreateStillDto {
+	url: string;
+	description: string;
+	originalName: string;
+	quality: string;
+	lastUpdated?: Date;
+	created?: Date;
+}
+
+export class UpdateStillDto {
+	url: string;
+	description?: string;
+	originalName?: string;
+	quality?: string;
+	lastUpdated?: Date;
+	created?: Date;
+}
+
+// Poster
+export class CreatePosterDto {
+	url: string;
+	originalName: string;
+	description: string;
+	quality: string;
+	lastUpdated?: Date;
+	created?: Date;
+}
+
+export class UpdatePosterDto {
+	url: string;
+	originalName?: string;
+	description?: string;
+	quality?: string;
+	lastUpdated?: Date;
+	created?: Date;
+}
+
+// PersonRole
+export class CreatePersonRoleDto {
+	personName: string;
+	personId?: number;
+	title: string;
+	subtitle: string;
+	category: string;
+	characterName?: string;
+	characterDescription?: string;
+	lastUpdated?: Date;
+	created?: Date;
+}
+
+export class UpdatePersonRoleDto {
+	id: number;
+	personName?: string;
+	personId?: number;
+	title?: string;
+	subtitle?: string;
+	category?: string;
+	characterName?: string;
+	characterDescription?: string;
+	lastUpdated?: Date;
+	created?: Date;
+}
+
+// CompanyRole
+export class CreateCompanyRoleDto {
+	companyName: string;
+	companyId?: number;
+	website?: string;
+	type: string;
+	lastUpdated?: Date;
+	created?: Date;
+	film?: string;
+}
+
+export class UpdateCompanyRoleDto {
+	id: number;
+	companyName?: string;
+	companyId?: number;
+	website?: string;
+	type?: string;
+	lastUpdated?: Date;
+	created?: Date;
+	film?: string;
+}
+
+// Link
+export class CreateLinkDto {
+	accessType: string;
+	url: string;
+	platformName: string;
+	platformId?: number;
+	lastUpdated?: Date;
+	created?: Date;
+}
+
+export class UpdateLinkDto {
+	id: number;
+	accessType?: string;
+	url?: string;
+	platformName?: string;
+	platformId?: number;
+	lastUpdated?: Date;
+	created?: Date;
 }
