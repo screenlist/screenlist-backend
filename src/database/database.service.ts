@@ -50,8 +50,8 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Still methods
-	createStillEntity(data: any, id: number|string, time: Date, kind: string){
-		const stillKey = this.key([kind, id, 'Still', data.url]);
+	createStillEntity(data: any, parentId: number|string, time: Date, parentKind: string){
+		const stillKey = this.key([parentKind, parentId, 'Still', data.url]);
 		data.lastUpdated = time;
 		data.created = time;
 		return {
@@ -60,8 +60,8 @@ export class DatabaseService extends Datastore{
 		}
 	}
 
-	updateStillEntity(data: any, id: number|string, time: Date, kind: string){
-		const stillKey = this.key([kind, id, 'Still', data.url]);
+	updateStillEntity(data: any, parentId: number|string, time: Date, parentKind: string){
+		const stillKey = this.key([parentKind, parentId, 'Still', data.url]);
 		data.lastUpdated = time;
 		return {
 			key: stillKey,
@@ -70,8 +70,8 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Poster methods
-	createPosterEntity(data: any, id: number|string, time: Date, kind){
-		const stillKey = this.key([kind, id, 'Poster', data.url]);
+	createPosterEntity(data: any, parentId: number|string, time: Date, parentKind: string){
+		const stillKey = this.key([parentKind, parentId, 'Poster', data.url]);
 		data.lastUpdated = time;
 		data.created = time;
 		return {
@@ -80,8 +80,8 @@ export class DatabaseService extends Datastore{
 		}
 	}
 
-	updatePosterEntity(data: any, id: number|string, time: Date, kind){
-		const stillKey = this.key([kind, id, 'Poster', data.url]);
+	updatePosterEntity(data: any, parentId: number|string, time: Date, parentKind: string){
+		const stillKey = this.key([parentKind, parentId, 'Poster', data.url]);
 		data.lastUpdated = time;
 		return {
 			key: stillKey,
@@ -90,9 +90,33 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Person methods
+	createPersonEntity(data: any, time: Date, user: string){
+		const personKey = this.key('Person');
+		data.nameEditable = true;
+		data.created = time;
+		data.lastUpdated = time;
+		const entity = {
+			key: personKey,
+			data: data
+		}
+		const history = this.formulateHistory(data, 'Person', personKey.id, user, 'create');
+		return { entity, history }
+	}
+
+	updatePersonEntity(data: any, time: Date, user: string){
+		const history = [];
+		const entity = [];
+		if(data.id){
+			data.lastUpdated = time;
+			const personKey = this.key(['Person', data.id]);
+			delete data.id;
+			entity.push({key: personKey, data});
+			history.push(this.formulateHistory(data, 'Person', personKey.id, user, 'update'));
+		}
+	}
 
 	// PersonRole methods
-	async createPersonRoleEntity(data: any, id: number|string, time: Date, user: string, kind: string){
+	async createPersonRoleEntity(data: any, parentId: number|string, time: Date, user: string, parentKind: string){
 		data.lastUpdated = time;
 		data.created = time;
 		const entities = []
@@ -104,7 +128,7 @@ export class DatabaseService extends Datastore{
 				const person = await this.get(personKey)
 				if(person.length >= 1 && isNaN(person[0])){
 					// Creates the role for this existing person
-					const roleKey = this.key(['Person', personKey.id, kind, id, 'PersonRole']);
+					const roleKey = this.key(['Person', personKey.id, parentKind, parentId, 'PersonRole']);
 					delete data.personId;
 					entities.push({
 						key: roleKey,
@@ -126,7 +150,7 @@ export class DatabaseService extends Datastore{
 					key: personKey,
 					data: personEntity
 				})
-				const roleKey = this.key(['Person', personKey.id, kind, id, 'PersonRole']);
+				const roleKey = this.key(['Person', personKey.id, parentKind, parentId, 'PersonRole']);
 				entities.push({
 					key: roleKey,
 					data: data
@@ -183,9 +207,33 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Company methods
+	createCompanyEntity(data: any, time: Date, user: string){
+		const companyKey = this.key('Company');
+		data.nameEditable = true;
+		data.created = time;
+		data.lastUpdated = time;
+		const entity = {
+			key: companyKey,
+			data: data
+		}
+		const history = this.formulateHistory(data, 'Company', companyKey.id, user, 'create');
+		return { entity, history }
+	}
+
+	updateCompanyEntity(data: any, time: Date, user: string){
+		const history = [];
+		const entity = [];
+		if(data.id){
+			data.lastUpdated = time;
+			const companyKey = this.key(['Company', data.id]);
+			delete data.id;
+			entity.push({key: companyKey, data});
+			history.push(this.formulateHistory(data, 'Company', companyKey.id, user, 'update'));
+		}
+	}
 
 	// CompanyRole methods
-	async createCompanyRoleEntity(data: any, id: number|string, time: Date, user: string, kind: string){
+	async createCompanyRoleEntity(data: any, parentId: number|string, time: Date, user: string, parentKind: string){
 		data.lastUpdated = time;
 		data.created = time;
 		const entities = [];
@@ -197,7 +245,7 @@ export class DatabaseService extends Datastore{
 				const companyKey = this.key(['Company', data.companyId]);
 				const company = await this.get(companyKey);
 				if(company.length >= 1 && isNaN(company[0])){
-					const roleKey = this.key(['Company', companyKey.id, kind, id, 'CompanyRole']);
+					const roleKey = this.key(['Company', companyKey.id, parentKind, parentId, 'CompanyRole']);
 					delete data.companyId;
 					entities.push({
 						key: roleKey,
@@ -220,7 +268,7 @@ export class DatabaseService extends Datastore{
 					key: companyKey,
 					data: companyEntity
 				})
-				const roleKey = this.key(['Company', companyKey.id, kind, id, 'CompanyRole']);
+				const roleKey = this.key(['Company', companyKey.id, parentKind, parentId, 'CompanyRole']);
 				entities.push({
 					key: roleKey,
 					data: data
@@ -275,10 +323,35 @@ export class DatabaseService extends Datastore{
 
 		return { entities, history }
 	}
+
 	// Platform methods
+	createPlatformEntity(data: any, time: Date, user: string){
+		const platformKey = this.key('Platform');
+		data.nameEditable = true;
+		data.created = time;
+		data.lastUpdated = time;
+		const entity = {
+			key: platformKey,
+			data: data
+		}
+		const history = this.formulateHistory(data, 'Platform', platformKey.id, user, 'create');
+		return { entity, history }
+	}
+
+	updatePlatformEntity(data: any, time: Date, user: string){
+		const history = [];
+		const entity = [];
+		if(data.id){
+			data.lastUpdated = time;
+			const platformKey = this.key(['Platform', data.id]);
+			delete data.id;
+			entity.push({key: platformKey, data});
+			history.push(this.formulateHistory(data, 'Platform', platformKey.id, user, 'update'));
+		}
+	}
 
 	// Link methods
-	async createLinkEntity(data: any, id: number|string, time: Date, user: string, kind: string){
+	async createLinkEntity(data: any, parentId: number|string, time: Date, user: string, parentKind: string){
 		data.lastUpdated = time;
 		data.created = time;
 		const entities = [];
@@ -291,7 +364,7 @@ export class DatabaseService extends Datastore{
 				const platformKey = this.key(['Platform', data.platformId]);
 				const platform = await this.get(platformKey);
 				if(platform.length >= 1 && isNaN(platform[0])){
-					const linkKey = this.key(['Platform', platformKey.id, kind, id, 'Link']);
+					const linkKey = this.key(['Platform', platformKey.id, parentKind, parentId, 'Link']);
 					delete data.platformId;
 					entities.push({
 						key: linkKey,
@@ -314,7 +387,7 @@ export class DatabaseService extends Datastore{
 					key: platformKey,
 					data: platform
 				})
-				const linkKey = this.key(['Platform', platformKey.id, kind, id, 'Link']);
+				const linkKey = this.key(['Platform', platformKey.id, parentKind, parentId, 'Link']);
 				entities.push({
 					key: linkKey,
 					data: data
