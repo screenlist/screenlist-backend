@@ -22,13 +22,20 @@ export class StorageController {
 	@Post('file')
 	@UseInterceptors(FileFieldsInterceptor([
 		{name: 'poster', maxCount: 1},
-		{name: 'still', maxCount: 1}
+		{name: 'still', maxCount: 1},
+		{name: 'profile', maxCount: 1}
 	]))
-	async uploadPhoto(@UploadedFiles() image: { poster?: Express.Multer.File[], still?: Express.Multer.File[] }) {
+	async uploadPhoto(@UploadedFiles() image: { 
+		poster?: Express.Multer.File[], 
+		still?: Express.Multer.File[] ,
+		profile?: Express.Multer.File[]
+	}) {
 		if(image.poster){
 			return await this.storageService.uploadPoster(image.poster[0])
 		} else if(image.still){
 			return await this.storageService.uploadStill(image.still[0])	
+		} else if(image.profile){
+			return await this.storageService.uploadProfilePhoto(image.still[0])	
 		}
 	}
 }
