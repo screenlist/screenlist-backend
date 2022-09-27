@@ -11,7 +11,8 @@ import {
 	PersonRole, 
 	Person,
 	Link,
-	Platform
+	Platform,
+	FilmType
 } from './films.types'
 
 
@@ -24,9 +25,9 @@ export class FilmsService {
 		this.datastore = new DatabaseService(configService)
 	}
 
-	async findAll(user: string): Promise<GetFilmDto[]>{
+	async findAll(user: string): Promise<FilmType[]>{
 		const query = this.datastore.createQuery('Film').filter('status', '=', 'public').limit(20)
-		const results: GetFilmDto[] = []
+		const results: FilmType[] = []
 		try {
 			const films = await this.datastore.runQuery(query)
 			// Loop through each film to retrieve its poster
@@ -36,14 +37,10 @@ export class FilmsService {
 					.filter('film', '=', film.name)
 					.filter('quality', '=', 'SD')
 					.limit(1);
-				const posters = await this.datastore.runQuery(posterQuery);
-				posters[0].map(obj => {
-					obj.id = obj[this.datastore.KEY]['id']
-					return obj
-				})
-				const wholeFilm: GetFilmDto = {
+				const posters = await this.datastore.runQueryFull(posterQuery);
+				const wholeFilm: FilmType = {
 					details: film,
-					posters: posters[0] as GetFilmDto['posters']
+					posters: posters[0] as Poster[]
 				}
 				results.push(wholeFilm);
 			})
@@ -53,7 +50,7 @@ export class FilmsService {
 		}
 	}
 
-	async findOne(id: number, user: string): Promise<any>{
+	async findOne(id: number, user: string): Promise<FilmType>{
 		const filmKey = this.datastore.key(['Film', id]);
 		// Create queries
 		const postersQuery = this.datastore.createQuery('Poster')
@@ -93,27 +90,27 @@ export class FilmsService {
 			if(details[0].status != "public"){
 				throw new NotFoundException("Not available");
 			}
-			const platformLinks =  await this.datastore.runQueryFull(linksQuery);
+			const platformLinks: Link[] =  await this.datastore.runQueryFull(linksQuery);
 			const poster = await this.datastore.runQuery(postersQuery);
 			const stills = await this.datastore.runQuery(stillsQuery);
-			const distributors = await this.datastore.runQueryFull(distributorsQuery);
-			const producers = await this.datastore.runQueryFull(producersQuery);
-			const actors = await this.datastore.runQueryFull(actorsQuery);
-			const crew = await this.datastore.runQueryFull(crewQuery);
+			const distributors: CompanyRole[] = await this.datastore.runQueryFull(distributorsQuery);
+			const producers: CompanyRole[] = await this.datastore.runQueryFull(producersQuery);
+			const actors: PersonRole[] = await this.datastore.runQueryFull(actorsQuery);
+			const crew: PersonRole[] = await this.datastore.runQueryFull(crewQuery);
 
 			// Extact the entity id/name from query to expose to the client
-			details[0].map(obj => {
+			details.map(obj => {
 				obj.id = obj[this.datastore.KEY]["id"]
 				return obj
 			})
 
-			const film = {
-				details: details,
-				posters: poster,
-				stills: stills,
-				productionCompanies: producers,
-				distributionCompanies: distributors,
-				currentPlatforms: platformLinks,
+			const film: FilmType = {
+				details: details[0],
+				posters: poster[0] as Poster[],
+				stills: stills[0] as Still[],
+				producers: producers,
+				distributors: distributors,
+				platforms: platformLinks,
 				actors: actors,
 				crew: crew
 			}
@@ -265,8 +262,9 @@ export class FilmsService {
 		}
 
 		try{
-			await this.datastore.transaction({id: transactionId}).update(entities)
-			await this.datastore.transaction({id: transactionHistoryId}).insert(history)
+			await this.datastore.transaction({id: transactionId}).update(entities);
+			await this.datastore.transaction({id: transactionHistoryId}).insert(history);
+			return { 'status': 'successfully updated' };
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
