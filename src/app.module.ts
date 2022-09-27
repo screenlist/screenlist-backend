@@ -8,9 +8,8 @@ import { SearchModule } from './search/search.module';
 import { UsersModule } from './users/users.module';
 import { PlatformsModule } from './platforms/platforms.module';
 import { PeopleModule } from './people/people.module';
-import { StillsModule } from './stills/stills.module';
+import { StorageModule } from './storage/storage.module';
 import { CompaniesModule } from './companies/companies.module';
-import { PostersModule } from './posters/posters.module';
 import { DatabaseModule } from './database/database.module';
 import { SessionModule } from './session/session.module';
 
@@ -26,9 +25,8 @@ import { SessionModule } from './session/session.module';
     }),
     PlatformsModule,
     PeopleModule,
-    StillsModule,
+    StorageModule,
     CompaniesModule,
-    PostersModule,
     DatabaseModule,
     SessionModule
   ],
