@@ -7,9 +7,11 @@ import {
 	UpdateStillDto,
 	CreatePosterDto,
 	UpdatePosterDto,
+} from '../films/films.dto';
+import {
 	CreateCompanyRoleDto,
 	UpdateCompanyRoleDto
-} from '../films/films.dto'
+} from '../companies/companies.dto';
 
 export class CreateSeriesDto {
 	details: {

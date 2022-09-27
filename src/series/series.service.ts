@@ -7,18 +7,17 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ConfigService } from '@nestjs/config';
-import { CreateSeriesDto, UpdateSeriesDto } from './series.dto'
-import {
-	Company,
-	CompanyRole, 
+import { CreateSeriesDto, UpdateSeriesDto } from './series.dto';
+import { 
 	Poster, 
 	Still, 
 	PersonRole, 
 	Person,
 	Link,
 	Platform
-} from '../films/films.types'
-import { SeriesType, SeriesDetails } from './series.types'
+} from '../films/films.types';
+import { SeriesType, SeriesDetails } from './series.types';
+import { Company, CompanyRole } from '../companies/companies.types';
 
 @Injectable()
 export class SeriesService {

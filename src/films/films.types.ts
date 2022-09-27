@@ -1,3 +1,8 @@
+import {
+	Company,
+	CompanyRole
+} from '../companies/companies.types';
+
 export interface Still {
 	originalName: string;
 	description: string;
@@ -36,27 +41,6 @@ export interface Person {
 	id: string;
 	name: string;
 	nameEditable: boolean;
-	lastUpdated: Date;
-	created: Date;
-}
-
-export interface Company {
-	id: string;
-	name: string;
-	nameEditable: boolean;
-	website?: string;
-	lastUpdated: Date;
-	created: Date;
-}
-
-export interface CompanyRole {
-	id: string;
-	film: string;
-	companyName: string;
-	companyId?: string;
-	year?: string;
-	type: string;
-	website?: string;
 	lastUpdated: Date;
 	created: Date;
 }

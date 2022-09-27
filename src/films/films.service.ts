@@ -1,11 +1,9 @@
 import { Injectable, ParseFileOptions, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ConfigService } from '@nestjs/config';
-import { CreateFilmDto, UpdateFilmDto, GetFilmDto } from './films.dto';
+import { CreateFilmDto, UpdateFilmDto } from './films.dto';
 import { 
 	FilmDetails, 
-	Company,
-	CompanyRole, 
 	Poster, 
 	Still, 
 	PersonRole, 
@@ -13,7 +11,13 @@ import {
 	Link,
 	Platform,
 	FilmType
-} from './films.types'
+} from './films.types';
+import {
+	Company,
+	CompanyRole
+} from '../companies/companies.types';
+
+
 
 
 @Injectable()

@@ -4,15 +4,13 @@ import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
 import { 
 	FilmDetails, 
-	Company,
-	CompanyRole, 
 	Poster, 
 	Still, 
 	PersonRole, 
 	Person,
 	Link,
 	Platform
-} from '../films/films.types'
+} from '../films/films.types';
 import {
 	CreateLinkDto,
 	UpdateLinkDto,
@@ -22,9 +20,12 @@ import {
 	UpdateStillDto,
 	CreatePosterDto,
 	UpdatePosterDto,
+} from '../films/films.dto';
+import {
 	CreateCompanyRoleDto,
 	UpdateCompanyRoleDto
-} from '../films/films.dto'
+} from '../companies/companies.dto';
+import { Company,	CompanyRole } from '../companies/companies.types';
 
 @Injectable()
 export class DatabaseService extends Datastore{
@@ -37,8 +38,8 @@ export class DatabaseService extends Datastore{
 
 	// Runs the runQuery method but explicity exposes entity id in return
 	async runQueryFull(query: Query){
-		const objects = await this.runQuery(query)
-		return objects[0].map(obj => {
+		const [objects, info] = await this.runQuery(query)
+		return objects.map(obj => {
 			obj.id = obj[this.datastore.KEY]["id"]
 			return obj
 		})

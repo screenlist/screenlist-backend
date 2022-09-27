@@ -1,13 +1,15 @@
-import { 
-	Company,
-	CompanyRole, 
+import {
 	Poster, 
 	Still, 
 	PersonRole, 
 	Person,
 	Link,
 	Platform,
-} from '../films/films.types'
+} from '../films/films.types';
+import {
+	Company,
+	CompanyRole
+} from '../companies/companies.types';
 
 export interface SeriesDetails {
 	id: string;
