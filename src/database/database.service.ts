@@ -13,7 +13,18 @@ import {
 	Link,
 	Platform
 } from '../films/films.types'
-import { CreateFilmDto, UpdateFilmDto, GetFilmDto } from '../films/films.dto';
+import {
+	CreateLinkDto,
+	UpdateLinkDto,
+	CreatePersonRoleDto,
+	UpdatePersonRoleDto,
+	CreateStillDto,
+	UpdateStillDto,
+	CreatePosterDto,
+	UpdatePosterDto,
+	CreateCompanyRoleDto,
+	UpdateCompanyRoleDto
+} from '../films/films.dto'
 
 @Injectable()
 export class DatabaseService extends Datastore{
@@ -27,11 +38,10 @@ export class DatabaseService extends Datastore{
 	// Runs the runQuery method but explicity exposes entity id in return
 	async runQueryFull(query: Query){
 		const objects = await this.runQuery(query)
-		objects[0].map(obj => {
+		return objects[0].map(obj => {
 			obj.id = obj[this.datastore.KEY]["id"]
 			return obj
 		})
-		return objects
 	}
 
 	// History methods
@@ -50,7 +60,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Still methods
-	createStillEntity(data: any, parentId: number|string, time: Date, parentKind: string){
+	createStillEntity(data: CreateStillDto, parentId: number|string, time: Date, parentKind: string){
 		const stillKey = this.key([parentKind, parentId, 'Still', data.url]);
 		data.lastUpdated = time;
 		data.created = time;
@@ -60,7 +70,7 @@ export class DatabaseService extends Datastore{
 		}
 	}
 
-	updateStillEntity(data: any, parentId: number|string, time: Date, parentKind: string){
+	updateStillEntity(data: UpdateStillDto, parentId: number|string, time: Date, parentKind: string){
 		const stillKey = this.key([parentKind, parentId, 'Still', data.url]);
 		data.lastUpdated = time;
 		return {
@@ -70,7 +80,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Poster methods
-	createPosterEntity(data: any, parentId: number|string, time: Date, parentKind: string){
+	createPosterEntity(data: CreatePosterDto, parentId: number|string, time: Date, parentKind: string){
 		const stillKey = this.key([parentKind, parentId, 'Poster', data.url]);
 		data.lastUpdated = time;
 		data.created = time;
@@ -80,7 +90,7 @@ export class DatabaseService extends Datastore{
 		}
 	}
 
-	updatePosterEntity(data: any, parentId: number|string, time: Date, parentKind: string){
+	updatePosterEntity(data: UpdatePosterDto, parentId: number|string, time: Date, parentKind: string){
 		const stillKey = this.key([parentKind, parentId, 'Poster', data.url]);
 		data.lastUpdated = time;
 		return {
@@ -116,7 +126,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// PersonRole methods
-	async createPersonRoleEntity(data: any, parentId: number|string, time: Date, user: string, parentKind: string){
+	async createPersonRoleEntity(data: CreatePersonRoleDto, parentId: number|string, time: Date, user: string, parentKind: string){
 		data.lastUpdated = time;
 		data.created = time;
 		const entities = []
@@ -140,7 +150,7 @@ export class DatabaseService extends Datastore{
 			} else {
 				// Creates the role and a new person
 				const personKey = this.key('Person')
-				const personEntity: Person = {
+				const personEntity = {
 					name: data.personName,
 					nameEditable: true,
 					lastUpdated: time,
@@ -165,7 +175,7 @@ export class DatabaseService extends Datastore{
 		return {entities, history}
 	}
 
-	async updatePersonRoleEntity(data: UpdateFilmDto['credits'][0], parentId: number|string, time: Date, user: string, parentKind: string){
+	async updatePersonRoleEntity(data: UpdatePersonRoleDto, parentId: number|string, time: Date, user: string, parentKind: string){
 		const entities = [];
 		const history = [];
 		if(data.personId && data.id){
@@ -233,7 +243,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// CompanyRole methods
-	async createCompanyRoleEntity(data: any, parentId: number|string, time: Date, user: string, parentKind: string){
+	async createCompanyRoleEntity(data: CreateCompanyRoleDto, parentId: number|string, time: Date, user: string, parentKind: string){
 		data.lastUpdated = time;
 		data.created = time;
 		const entities = [];
@@ -257,7 +267,7 @@ export class DatabaseService extends Datastore{
 			} else {
 				// Create the role and a new company
 				const companyKey = this.key('Company');
-				const companyEntity: Company = {
+				const companyEntity = {
 					name: data.companyName,
 					nameEditable: true,
 					website: data.website,
@@ -283,7 +293,7 @@ export class DatabaseService extends Datastore{
 		return { entities, history}
 	}
 
-	async updateCompanyRoleEntity(data: any, parentId: number|string, time: Date, user: string, parentKind: string){
+	async updateCompanyRoleEntity(data: UpdateCompanyRoleDto, parentId: number|string, time: Date, user: string, parentKind: string){
 		const entities = [];
 		const history = [];
 		if(data.companyId && data.id){
@@ -351,7 +361,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Link methods
-	async createLinkEntity(data: any, parentId: number|string, time: Date, user: string, parentKind: string){
+	async createLinkEntity(data: CreateLinkDto, parentId: number|string, time: Date, user: string, parentKind: string){
 		data.lastUpdated = time;
 		data.created = time;
 		const entities = [];
@@ -377,7 +387,7 @@ export class DatabaseService extends Datastore{
 			} else {
 				// Creates a link and a new platform
 				const platformKey = this.key('Platform');
-				const platform: Platform = {
+				const platform = {
 					name: data.platformName,
 					nameEditable: true,
 					lastUpdated: time,
@@ -401,7 +411,7 @@ export class DatabaseService extends Datastore{
 		return { entities, history }
 	}
 
-	async updateLinkEntity(data: UpdateFilmDto['currentPlatforms'][0], parentId: number|string, time: Date, user: string, parentKind: string){
+	async updateLinkEntity(data: UpdateLinkDto, parentId: number|string, time: Date, user: string, parentKind: string){
 		const entities = [];
 		const history = [];
 		if(data.platformId && data.id){
