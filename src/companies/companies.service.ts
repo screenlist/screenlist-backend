@@ -76,8 +76,8 @@ export class CompaniesService {
 		const entityData = this.datastore.createCompanyEntity(data, time, user);
 		const insertion = [entityData.history, entityData.entity]
 		try {
-			await this.datastore.insert(insertion)
-			return { 'status': 'successfully created company' }
+			await this.datastore.insert(insertion);
+			return { 'status': 'successfully created' };
 		} catch(err: any) {
 			throw new BadRequestException(err.message)
 		}
@@ -89,8 +89,30 @@ export class CompaniesService {
 		try{
 			await this.datastore.update(entityData.entity)
 			await this.datastore.insert(entityData.history)
-			return { 'status': 'successfully updated company' }
+			return { 'status': 'successfully updated' }
 		} catch(err: any){
+			throw new BadRequestException(err.message)
+		}
+	}
+
+	async deleteOne(id: string, user:string){
+		const companyKey = this.datastore.key(['Company', +id]);
+		const entities = [{key: companyKey}]; // entites to be deleted
+		const history = []; // actions to write into history
+		const rolesQuery = this.datastore.createQuery('CompanyRole').hasAncestor(companyKey);
+		try {
+			const [roles] = await this.datastore.runQuery(rolesQuery);
+			const [company] = await this.datastore.get(companyKey);
+			history.push(this.datastore.formulateHistory(company, 'Company', companyKey.id, user, 'delete'));
+			roles.forEach((role) => {
+				const roleKey = role[this.datastore.KEY];
+				entities.push({key: roleKey});
+				history.push(this.datastore.formulateHistory(role, 'CompanyRole', roleKey.id, user, 'delete'));
+			})
+			await this.datastore.transaction().delete(entities);
+			await this.datastore.transaction().insert(history);
+			return { 'status': 'successfully deleted' };
+		} catch(err:any) {
 			throw new BadRequestException(err.message)
 		}
 	}
@@ -102,7 +124,7 @@ export class CompaniesService {
 		insertion.push(...entityData.entities,...entityData.history)
 		try{
 			await this.datastore.insert(insertion);
-			return { 'status': 'successfully created role' }
+			return { 'status': 'successfully created' }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -114,8 +136,22 @@ export class CompaniesService {
 		try {
 			await this.datastore.update(entityData.entities)
 			await this.datastore.insert(entityData.history)
-			return { 'status': 'successfully updated role' }
+			return { 'status': 'successfully updated' }
 		} catch(err: any){
+			throw new BadRequestException(err.message)
+		}
+	}
+
+	async deleteOneRole(id: string, parentKind: string, parentId: string, user: string, companyId: string){
+		const roleKey = this.datastore.key(['Company', companyId, parentKind, parentId, 'CompanyRole', id]);
+		try {
+			const [role] = await this.datastore.get(roleKey);
+			const history = this.datastore.formulateHistory(role, 'CompanyRole', roleKey.id, user, 'delete');
+			const entity = {key: roleKey};
+			await this.datastore.delete(entity);
+			await this.datastore.insert(history);
+			return { 'status': 'successfully deleted' };
+		} catch (err: any){
 			throw new BadRequestException(err.message)
 		}
 	}
