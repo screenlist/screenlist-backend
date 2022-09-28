@@ -23,7 +23,9 @@ import {
 } from '../films/films.dto';
 import {
 	CreateCompanyRoleDto,
-	UpdateCompanyRoleDto
+	UpdateCompanyRoleDto,
+	CreateCompanyDto,
+	UpdateCompanyDto
 } from '../companies/companies.dto';
 import { Company,	CompanyRole } from '../companies/companies.types';
 
@@ -91,7 +93,7 @@ export class DatabaseService extends Datastore{
 		}
 	}
 
-	updatePosterEntity(data: UpdatePosterDto, parentId: number|string, time: Date, parentKind: string){
+	updatePosterEntity(data: UpdatePosterDto, parentId: string, time: Date, parentKind: string){
 		const stillKey = this.key([parentKind, parentId, 'Poster', data.url]);
 		data.lastUpdated = time;
 		return {
@@ -127,17 +129,19 @@ export class DatabaseService extends Datastore{
 	}
 
 	// PersonRole methods
-	async createPersonRoleEntity(data: CreatePersonRoleDto, parentId: number|string, time: Date, user: string, parentKind: string){
+	async createPersonRoleEntity(data: CreatePersonRoleDto, parentId: string, time: Date, user: string, parentKind: string){
 		data.lastUpdated = time;
 		data.created = time;
+		data.ownerKind = parentKind;
+		data.ownerId = parentId;
 		const entities = []
 		const history = []
 		if(data.category){
 			if(data.personId){
 				// Checks whether the person id real or bogus
 				const personKey = this.key(['Person', data.personId])
-				const person = await this.get(personKey)
-				if(person.length >= 1 && isNaN(person[0])){
+				const [person] = await this.get(personKey)
+				if(isNaN(person)){
 					// Creates the role for this existing person
 					const roleKey = this.key(['Person', personKey.id, parentKind, parentId, 'PersonRole']);
 					delete data.personId;
@@ -176,7 +180,7 @@ export class DatabaseService extends Datastore{
 		return {entities, history}
 	}
 
-	async updatePersonRoleEntity(data: UpdatePersonRoleDto, parentId: number|string, time: Date, user: string, parentKind: string){
+	async updatePersonRoleEntity(data: UpdatePersonRoleDto, parentId: string, time: Date, user: string, parentKind: string){
 		const entities = [];
 		const history = [];
 		if(data.personId && data.id){
@@ -218,7 +222,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Company methods
-	createCompanyEntity(data: any, time: Date, user: string){
+	createCompanyEntity(data: CreateCompanyDto, time: Date, user: string){
 		const companyKey = this.key('Company');
 		data.nameEditable = true;
 		data.created = time;
@@ -231,7 +235,7 @@ export class DatabaseService extends Datastore{
 		return { entity, history }
 	}
 
-	updateCompanyEntity(data: any, time: Date, user: string){
+	updateCompanyEntity(data: UpdateCompanyDto, time: Date, user: string){
 		const history = [];
 		const entity = [];
 		if(data.id){
@@ -241,12 +245,15 @@ export class DatabaseService extends Datastore{
 			entity.push({key: companyKey, data});
 			history.push(this.formulateHistory(data, 'Company', companyKey.id, user, 'update'));
 		}
+		return { entity, history }
 	}
 
 	// CompanyRole methods
-	async createCompanyRoleEntity(data: CreateCompanyRoleDto, parentId: number|string, time: Date, user: string, parentKind: string){
+	async createCompanyRoleEntity(data: CreateCompanyRoleDto, parentId: string, time: Date, user: string, parentKind: string){
 		data.lastUpdated = time;
 		data.created = time;
+		data.ownerKind = parentKind;
+		data.ownerId = parentId;
 		const entities = [];
 		const history = [];
 		if(data.type){
@@ -254,8 +261,8 @@ export class DatabaseService extends Datastore{
 			if(data.companyId){
 				// Checks whether the company id real or bogus
 				const companyKey = this.key(['Company', data.companyId]);
-				const company = await this.get(companyKey);
-				if(company.length >= 1 && isNaN(company[0])){
+				const [company] = await this.get(companyKey);
+				if(isNaN(company)){
 					const roleKey = this.key(['Company', companyKey.id, parentKind, parentId, 'CompanyRole']);
 					delete data.companyId;
 					entities.push({
@@ -294,7 +301,7 @@ export class DatabaseService extends Datastore{
 		return { entities, history}
 	}
 
-	async updateCompanyRoleEntity(data: UpdateCompanyRoleDto, parentId: number|string, time: Date, user: string, parentKind: string){
+	async updateCompanyRoleEntity(data: UpdateCompanyRoleDto, parentId: string, time: Date, user: string, parentKind: string){
 		const entities = [];
 		const history = [];
 		if(data.companyId && data.id){
@@ -362,9 +369,11 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Link methods
-	async createLinkEntity(data: CreateLinkDto, parentId: number|string, time: Date, user: string, parentKind: string){
+	async createLinkEntity(data: CreateLinkDto, parentId: string, time: Date, user: string, parentKind: string){
 		data.lastUpdated = time;
 		data.created = time;
+		data.ownerKind = parentKind;
+		data.ownerId = parentId;
 		const entities = [];
 		const history = [];
 		// What's a link w/o a url? The following code skips it
@@ -373,8 +382,8 @@ export class DatabaseService extends Datastore{
 			if(data.platformId){
 				// Checks whether the platform id real or bogus
 				const platformKey = this.key(['Platform', data.platformId]);
-				const platform = await this.get(platformKey);
-				if(platform.length >= 1 && isNaN(platform[0])){
+				const [platform] = await this.get(platformKey);
+				if(isNaN(platform)){
 					const linkKey = this.key(['Platform', platformKey.id, parentKind, parentId, 'Link']);
 					delete data.platformId;
 					entities.push({
@@ -412,7 +421,7 @@ export class DatabaseService extends Datastore{
 		return { entities, history }
 	}
 
-	async updateLinkEntity(data: UpdateLinkDto, parentId: number|string, time: Date, user: string, parentKind: string){
+	async updateLinkEntity(data: UpdateLinkDto, parentId: string, time: Date, user: string, parentKind: string){
 		const entities = [];
 		const history = [];
 		if(data.platformId && data.id){
