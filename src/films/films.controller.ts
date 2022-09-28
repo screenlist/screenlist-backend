@@ -15,71 +15,56 @@ import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
 import { InsertResult } from 'typeorm';
 import { FilmsService } from './films.service';
-import { Film, FilmHistory } from './films.entity';
 import { CreateFilmDto, UpdateFilmDto } from './films.dto';
 import { DatabaseService } from '../database/database.service';
+import { CompaniesService } from '../companies/companies.service';
 
 @Controller('films')
 export class FilmsController {
 	constructor(
-		private filmsService: FilmsService, 
-		private configService: ConfigService,
-		private datastore: DatabaseService
-	){
-		this.datastore = new DatabaseService(configService)
-	}
+		private filmsService: FilmsService,
+		private companiesService: CompaniesService
+	){}
 
+	// Core film methods
 	@Get()
-	async findOne() {
-		return new Promise<any[]>((resolve, reject) => {
-			const query = this.datastore.createQuery('Task');
-			this.datastore.runQuery(query, async (err, entities) => {
-				// console.log(entities)
-				if(err){
-					reject(new HttpException(err, 404))
-				} else {
-					resolve(entities.map(obj => {
-						obj.id = obj[this.datastore.KEY]
-						console.log(obj.id)
-						return obj
-					}))
-				}
-			})
-		})
-	}
+	async findMany(){}
+
+	@Get(':id')
+	async findOne(){}
 
 	@Post()
-	async makeSome() {
-		try{
-			const taskKey = this.datastore.key('Task');
-			const task = {
-			  category: 'Personal',
-			  done: false,
-			  priority: 6,
-			  description: 'Do Not Learn Cloud Datastore',
-			};
+	async createOne(){}
 
-			const entity = {
-			  key: taskKey,
-			  data: task,
-			};
+	@Patch(':id')
+	async updateOne(){}
 
-			const result = await this.datastore.upsert(entity);
-			// Task inserted successfully.
-			return {key: taskKey, result}
-		} catch(err:any){
-			throw new HttpException(err.message, 404)
-		}
-	}
+	@Delete(':id')
+	async deleteOne(){}
 
-	@Post('create')
-	async create(@Body() film: CreateFilmDto): Promise<void>{
-		try{
-			await this.filmsService.create(film)
-		} catch(err: unknown) {
-			console.log(err)
-			throw new HttpException(err, 404)
-		}
-	}
+	// CompanyRole methods
+	@Patch([':id', ':company_id', ':role_id'])
+	async updateOneCompanyRole(){}
+
+	@Delete([':id', ':company_id', ':role_id'])
+	async deleteOneCompanyRole(){}
+
+	// @Get()
+	// async findOne() {
+	// 	return new Promise<any[]>((resolve, reject) => {
+	// 		const query = this.datastore.createQuery('Task');
+	// 		this.datastore.runQuery(query, async (err, entities) => {
+	// 			// console.log(entities)
+	// 			if(err){
+	// 				reject(new HttpException(err, 404))
+	// 			} else {
+	// 				resolve(entities.map(obj => {
+	// 					obj.id = obj[this.datastore.KEY]
+	// 					console.log(obj.id)
+	// 					return obj
+	// 				}))
+	// 			}
+	// 		})
+	// 	})
+	// }
 }
-
