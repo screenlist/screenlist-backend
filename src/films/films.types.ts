@@ -27,12 +27,12 @@ export interface PersonRole {
 	id: string;
 	personName: string;
 	personId?: string;
+	ownerKind: string;
 	title: string;
 	subtitle: string;
 	category: string;
 	characterName?: string;
 	characterDescription?: string;
-	film: string;
 	lastUpdated: Date;
 	created: Date;
 }
@@ -60,7 +60,7 @@ export interface Link {
 	url: string;
 	platformName: string;
 	platformId?: string;
-	film?: string;
+	ownerKind: string;
 	lastUpdated: Date;
 	created: Date;
 }

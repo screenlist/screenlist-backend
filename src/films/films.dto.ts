@@ -94,6 +94,8 @@ export class UpdatePosterDto {
 export class CreatePersonRoleDto {
 	personName: string;
 	personId?: number;
+	ownerKind?: string;
+	ownerId: string;
 	title: string;
 	subtitle: string;
 	category: string;
@@ -122,6 +124,8 @@ export class CreateLinkDto {
 	url: string;
 	platformName: string;
 	platformId?: number;
+	ownerKind: string;
+	ownerId: string;
 	lastUpdated?: Date;
 	created?: Date;
 }

@@ -1,3 +1,14 @@
+import { 
+	FilmDetails, 
+	Poster, 
+	Still, 
+	PersonRole, 
+	Person,
+	Link,
+	Platform,
+	FilmType
+} from '../films/films.types';
+
 export interface Company {
 	id: string;
 	name: string;
@@ -11,9 +22,9 @@ export interface Company {
 
 export interface CompanyRole {
 	id: string;
-	film: string;
 	companyName: string;
 	companyId?: string;
+	ownerName: string;
 	year?: string;
 	type: string;
 	website?: string;
@@ -26,5 +37,4 @@ export interface CompanyType {
 	filmProduction: CompanyRole[];
 	seriesProduction: CompanyRole[];
 	filmDistribution: CompanyRole[];
-	seriesDistribution: CompanyRole[];
 }
