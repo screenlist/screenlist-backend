@@ -29,7 +29,7 @@ export class FilmsService {
 		this.datastore = new DatabaseService(configService)
 	}
 
-	async findAll(user: string): Promise<FilmType[]>{
+	async findAll(): Promise<FilmType[]>{
 		const query = this.datastore.createQuery('Film').filter('status', '=', 'public').limit(20)
 		const results: FilmType[] = []
 		try {
@@ -54,8 +54,8 @@ export class FilmsService {
 		}
 	}
 
-	async findOne(id: number, user: string): Promise<FilmType>{
-		const filmKey = this.datastore.key(['Film', id]);
+	async findOne(id: string): Promise<FilmType>{
+		const filmKey = this.datastore.key(['Film', +id]);
 		// Create queries
 		const postersQuery = this.datastore.createQuery('Poster')
 			.hasAncestor(filmKey)
@@ -274,27 +274,15 @@ export class FilmsService {
 		}
 	}
 
-	async softDeleteFilm(id: number, user: string){
-		const filmKey = this.datastore.key(['Film', id]);
-		const entity = {
-			key: filmKey,
-			data: {
-				status: "hidden"
-			}
-		}
-
-		// Write action into history
-		const historyEntity = this.datastore.formulateHistory(
-			{status: 'hidden'},
-			filmKey.id,
-			'Film',
-			user,
-			'softDelete'
-		)
-
+	async deleteOne(id: string, user: string){
+		const filmKey = this.datastore.key(['Film', +id]);
 		try {
-			await this.datastore.update(entity)
-			await this.datastore.insert(historyEntity)
+			const [film] = await this.datastore.get(filmKey);
+			await this.datastore.delete(film);
+			delete film[this.datastore.KEY]
+			// Write action into history
+			const history = this.datastore.formulateHistory(film, filmKey.id, 'Film', user, 'delete');
+			await this.datastore.insert(history);
 			return {'status': 'deleted'}
 		} catch(err: any){
 			throw new BadRequestException(err.message)

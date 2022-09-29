@@ -16,8 +16,19 @@ import { ConfigService } from '@nestjs/config';
 import { InsertResult } from 'typeorm';
 import { FilmsService } from './films.service';
 import { CreateFilmDto, UpdateFilmDto } from './films.dto';
+import { 
+	FilmDetails, 
+	Poster, 
+	Still, 
+	PersonRole, 
+	Person,
+	Link,
+	Platform,
+	FilmType
+} from './films.types';
 import { DatabaseService } from '../database/database.service';
 import { CompaniesService } from '../companies/companies.service';
+import { UpdateCompanyRoleDto } from '../companies/companies.dto';
 
 @Controller('films')
 export class FilmsController {
@@ -28,26 +39,52 @@ export class FilmsController {
 
 	// Core film methods
 	@Get()
-	async findMany(){}
+	async findMany(): Promise<FilmType[]>{
+		return await this.filmsService.findAll()
+	}
 
 	@Get(':id')
-	async findOne(){}
+	async findOne(@Param('id') id: string): Promise<FilmType>{
+		return await this.filmsService.findOne(id)
+	}
 
-	@Post()
-	async createOne(){}
+	@Post(':id')
+	async createOne(@Param('id') id: string, @Body() createFilmDto: CreateFilmDto, user: string){
+		return await this.filmsService.createOne(createFilmDto, user)
+	}
 
 	@Patch(':id')
-	async updateOne(){}
+	async updateOne(@Param('id') id: string, @Body() updateFilmDto: UpdateFilmDto, user: string){
+		return await this.filmsService.updateOne(updateFilmDto, user)
+	}
 
 	@Delete(':id')
-	async deleteOne(){}
+	async deleteOne(@Param('id') id: string, user: string){
+		return await this.filmsService.deleteOne(id, user);
+	}
 
 	// CompanyRole methods
-	@Patch([':id', ':company_id', ':role_id'])
-	async updateOneCompanyRole(){}
+	@Patch(':id/company')
+	async updateOneCompanyRole(
+		@Param('id') id: string,
+		@Query('company_id') companyId: string,
+		@Query('role_id') roleId: string,
+		@Body() updateCompanyRoleDto: UpdateCompanyRoleDto, 
+		user: string
+	){
+		return await this.companiesService.updateOneRole(updateCompanyRoleDto, 'Film', id, user);
+	}
 
-	@Delete([':id', ':company_id', ':role_id'])
-	async deleteOneCompanyRole(){}
+	@Delete(':id/company')
+	async deleteOneCompanyRole(
+		@Param('id') id: string,
+		@Query('company_id') companyId: string,
+		@Query('role_id') roleId: string,
+		@Body() updateCompanyRoleDto: UpdateCompanyRoleDto, 
+		user: string
+	){
+		return await this.companiesService.deleteOneRole(roleId,'Film', id, user, companyId);
+	}
 
 	// @Get()
 	// async findOne() {
