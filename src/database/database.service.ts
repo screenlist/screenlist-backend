@@ -27,7 +27,12 @@ import {
 	CreateCompanyDto,
 	UpdateCompanyDto
 } from '../companies/companies.dto';
-import { Company,	CompanyRole } from '../companies/companies.types';
+import { 
+	Company,	
+	CompanyRole, 
+	CompanyRoleOpt,
+	CompanyOpt
+} from '../companies/companies.types';
 
 @Injectable()
 export class DatabaseService extends Datastore{
@@ -51,7 +56,6 @@ export class DatabaseService extends Datastore{
 	formulateHistory(data: any, kind: string, id: number|string, user: string, action: string){
 		const key = this.key('History');
 		const history = data;
-		const time = new Date();
 		history.entityIdentifier = id;
 		history.resultingAction = action;
 		history.triggeredByUser = user;
@@ -222,124 +226,60 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Company methods
-	createCompanyEntity(data: CreateCompanyDto, time: Date, user: string){
+	createCompanyEntity(data: CreateCompanyDto, opt: CompanyOpt){
 		const companyKey = this.key('Company');
-		data.nameEditable = true;
-		data.created = time;
-		data.lastUpdated = time;
+		data.created = opt.time;
+		data.lastUpdated = opt.time;
 		const entity = {
 			key: companyKey,
 			data: data
 		}
-		const history = this.formulateHistory(data, 'Company', companyKey.id, user, 'create');
-		return { entity, history }
+		const history = this.formulateHistory(data, 'Company', companyKey.id, opt.user, 'create');
+		return {entity, history}
 	}
 
-	updateCompanyEntity(data: UpdateCompanyDto, time: Date, user: string){
-		const history = [];
-		const entity = [];
-		if(data.id){
-			data.lastUpdated = time;
-			const companyKey = this.key(['Company', data.id]);
-			delete data.id;
-			entity.push({key: companyKey, data});
-			history.push(this.formulateHistory(data, 'Company', companyKey.id, user, 'update'));
-		}
-		return { entity, history }
+	updateCompanyEntity(data: UpdateCompanyDto, opt: CompanyOpt){
+		data.lastUpdated = opt.time;
+		const companyKey = this.key(['Company', opt.companyId]);
+
+		const entity = {key: companyKey, data};
+		const history = this.formulateHistory(data, 'Company', companyKey.id, opt.user, 'update');
+		
+		return {entity, history}
 	}
 
 	// CompanyRole methods
-	async createCompanyRoleEntity(data: CreateCompanyRoleDto, parentId: string, time: Date, user: string, parentKind: string){
-		data.lastUpdated = time;
-		data.created = time;
-		data.ownerKind = parentKind;
-		data.ownerId = parentId;
-		const entities = [];
-		const history = [];
-		if(data.type){
-			// Checks whether the company in question already exist
-			if(data.companyId){
-				// Checks whether the company id real or bogus
-				const companyKey = this.key(['Company', data.companyId]);
-				const [company] = await this.get(companyKey);
-				if(isNaN(company)){
-					const roleKey = this.key(['Company', companyKey.id, parentKind, parentId, 'CompanyRole']);
-					delete data.companyId;
-					entities.push({
-						key: roleKey,
-						data: data
-					})
-					// Create history
-					history.push(this.formulateHistory(data, 'CompanyRole', roleKey.id, user, 'create'));
-				}
-			} else {
-				// Create the role and a new company
-				const companyKey = this.key('Company');
-				const companyEntity = {
-					name: data.companyName,
-					nameEditable: true,
-					website: data.website,
-					lastUpdated: time,
-					created: time,
-				}
-				entities.push({
-					key: companyKey,
-					data: companyEntity
-				})
-				const roleKey = this.key(['Company', companyKey.id, parentKind, parentId, 'CompanyRole']);
-				entities.push({
-					key: roleKey,
-					data: data
-				})
-
-				// Create histories for actions
-				history.push(this.formulateHistory(companyEntity, 'Company', companyKey.id, user, 'create'));
-				history.push(this.formulateHistory(data, 'CompanyRole', roleKey.id, user, 'create'));
-			}
+	createCompanyRoleEntity(data: CreateCompanyRoleDto, opt: CompanyRoleOpt){
+		data.lastUpdated = opt.time;
+		data.created = opt.time;
+		data.ownerKind = opt.parentKind;
+		data.ownerId = opt.parentId;	
+		// Create the role
+		const companyKey = this.key(['Company', opt.companyId]);
+		const roleKey = this.key(['Company', companyKey.id, opt.parentKind, opt.parentId, 'CompanyRole']);
+		const entity = {
+			key: roleKey,
+			data: data
 		}
-
-		return { entities, history}
+		// Create history
+		const history = this.formulateHistory(data, 'CompanyRole', roleKey.id, opt.user, 'create');
+		return {entity, history}
 	}
 
-	async updateCompanyRoleEntity(data: UpdateCompanyRoleDto, parentId: string, time: Date, user: string, parentKind: string){
-		const entities = [];
-		const history = [];
-		if(data.companyId && data.id){
-			const companyKey = this.datastore.key(['Company', data.companyId]);
-			const company = await this.datastore.get(companyKey);
-			if(company.length >= 1 && isNaN(company[0])){
-				// Edits an existing company role of an exsiting company
-				const roleKey = this.datastore.key(['Company', companyKey.id, parentKind, parentId,'CompanyRole', data.id]);
-				delete data.id;
-				delete data.companyId;
-				data.lastUpdated = time;
-				entities.push({
-					key: roleKey,
-					data: data
-				})
-
-				// Creates history
-				history.push(this.formulateHistory(data, 'CompanyRole', roleKey.id, user, 'update'));
-
-				// Updates the the parent kind if there's a change
-				if(data.companyName || data.website){
-					const updateData = {
-						lastUpdated: time
-					}
-					data.companyName && company[0].nameEditable == true ? updateData['name'] = data.companyName : null
-					data.website ? updateData['website'] = data.website : null
-					entities.push({
-						key: companyKey,
-						data: updateData
-					})
-
-					// Creates history
-					history.push(this.formulateHistory(updateData, 'Company', companyKey.id, user, 'update'));
-				}
-			} 
+	updateCompanyRoleEntity(data: UpdateCompanyRoleDto, opt: CompanyRoleOpt){
+		const companyKey = this.datastore.key(['Company', opt.companyId]);
+		
+		const roleKey = this.datastore.key(['Company', companyKey.id, opt.parentKind, opt.parentId,'CompanyRole', opt.roleId]);
+		data.lastUpdated = opt.time;
+		const entity = {
+			key: roleKey,
+			data: data
 		}
 
-		return { entities, history }
+		// Creates history
+		const history = this.formulateHistory(data, 'CompanyRole', roleKey.id, opt.user, 'update');
+
+		return {entity, history}
 	}
 
 	// Platform methods
