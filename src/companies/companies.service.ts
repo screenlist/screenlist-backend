@@ -10,22 +10,24 @@ import {
 import {
 	Company,
 	CompanyRole,
-	CompanyType
+	CompanyType,
+	CompanyOpt,
+	CompanyRoleOpt
 } from './companies.types';
 
 @Injectable()
 export class CompaniesService {
 	constructor(
 		private configService: ConfigService,
-		private datastore: DatabaseService
+		private db: DatabaseService
 	){
-		this.datastore = new DatabaseService(configService)
+		this.db = new DatabaseService(configService)
 	}
 
 	async findAll(): Promise<Company[]>{
-		const query = this.datastore.createQuery('Company').order('name').limit(20);
+		const query = this.db.createQuery('Company').order('name').limit(20);
 		try{
-			const [companies] = await this.datastore.runQuery(query);
+			const [companies] = await this.db.runQuery(query);
 			return companies
 		} catch {
 			throw new NotFoundException('Could not retrieve companies');
@@ -33,27 +35,27 @@ export class CompaniesService {
 	}
 
 	async findOne(id: string): Promise<CompanyType>{
-		const companyKey = this.datastore.key(['Company', +id]);
-		const filmProductionQuery = this.datastore.createQuery('CompanyRole')
+		const companyKey = this.db.key(['Company', +id]);
+		const filmProductionQuery = this.db.createQuery('CompanyRole')
 			.hasAncestor(companyKey)
 			.filter('type', '=', 'production')
 			.filter('ownerKind', '=', 'Film')
-		const filmDistributionQuery = this.datastore.createQuery('CompanyRole')
+		const filmDistributionQuery = this.db.createQuery('CompanyRole')
 			.hasAncestor(companyKey)
 			.filter('type', '=', 'distribution')
 			.filter('ownerKind', '=', 'Film')
-		const seriesProductionQuery = this.datastore.createQuery('CompanyRole')
+		const seriesProductionQuery = this.db.createQuery('CompanyRole')
 			.hasAncestor(companyKey)
 			.filter('type', '=', 'production')
 			.filter('ownerKind', '=', 'Series')
 		try {
-			const [details] = await this.datastore.get(companyKey);
-			const [filmProduction] = await this.datastore.runQuery(filmProductionQuery);
-			const [seriesProduction] = await this.datastore.runQuery(seriesProductionQuery);
-			const [filmDistribution] = await this.datastore.runQuery(filmDistributionQuery);
+			const [details] = await this.db.get(companyKey);
+			const [filmProduction] = await this.db.runQuery(filmProductionQuery);
+			const [seriesProduction] = await this.db.runQuery(seriesProductionQuery);
+			const [filmDistribution] = await this.db.runQuery(filmDistributionQuery);
 			filmDistribution.map(async (role) => {
-				const key = this.datastore.key(['Film', +role.ownerId])
-				const [film] = await this.datastore.get(key)
+				const key = this.db.key(['Film', +role.ownerId])
+				const [film] = await this.db.get(key)
 				return {
 					filmName: film.name,
 					year: role.year,
@@ -71,24 +73,21 @@ export class CompaniesService {
 		}
 	}
 
-	async createOne(data: CreateCompanyDto, user: string){
-		const time = new Date()
-		const entityData = this.datastore.createCompanyEntity(data, time, user);
-		const insertion = [entityData.history, entityData.entity]
+	async createOne(data: CreateCompanyDto, opt: CompanyOpt){
+		const {entity, history} = this.db.createCompanyEntity(data, opt);
 		try {
-			await this.datastore.insert(insertion);
+			await this.db.insert([entity, history]);
 			return { 'status': 'successfully created' };
 		} catch(err: any) {
 			throw new BadRequestException(err.message)
 		}
 	}
 
-	async updateOne(data: UpdateCompanyDto, user: string){
-		const time = new Date();
-		const entityData = this.datastore.updateCompanyEntity(data, time, user);
+	async updateOne(data: UpdateCompanyDto, opt: CompanyOpt){
+		const {entity, history} = this.db.updateCompanyEntity(data, opt);
 		try{
-			await this.datastore.update(entityData.entity)
-			await this.datastore.insert(entityData.history)
+			await this.db.update(entity);
+			await this.db.insert(history);
 			return { 'status': 'successfully updated' }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -96,46 +95,42 @@ export class CompaniesService {
 	}
 
 	async deleteOne(id: string, user:string){
-		const companyKey = this.datastore.key(['Company', +id]);
+		const companyKey = this.db.key(['Company', +id]);
 		const entities = [{key: companyKey}]; // entites to be deleted
 		const history = []; // actions to write into history
-		const rolesQuery = this.datastore.createQuery('CompanyRole').hasAncestor(companyKey);
+		const rolesQuery = this.db.createQuery('CompanyRole').hasAncestor(companyKey);
 		try {
-			const [roles] = await this.datastore.runQuery(rolesQuery);
-			const [company] = await this.datastore.get(companyKey);
-			history.push(this.datastore.formulateHistory(company, 'Company', companyKey.id, user, 'delete'));
+			const [roles] = await this.db.runQuery(rolesQuery);
+			const [company] = await this.db.get(companyKey);
+			history.push(this.db.formulateHistory(company, 'Company', companyKey.id, user, 'delete'));
 			roles.forEach((role) => {
-				const roleKey = role[this.datastore.KEY];
+				const roleKey = role[this.db.KEY];
 				entities.push({key: roleKey});
-				history.push(this.datastore.formulateHistory(role, 'CompanyRole', roleKey.id, user, 'delete'));
+				history.push(this.db.formulateHistory(role, 'CompanyRole', roleKey.id, user, 'delete'));
 			})
-			await this.datastore.transaction().delete(entities);
-			await this.datastore.transaction().insert(history);
+			await this.db.transaction().delete(entities);
+			await this.db.transaction().insert(history);
 			return { 'status': 'successfully deleted' };
 		} catch(err:any) {
 			throw new BadRequestException(err.message)
 		}
 	}
 
-	async createOneRole(data: CreateCompanyRoleDto, parentKind: string, parentId: string, user: string){
-		const time = new Date();
-		const entityData = await this.datastore.createCompanyRoleEntity(data, parentId, time, user, parentKind);
-		const insertion = []
-		insertion.push(...entityData.entities,...entityData.history)
-		try{
-			await this.datastore.insert(insertion);
+	async createOneRole(data: CreateCompanyRoleDto, opt: CompanyRoleOpt){
+		const {entity, history} = this.db.createCompanyRoleEntity(data, opt);
+		try {
+			await this.db.insert([entity, history]);
 			return { 'status': 'successfully created' }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
 	}
 
-	async updateOneRole(data: UpdateCompanyRoleDto, parentKind: string, parentId: string, user: string){
-		const time = new Date();
-		const entityData = await this.datastore.updateCompanyRoleEntity(data, parentId, time, user, parentKind);
+	async updateOneRole(data: UpdateCompanyRoleDto, opt: CompanyRoleOpt){
+		const entityData = await this.db.updateCompanyRoleEntity(data, opt);
 		try {
-			await this.datastore.update(entityData.entities)
-			await this.datastore.insert(entityData.history)
+			await this.db.update(entityData.entity)
+			await this.db.insert(entityData.history)
 			return { 'status': 'successfully updated' }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -143,13 +138,13 @@ export class CompaniesService {
 	}
 
 	async deleteOneRole(id: string, parentKind: string, parentId: string, user: string, companyId: string){
-		const roleKey = this.datastore.key(['Company', companyId, parentKind, parentId, 'CompanyRole', id]);
+		const roleKey = this.db.key(['Company', companyId, parentKind, parentId, 'CompanyRole', id]);
 		try {
-			const [role] = await this.datastore.get(roleKey);
-			const history = this.datastore.formulateHistory(role, 'CompanyRole', roleKey.id, user, 'delete');
+			const [role] = await this.db.get(roleKey);
+			const history = this.db.formulateHistory(role, 'CompanyRole', roleKey.id, user, 'delete');
 			const entity = {key: roleKey};
-			await this.datastore.delete(entity);
-			await this.datastore.insert(history);
+			await this.db.delete(entity);
+			await this.db.insert(history);
 			return { 'status': 'successfully deleted' };
 		} catch (err: any){
 			throw new BadRequestException(err.message)
