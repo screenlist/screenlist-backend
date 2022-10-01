@@ -1,6 +1,5 @@
 export class CreateCompanyDto {
 	name: string;
-	nameEditable: boolean;
 	profilePhotoUrl: string;
 	profilePhotoOriginalName: string;
 	website: string;
@@ -9,9 +8,7 @@ export class CreateCompanyDto {
 }
 
 export class UpdateCompanyDto {
-	id: string;
 	name?: string;
-	nameEditable?: boolean;
 	profilePhotoUrl?: string;
 	profilePhotoOriginalName?: string;
 	website?: string;
@@ -23,7 +20,6 @@ export class UpdateCompanyDto {
 // Role
 export class CreateCompanyRoleDto {
 	companyName: string;
-	companyId?: number;
 	website?: string;
 	ownerKind: string;
 	ownerId: string;
@@ -33,9 +29,7 @@ export class CreateCompanyRoleDto {
 }
 
 export class UpdateCompanyRoleDto {
-	id: number;
 	companyName?: string;
-	companyId?: number;
 	website?: string;
 	type?: string;
 	lastUpdated?: Date;

@@ -12,7 +12,6 @@ import {
 export interface Company {
 	id: string;
 	name: string;
-	nameEditable: boolean;
 	profilePhotoUrl?: string;
 	profilePhotoOriginalName?: string;
 	website?: string;
@@ -37,4 +36,20 @@ export interface CompanyType {
 	filmProduction: CompanyRole[];
 	seriesProduction: CompanyRole[];
 	filmDistribution: CompanyRole[];
+}
+
+// Utility
+export interface CompanyRoleOpt {
+	companyId: string,
+	roleId?: string,
+	time: Date,
+	parentId: string,
+	parentKind: string,
+	user: string
+}
+
+export interface CompanyOpt {
+	time: Date,
+	user: string,
+	companyId?: string
 }
