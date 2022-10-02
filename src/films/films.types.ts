@@ -2,8 +2,16 @@ import {
 	Company,
 	CompanyRole
 } from '../companies/companies.types';
+import {
+	PersonRole, 
+	Person,
+} from '../people/people.types';
+import {
+	Link
+} from '../platforms/platforms.types'
 
 export interface Still {
+	id
 	originalName: string;
 	description: string;
 	url: string;
@@ -14,53 +22,12 @@ export interface Still {
 }
 
 export interface Poster {
+	id
 	originalName: string;
 	description: string;
 	url: string;
 	quality: string;
 	film: string;
-	lastUpdated: Date;
-	created: Date;
-}
-
-export interface PersonRole {
-	id: string;
-	personName: string;
-	personId?: string;
-	ownerKind: string;
-	title: string;
-	subtitle: string;
-	category: string;
-	characterName?: string;
-	characterDescription?: string;
-	lastUpdated: Date;
-	created: Date;
-}
-
-export interface Person {
-	id: string;
-	name: string;
-	nameEditable: boolean;
-	lastUpdated: Date;
-	created: Date;
-}
-
-export interface Platform {
-	id: string;
-	name: string;
-	nameEditable: boolean;
-	website?: string;
-	lastUpdated: Date;
-	created: Date;
-}
-
-export interface Link {
-	id: string;
-	accessType: string;
-	url: string;
-	platformName: string;
-	platformId?: string;
-	ownerKind: string;
 	lastUpdated: Date;
 	created: Date;
 }
@@ -92,4 +59,13 @@ export interface FilmType {
 	platforms?: Link[];
 	distributors?: CompanyRole[];
 	producers?: CompanyRole[]
+}
+
+// Utility
+export interface ImageOpt {
+	imageId?: string,
+	time: Date,
+	parentId: string,
+	parentKind: string,
+	user: string
 }

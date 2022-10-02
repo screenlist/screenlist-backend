@@ -5,19 +5,21 @@ import { CreateFilmDto, UpdateFilmDto } from './films.dto';
 import { 
 	FilmDetails, 
 	Poster, 
-	Still, 
-	PersonRole, 
-	Person,
-	Link,
-	Platform,
+	Still,
 	FilmType
 } from './films.types';
 import {
 	Company,
 	CompanyRole
 } from '../companies/companies.types';
-
-
+import {
+	Link,
+	Platform,
+} from '../platforms/platforms.types';
+import {
+	Person,
+	PersonRole,
+} from '../people/people.types';
 
 
 @Injectable()
@@ -126,60 +128,25 @@ export class FilmsService {
 	}
 
 	async createOne(film: CreateFilmDto, user: string){
-		const transactionId = (new Date()).toISOString().concat("-create-film-"+film.details.name);
 		// A variable to house all entities created
 		let entities = []
 		// Creates the film details entity
 		const filmKey = this.datastore.key('Film');
-		const filmName = film.details.name;
+		const filmName = film.name;
 		const time = new Date();
-		film.details.slug = filmName.concat("-"+filmKey.id.toString());
-		film.details.lastUpdated = time;
-		film.details.created = time;
-		film.details.status = "public"
-		film.details.nameEditable = true;
+		film.slug = filmName.concat("-"+filmKey.id.toString());
+		film.lastUpdated = time;
+		film.created = time;
+		film.status = "public";
 		entities.push({
 			key: filmKey,
-			data: film.details
+			data: film
 		})
 		// Write film action into history
-		entities.push(this.datastore.formulateHistory(film.details, 'Film',	filmKey.id,	user,	'create'));
-
-		// Creates poster entities
-		film.posters.forEach(poster => {
-			const posterEntity = this.datastore.createPosterEntity(poster, filmKey.id, time, 'Film');
-			entities.push(posterEntity)
-			// Write poster action into history
-			entities.push(this.datastore.formulateHistory(poster,	'Poster',	posterEntity.key.name,	user,	'create'));
-		})
-		// Creates still frame entities
-		film.stillFrames.forEach(frame => {
-			const still = this.datastore.createStillEntity(frame, filmKey.id, time, 'Film');
-			entities.push(still)
-			// Write film action into history
-			entities.push(this.datastore.formulateHistory(frame, 'Still', still.key.name, user, 'create'));
-		})
-		// Creates person role entities
-		film.credits.forEach(async (role) => {
-			const data = await this.datastore.createPersonRoleEntity(role, filmKey.id, time, user, 'Film');
-			entities.push(...data.entities);
-			entities.push(...data.history);
-		})
-		// Creates company role entities
-		film.companies.forEach(async (role) => {
-			const data = await this.datastore.createCompanyRoleEntity(role, filmKey.id, time, user, 'Film');
-			entities.push(...data.entities);
-			entities.push(...data.history);
-		})
-
-		film.currentPlatforms.forEach(async (link) => {
-			const data = await this.datastore.createLinkEntity(link, filmKey.id, time, user, 'Film');
-			entities.push(...data.entities);
-			entities.push(...data.history);
-		})
+		entities.push(this.datastore.formulateHistory(film, 'Film',	filmKey.id,	user,	'create'));
 
 		try {
-			await this.datastore.transaction({ id: transactionId }).insert(entities);
+			await this.datastore.transaction().insert(entities);
 			return {"status": "successfully created"}
 		} catch(err: any){
 			throw new BadRequestException(err.message);
@@ -192,7 +159,7 @@ export class FilmsService {
 		const time = new Date()
 		let history = [] // Where to put all history entities
 		let entities = [] // Where to put all entities needing an update
-		const filmKey = this.datastore.key(['Film', film.details.id]);
+		const filmKey = this.datastore.key(['Film', film.id]);
 		const state = await this.datastore.get(filmKey) // to check if the film really exists
 		if(state.length !>= 1 && isNaN(state[0]) == false){
 			throw new NotFoundException('This film does not exist')
@@ -215,59 +182,9 @@ export class FilmsService {
 			history.push(this.datastore.formulateHistory(film.details, 'Film', filmKey.id, user, 'update'));
 		}
 
-		// Updates posters
-		if(film.posters && film.posters.length <= 2){
-			film.posters.forEach((poster) => {
-				const data = this.datastore.updatePosterEntity(poster, filmKey.id, time, 'Film');
-				entities.push(data);
-
-				// Create history
-				history.push(this.datastore.formulateHistory(poster, 'Poster', data.key.name, user, 'update'));
-			})
-		}
-
-		// Updates stills
-		if(film.stillFrames && film.stillFrames.length <= 3){
-			film.stillFrames.forEach((still) => {
-				const data = this.datastore.updateStillEntity(still, filmKey.id, time, 'Film');
-				entities.push(data);
-
-				// Create history
-				history.push(this.datastore.formulateHistory(still, 'Still', data.key.name, user, 'update'));
-			})
-		}
-
-		// Updates company roles
-		if(film.companies){
-			film.companies.forEach(async (role) => {
-				// For company role of an existing company
-				const data = await this.datastore.updateCompanyRoleEntity(role, filmKey.id, time, user, 'Film');
-				entities.push(...data.entities);
-				history.push(...data.history);
-			})
-		}
-
-		// Updates person roles
-		if(film.credits){
-			film.credits.forEach(async (role) => {
-				const data = await this.datastore.updatePersonRoleEntity(role, filmKey.id, time, user, 'Film');
-				entities.push(...data.entities);
-				history.push(...data.history);
-			})
-		}
-
-		// Updates watch links
-		if(film.currentPlatforms){
-			film.currentPlatforms.forEach(async (link) => {
-				const data = await this.datastore.updateLinkEntity(link, filmKey.id, time, user, 'Film');
-				entities.push(...data.entities);
-				history.push(...data.history);
-			})
-		}
-
 		try{
-			await this.datastore.transaction({id: transactionId}).update(entities);
-			await this.datastore.transaction({id: transactionHistoryId}).insert(history);
+			await this.datastore.transaction().update(entities);
+			await this.datastore.transaction().insert(history);
 			return { 'status': 'successfully updated' };
 		} catch(err: any){
 			throw new BadRequestException(err.message)
