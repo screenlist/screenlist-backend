@@ -25,7 +25,7 @@ export class CompaniesService {
 	}
 
 	async findAll(): Promise<Company[]>{
-		const query = this.db.createQuery('Company').order('name').limit(20);
+		const query = this.db.createQuery('Company').order('name').limit(100);
 		try{
 			const [companies] = await this.db.runQuery(query);
 			return companies
@@ -138,7 +138,7 @@ export class CompaniesService {
 	}
 
 	async deleteOneRole(id: string, parentKind: string, parentId: string, user: string, companyId: string){
-		const roleKey = this.db.key(['Company', companyId, parentKind, parentId, 'CompanyRole', id]);
+		const roleKey = this.db.key(['Company', +companyId, parentKind, +parentId, 'CompanyRole', +id]);
 		try {
 			const [role] = await this.db.get(roleKey);
 			const history = this.db.formulateHistory(role, 'CompanyRole', roleKey.id, user, 'delete');

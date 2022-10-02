@@ -1,9 +1,7 @@
 import { 
 	FilmDetails, 
 	Poster, 
-	Still, 
-	PersonRole, 
-	Person,
+	Still,
 	Link,
 	Platform,
 	FilmType
