@@ -11,7 +11,7 @@ export class StorageService extends Storage {
 	constructor(private configService: ConfigService){
 		super({
 			projectId: configService.get('PROJECT_ID'),
-			keyFilename: path.join(__dirname, '../../cloud-keys.json')
+			keyFilename: path.join(__dirname, '../../config/cloud-keys.json')
 		})
 	}
 

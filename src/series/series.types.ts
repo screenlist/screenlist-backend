@@ -1,8 +1,6 @@
 import {
 	Poster, 
 	Still, 
-	PersonRole, 
-	Person,
 	Link,
 	Platform,
 } from '../films/films.types';
@@ -10,6 +8,10 @@ import {
 	Company,
 	CompanyRole
 } from '../companies/companies.types';
+import {
+	PersonRole, 
+	Person,
+} from '../people/people.types';
 
 export interface SeriesDetails {
 	id: string;
