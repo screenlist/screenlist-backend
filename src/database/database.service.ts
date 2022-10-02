@@ -5,17 +5,10 @@ import { ConfigService } from '@nestjs/config';
 import { 
 	FilmDetails, 
 	Poster, 
-	Still, 
-	PersonRole, 
-	Person,
-	Link,
-	Platform
+	Still,
+	ImageOpt
 } from '../films/films.types';
 import {
-	CreateLinkDto,
-	UpdateLinkDto,
-	CreatePersonRoleDto,
-	UpdatePersonRoleDto,
 	CreateStillDto,
 	UpdateStillDto,
 	CreatePosterDto,
@@ -33,13 +26,37 @@ import {
 	CompanyRoleOpt,
 	CompanyOpt
 } from '../companies/companies.types';
+import {
+	CreatePersonDto,
+	UpdatePersonDto,
+	CreatePersonRoleDto,
+	UpdatePersonRoleDto
+} from '../people/people.dto';
+import {
+	Person,
+	PersonRole,
+	PersonOpt,
+	PersonRoleOpt
+} from '../people/people.types';
+import {
+	CreateLinkDto,
+	UpdateLinkDto,
+	CreatePlatformDto,
+	UpdatePlatformDto
+} from '../platforms/platforms.dto';
+import {
+	Link,
+	Platform,
+	LinkOpt,
+	PlatformOpt
+} from '../platforms/platforms.types';
 
 @Injectable()
 export class DatabaseService extends Datastore{
 	constructor(private configService: ConfigService){
 		super({
 			projectId: configService.get('PROJECT_ID'),
-			keyFilename: path.join(__dirname, '../../db.json')
+			keyFilename: path.join(__dirname, '../../config/db.json')
 		})
 	}
 
@@ -53,10 +70,11 @@ export class DatabaseService extends Datastore{
 	}
 
 	// History methods
-	formulateHistory(data: any, kind: string, id: number|string, user: string, action: string){
+	formulateHistory(data: any, kind: string, id: string, user: string, action: string){
 		const key = this.key('History');
 		const history = data;
 		history.entityIdentifier = id;
+		history.entityKind = kind
 		history.resultingAction = action;
 		history.triggeredByUser = user;
 		history.timestamp = new Date();
@@ -67,162 +85,105 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Still methods
-	createStillEntity(data: CreateStillDto, parentId: number|string, time: Date, parentKind: string){
-		const stillKey = this.key([parentKind, parentId, 'Still', data.url]);
-		data.lastUpdated = time;
-		data.created = time;
-		return {
+	createStillEntity(data: CreateStillDto, opt: ImageOpt){
+		const stillKey = this.key([opt.parentKind, +opt.parentId, 'Still']);
+		data.lastUpdated = opt.time;
+		data.created = opt.time;
+		const entity = {
 			key: stillKey,
 			data: data
 		}
+		const history = this.formulateHistory(data, 'Still', stillKey.id, opt.user, 'create');
+		return {entity, history}
 	}
 
-	updateStillEntity(data: UpdateStillDto, parentId: number|string, time: Date, parentKind: string){
-		const stillKey = this.key([parentKind, parentId, 'Still', data.url]);
-		data.lastUpdated = time;
-		return {
+	updateStillEntity(data: UpdateStillDto, opt: ImageOpt){
+		const stillKey = this.key([opt.parentKind, +opt.parentId, 'Still', +opt.imageId]);
+		data.lastUpdated = opt.time;
+		const entity = {
 			key: stillKey,
 			data: data
 		}
+		const history = this.formulateHistory(data, 'Still', stillKey.id, opt.user, 'update');
+		return {entity, history};
 	}
 
 	// Poster methods
-	createPosterEntity(data: CreatePosterDto, parentId: number|string, time: Date, parentKind: string){
-		const stillKey = this.key([parentKind, parentId, 'Poster', data.url]);
-		data.lastUpdated = time;
-		data.created = time;
-		return {
-			key: stillKey,
+	createPosterEntity(data: CreatePosterDto, opt: ImageOpt){
+		const posterKey = this.key([opt.parentKind, +opt.parentId, 'Poster']);
+		data.lastUpdated = opt.time;
+		data.created = opt.time;
+		const entity = {
+			key: posterKey,
 			data: data
 		}
+		const history = this.formulateHistory(data, 'Still', posterKey.id, opt.user, 'create');
+		return {entity, history};
 	}
 
-	updatePosterEntity(data: UpdatePosterDto, parentId: string, time: Date, parentKind: string){
-		const stillKey = this.key([parentKind, parentId, 'Poster', data.url]);
-		data.lastUpdated = time;
-		return {
-			key: stillKey,
+	updatePosterEntity(data: UpdatePosterDto, opt: ImageOpt){
+		const posterKey = this.key([opt.parentKind, +opt.parentId, 'Poster', +opt.imageId]);
+		data.lastUpdated = opt.time;
+		const entity = {
+			key: posterKey,
 			data: data
 		}
+		const history = this.formulateHistory(data, 'Still', posterKey.id, opt.user, 'update');
+		return {entity, history};
 	}
 
 	// Person methods
-	createPersonEntity(data: any, time: Date, user: string){
+	createPersonEntity(data: CreatePersonDto, opt: PersonOpt){
 		const personKey = this.key('Person');
-		data.nameEditable = true;
-		data.created = time;
-		data.lastUpdated = time;
+		data.created = opt.time;
+		data.lastUpdated = opt.time;
 		const entity = {
 			key: personKey,
 			data: data
 		}
-		const history = this.formulateHistory(data, 'Person', personKey.id, user, 'create');
+		const history = this.formulateHistory(data, 'Person', personKey.id, opt.user, 'create');
 		return { entity, history }
 	}
 
-	updatePersonEntity(data: any, time: Date, user: string){
-		const history = [];
-		const entity = [];
-		if(data.id){
-			data.lastUpdated = time;
-			const personKey = this.key(['Person', data.id]);
-			delete data.id;
-			entity.push({key: personKey, data});
-			history.push(this.formulateHistory(data, 'Person', personKey.id, user, 'update'));
-		}
+	updatePersonEntity(data: UpdatePersonDto, opt: PersonOpt){
+		data.lastUpdated = opt.time;
+		const personKey = this.key(['Person', +opt.personId]);
+
+		const entity ={key: personKey, data};
+		const history = this.formulateHistory(data, 'Person', personKey.id, opt.user, 'update');
+		return {entity, history}
 	}
 
 	// PersonRole methods
-	async createPersonRoleEntity(data: CreatePersonRoleDto, parentId: string, time: Date, user: string, parentKind: string){
-		data.lastUpdated = time;
-		data.created = time;
-		data.ownerKind = parentKind;
-		data.ownerId = parentId;
-		const entities = []
-		const history = []
-		if(data.category){
-			if(data.personId){
-				// Checks whether the person id real or bogus
-				const personKey = this.key(['Person', data.personId])
-				const [person] = await this.get(personKey)
-				if(isNaN(person)){
-					// Creates the role for this existing person
-					const roleKey = this.key(['Person', personKey.id, parentKind, parentId, 'PersonRole']);
-					delete data.personId;
-					entities.push({
-						key: roleKey,
-						data: data
-					})
-					// Creates history
-					history.push(this.formulateHistory(data, 'PersonRole', roleKey.id, user, 'create'));
-				}
-			} else {
-				// Creates the role and a new person
-				const personKey = this.key('Person')
-				const personEntity = {
-					name: data.personName,
-					nameEditable: true,
-					lastUpdated: time,
-					created: time,
-				}
-				entities.push({
-					key: personKey,
-					data: personEntity
-				})
-				const roleKey = this.key(['Person', personKey.id, parentKind, parentId, 'PersonRole']);
-				entities.push({
-					key: roleKey,
-					data: data
-				})
-				// Create history for both actions
-				history.push(this.formulateHistory(personEntity, 'Person', personKey.id, user, 'create'));
-				history.push(this.formulateHistory(data, 'PersonRole', roleKey.id, user, 'create'));
-			}
+	createPersonRoleEntity(data: CreatePersonRoleDto, opt: PersonRoleOpt){
+		data.lastUpdated = opt.time;
+		data.created = opt.time;
+		data.ownerKind = opt.parentKind;
+		data.ownerId = opt.parentId;		
+		// Creates the role
+		const roleKey = this.key(['Person', +opt.personId, opt.parentKind, +opt.parentId, 'PersonRole']);
+		const entity = {
+			key: roleKey,
+			data: data
 		}
-
-		// Return enitity the arrays
-		return {entities, history}
+		// Create history
+		const history = this.formulateHistory(data, 'PersonRole', roleKey.id, opt.user, 'create');
+		return {entity, history}
 	}
 
-	async updatePersonRoleEntity(data: UpdatePersonRoleDto, parentId: string, time: Date, user: string, parentKind: string){
-		const entities = [];
-		const history = [];
-		if(data.personId && data.id){
-			const personKey = this.datastore.key(['Person', data.personId]);
-			const person = await this.datastore.get(personKey);
-			if(person.length >= 1 && isNaN(person[0])){
-				// Edits an existing person role of an exsiting person
-				const roleKey = this.key(['Person', personKey.id, parentKind, parentId,'PersonRole', data.id])
-				delete data.id;
-				delete data.personId;
-				data.lastUpdated = time;
-				entities.push({
-					key: roleKey,
-					data: data
-				})
-
-				// Creates history
-				history.push(this.formulateHistory(data, 'PersonRole', roleKey.id, user, 'update'));
-
-				// Updates the the parent kind if there's a change
-				if(data.personName){
-					const updateData = {
-						lastUpdated: time
-					}
-					data.personName && person[0].nameEditable == true ? updateData['name'] = data.personName : null;
-					
-					entities.push({
-						key: personKey,
-						data: updateData
-					})
-
-					// Creates history
-					history.push(this.formulateHistory(updateData, 'Person', personKey.id, user, 'update'));
-				}
-			} 
+	updatePersonRoleEntity(data: UpdatePersonRoleDto, opt: PersonRoleOpt){
+		
+		const personKey = this.datastore.key(['Person', +opt.personId]);
+			
+		const roleKey = this.key(['Person', +personKey.id, opt.parentKind, +opt.parentId,'PersonRole', +opt.roleId]);				
+		data.lastUpdated = opt.time;
+		const entity = {
+			key: roleKey,
+			data: data
 		}
+		const history = this.formulateHistory(data, 'PersonRole', roleKey.id, opt.user, 'update');
 
-		return { entities, history }
+		return { entity, history }
 	}
 
 	// Company methods
@@ -240,7 +201,7 @@ export class DatabaseService extends Datastore{
 
 	updateCompanyEntity(data: UpdateCompanyDto, opt: CompanyOpt){
 		data.lastUpdated = opt.time;
-		const companyKey = this.key(['Company', opt.companyId]);
+		const companyKey = this.key(['Company', +opt.companyId]);
 
 		const entity = {key: companyKey, data};
 		const history = this.formulateHistory(data, 'Company', companyKey.id, opt.user, 'update');
@@ -255,8 +216,8 @@ export class DatabaseService extends Datastore{
 		data.ownerKind = opt.parentKind;
 		data.ownerId = opt.parentId;	
 		// Create the role
-		const companyKey = this.key(['Company', opt.companyId]);
-		const roleKey = this.key(['Company', companyKey.id, opt.parentKind, opt.parentId, 'CompanyRole']);
+		const companyKey = this.key(['Company', +opt.companyId]);
+		const roleKey = this.key(['Company', +companyKey.id, opt.parentKind, +opt.parentId, 'CompanyRole']);
 		const entity = {
 			key: roleKey,
 			data: data
@@ -267,15 +228,14 @@ export class DatabaseService extends Datastore{
 	}
 
 	updateCompanyRoleEntity(data: UpdateCompanyRoleDto, opt: CompanyRoleOpt){
-		const companyKey = this.datastore.key(['Company', opt.companyId]);
+		const companyKey = this.datastore.key(['Company', +opt.companyId]);
 		
-		const roleKey = this.datastore.key(['Company', companyKey.id, opt.parentKind, opt.parentId,'CompanyRole', opt.roleId]);
+		const roleKey = this.datastore.key(['Company', +companyKey.id, opt.parentKind, +opt.parentId,'CompanyRole', +opt.roleId]);
 		data.lastUpdated = opt.time;
 		const entity = {
 			key: roleKey,
 			data: data
 		}
-
 		// Creates history
 		const history = this.formulateHistory(data, 'CompanyRole', roleKey.id, opt.user, 'update');
 
@@ -283,121 +243,55 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Platform methods
-	createPlatformEntity(data: any, time: Date, user: string){
+	createPlatformEntity(data: CreatePlatformDto, opt: PlatformOpt){
 		const platformKey = this.key('Platform');
-		data.nameEditable = true;
-		data.created = time;
-		data.lastUpdated = time;
+		data.created = opt.time;
+		data.lastUpdated = opt.time;
 		const entity = {
 			key: platformKey,
 			data: data
 		}
-		const history = this.formulateHistory(data, 'Platform', platformKey.id, user, 'create');
+		const history = this.formulateHistory(data, 'Platform', platformKey.id, opt.user, 'create');
 		return { entity, history }
 	}
 
-	updatePlatformEntity(data: any, time: Date, user: string){
-		const history = [];
-		const entity = [];
-		if(data.id){
-			data.lastUpdated = time;
-			const platformKey = this.key(['Platform', data.id]);
-			delete data.id;
-			entity.push({key: platformKey, data});
-			history.push(this.formulateHistory(data, 'Platform', platformKey.id, user, 'update'));
-		}
+	updatePlatformEntity(data: UpdatePlatformDto, opt: PlatformOpt){
+		data.lastUpdated = opt.time;
+		const platformKey = this.key(['Platform', +opt.platformId]);
+		const entity = {key: platformKey, data};
+		const history = this.formulateHistory(data, 'Platform', platformKey.id, opt.user, 'update');
+		return {entity, history}
 	}
 
 	// Link methods
-	async createLinkEntity(data: CreateLinkDto, parentId: string, time: Date, user: string, parentKind: string){
-		data.lastUpdated = time;
-		data.created = time;
-		data.ownerKind = parentKind;
-		data.ownerId = parentId;
-		const entities = [];
-		const history = [];
-		// What's a link w/o a url? The following code skips it
-		if(data.url){
-			// Checks whether the platform in question already exist
-			if(data.platformId){
-				// Checks whether the platform id real or bogus
-				const platformKey = this.key(['Platform', data.platformId]);
-				const [platform] = await this.get(platformKey);
-				if(isNaN(platform)){
-					const linkKey = this.key(['Platform', platformKey.id, parentKind, parentId, 'Link']);
-					delete data.platformId;
-					entities.push({
-						key: linkKey,
-						data: data
-					})
-
-					// Create history
-					history.push(this.formulateHistory(data, 'Link', linkKey.id, user, 'create'));
-				}
-			} else {
-				// Creates a link and a new platform
-				const platformKey = this.key('Platform');
-				const platform = {
-					name: data.platformName,
-					nameEditable: true,
-					lastUpdated: time,
-					created: time
-				}
-				entities.push({
-					key: platformKey,
-					data: platform
-				})
-				const linkKey = this.key(['Platform', platformKey.id, parentKind, parentId, 'Link']);
-				entities.push({
-					key: linkKey,
-					data: data
-				})
-				// Create histories for both actions
-				history.push(this.formulateHistory(platform, 'Platform', platformKey.id, user, 'create'));
-				history.push(this.formulateHistory(data, 'Link', linkKey.id, user, 'create'));
-			}
+	createLinkEntity(data: CreateLinkDto, opt: LinkOpt){
+		data.lastUpdated = opt.time;
+		data.created = opt.time;
+		data.ownerKind = opt.parentKind;
+		data.ownerId = opt.parentId;
+		// Creates a link
+		const platformKey = this.key(['Platform', +opt.platformId])
+		const linkKey = this.key(['Platform', +platformKey.id, opt.parentKind, +opt.parentId, 'Link']);
+		const entity = {
+			key: linkKey,
+			data: data
 		}
-
-		return { entities, history }
+		// Create history
+		const history = this.formulateHistory(data, 'Link', linkKey.id, user, 'create');
+		return { entity, history }
 	}
 
-	async updateLinkEntity(data: UpdateLinkDto, parentId: string, time: Date, user: string, parentKind: string){
-		const entities = [];
-		const history = [];
-		if(data.platformId && data.id){
-			const platformKey = this.key(['Platform', data.platformId]);
-			const platform = await this.get(platformKey);
-			if(platform.length >= 1 && isNaN(platform[0])){
-				// Edits an existing link of an exsiting platform
-				const linkKey = this.key(['Platform', platformKey.id, parentKind, parentId,'Link', data.id]);
-				delete data.id;
-				delete data.platformId;
-				data.lastUpdated = time;
-				entities.push({
-					key: linkKey,
-					data: data
-				})
-
-				// Creates history
-				history.push(this.formulateHistory(data, 'Link', linkKey.id, user, 'update'));
-
-				// Updates the the parent kind if there's a change
-				if(data.platformName){
-					const updateData = {
-						lastUpdated: time
-					}
-					data.platformName && platform[0].nameEditable == true ? updateData['name'] = data.platformName : null
-					entities.push({
-						key: platformKey,
-						data: updateData
-					})
-
-					// Creates history
-					history.push(this.formulateHistory(updateData, 'Platform', platformKey.id, user, 'update'));
-				}
-			}
+	updateLinkEntity(data: UpdateLinkDto, opt: LinkOpt){
+		const platformKey = this.key(['Platform', data.platformId]);
+			
+		const linkKey = this.key(['Platform', +platformKey.id, opt.parentKind, +opt.parentId,'Link', +opt.linkId]);
+		data.lastUpdated = opt.time;
+		const entity = {
+			key: linkKey,
+			data: data
 		}
-
-		return { entities, history }
+		// Creates history
+		const history = this.formulateHistory(data, 'Link', linkKey.id, opt.user, 'update');
+		return { entity, history }
 	}
 }
