@@ -38,7 +38,6 @@ lerna-debug.log*
 .env
 app.yaml
 .gcloudignore
-cloud-keys.json
 set_vars.cmd
 index.yaml
-db.json
+/config
