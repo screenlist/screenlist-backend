@@ -137,8 +137,8 @@ export class CompaniesService {
 		}
 	}
 
-	async deleteOneRole(id: string, parentKind: string, parentId: string, user: string, companyId: string){
-		const roleKey = this.db.key(['Company', +companyId, parentKind, +parentId, 'CompanyRole', +id]);
+	async deleteOneRole(opt: CompanyRoleOpt){
+		const roleKey = this.db.key(['Company', +opt.companyId, opt.parentKind, +opt.parentId, 'CompanyRole', +opt.roleId]);
 		try {
 			const [role] = await this.db.get(roleKey);
 			const history = this.db.formulateHistory(role, 'CompanyRole', roleKey.id, user, 'delete');
