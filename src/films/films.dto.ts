@@ -32,10 +32,10 @@ export class UpdateFilmDto {
 
 // Still
 export class CreateStillDto {
-	url: string;
+	url?: string;
 	description: string;
 	originalName: string;
-	quality: string;
+	quality?: string;
 	lastUpdated?: Date;
 	created?: Date;
 }
@@ -51,10 +51,10 @@ export class UpdateStillDto {
 
 // Poster
 export class CreatePosterDto {
-	url: string;
+	url?: string;
 	originalName: string;
 	description: string;
-	quality: string;
+	quality?: string;
 	lastUpdated?: Date;
 	created?: Date;
 }
