@@ -43,8 +43,19 @@ export class StorageService extends Storage {
 			} catch(err: any) {
 				throw new BadRequestException(err?.message)
 			}
+		} else { 
+			throw new BadRequestException("Unrecognised file extension");
 		}
-		throw new BadRequestException("Unrecognised file extension")
+	}
+
+	async deletePoster(name: string){
+		const posterBucket = this.bucket(this.configService.get('STORAGE_POSTERS'));
+		try {
+			await posterBucket.file(name).delete();
+			return {"status": "deleted"}
+		} catch(err: any){
+			throw new BadRequestException(err.message);
+		}
 	}
 
 	async uploadStill(still: Express.Multer.File): Promise<UploadedFileDto>{
@@ -62,8 +73,19 @@ export class StorageService extends Storage {
 			} catch(err: any){
 				throw new BadRequestException(err?.message);
 			}
+		}	else { 
+			throw new BadRequestException("Unrecognised file extension");
 		}
-		throw new BadRequestException("Unrecognised file extension");
+	}
+
+	async deleteStill(name: string){
+		const stillBucket = this.bucket(this.configService.get('STORAGE_STILLS'));
+		try {
+			await stillBucket.file(name).delete();
+			return {"status": "deleted"}
+		} catch(err: any){
+			throw new BadRequestException(err.message);
+		}
 	}
 
 	async uploadProfilePhoto(profile: Express.Multer.File): Promise<UploadedFileDto>{
@@ -81,7 +103,18 @@ export class StorageService extends Storage {
 			} catch(err: any){
 				throw new BadRequestException(err?.message);
 			}
+		} else { 
+			throw new BadRequestException("Unrecognised file extension");
 		}
-		throw new BadRequestException("Unrecognised file extension");
+	}
+
+	async deleteProfilePhoto(name: string){
+		const profileBucket = this.bucket(this.configService.get('STORAGE_PROFILES'));
+		try {
+			await profileBucket.file(name).delete();
+			return {"status": "deleted"}
+		} catch(err: any){
+			throw new BadRequestException(err.message);
+		}
 	}
 }
