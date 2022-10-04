@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, UnauthorizedExcepti
 import { Datastore, Query } from '@google-cloud/datastore';
 import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
+import { HistoryOpt } from './database.types';
 import { 
 	FilmDetails, 
 	Poster, 
@@ -69,15 +70,23 @@ export class DatabaseService extends Datastore{
 		})
 	}
 
+	removeKey(obj){
+		delete obj[this.KEY]
+		return obj
+	}
+
 	// History methods
-	formulateHistory(data: any, kind: string, id: string, user: string, action: string){
+	formulateHistory(opt: HistoryOpt){
+		if(opt.data[this.KEY]){
+			delete opt.data[this.KEY];
+		}
 		const key = this.key('History');
-		const history = data;
-		history.entityIdentifier = id;
-		history.entityKind = kind
-		history.resultingAction = action;
-		history.triggeredByUser = user;
-		history.timestamp = new Date();
+		const history = opt.data;
+		history.entityIdentifier = opt.id;
+		history.entityKind = opt.kind
+		history.resultingAction = opt.action;
+		history.triggeredByUser = opt.user;
+		history.timestamp = opt.time;
 		return {
 			key: key,
 			data: history
@@ -93,7 +102,15 @@ export class DatabaseService extends Datastore{
 			key: stillKey,
 			data: data
 		}
-		const history = this.formulateHistory(data, 'Still', stillKey.id, opt.user, 'create');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Still',
+			id: stillKey.id,
+			action: 'create',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		return {entity, history}
 	}
 
@@ -104,7 +121,15 @@ export class DatabaseService extends Datastore{
 			key: stillKey,
 			data: data
 		}
-		const history = this.formulateHistory(data, 'Still', stillKey.id, opt.user, 'update');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Still',
+			id: stillKey.id,
+			action: 'update',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		return {entity, history};
 	}
 
@@ -117,7 +142,15 @@ export class DatabaseService extends Datastore{
 			key: posterKey,
 			data: data
 		}
-		const history = this.formulateHistory(data, 'Still', posterKey.id, opt.user, 'create');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Poster',
+			id: posterKey.id,
+			action: 'create',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		return {entity, history};
 	}
 
@@ -128,7 +161,15 @@ export class DatabaseService extends Datastore{
 			key: posterKey,
 			data: data
 		}
-		const history = this.formulateHistory(data, 'Still', posterKey.id, opt.user, 'update');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Poster',
+			id: posterKey.id,
+			action: 'update',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		return {entity, history};
 	}
 
@@ -141,7 +182,15 @@ export class DatabaseService extends Datastore{
 			key: personKey,
 			data: data
 		}
-		const history = this.formulateHistory(data, 'Person', personKey.id, opt.user, 'create');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Person',
+			id: personKey.id,
+			action: 'create',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		return { entity, history }
 	}
 
@@ -150,7 +199,15 @@ export class DatabaseService extends Datastore{
 		const personKey = this.key(['Person', +opt.personId]);
 
 		const entity ={key: personKey, data};
-		const history = this.formulateHistory(data, 'Person', personKey.id, opt.user, 'update');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Person',
+			id: personKey.id,
+			action: 'update',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		return {entity, history}
 	}
 
@@ -167,7 +224,15 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		// Create history
-		const history = this.formulateHistory(data, 'PersonRole', roleKey.id, opt.user, 'create');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'PersonRole',
+			id: roleKey.id,
+			action: 'create',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		return {entity, history}
 	}
 
@@ -181,7 +246,16 @@ export class DatabaseService extends Datastore{
 			key: roleKey,
 			data: data
 		}
-		const history = this.formulateHistory(data, 'PersonRole', roleKey.id, opt.user, 'update');
+
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'PersonRole',
+			id: roleKey.id,
+			action: 'update',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 
 		return { entity, history }
 	}
@@ -195,7 +269,15 @@ export class DatabaseService extends Datastore{
 			key: companyKey,
 			data: data
 		}
-		const history = this.formulateHistory(data, 'Company', companyKey.id, opt.user, 'create');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Company',
+			id: companyKey.id,
+			action: 'create',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		return {entity, history}
 	}
 
@@ -204,7 +286,15 @@ export class DatabaseService extends Datastore{
 		const companyKey = this.key(['Company', +opt.companyId]);
 
 		const entity = {key: companyKey, data};
-		const history = this.formulateHistory(data, 'Company', companyKey.id, opt.user, 'update');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Company',
+			id: companyKey.id,
+			action: 'update',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		
 		return {entity, history}
 	}
@@ -223,7 +313,15 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		// Create history
-		const history = this.formulateHistory(data, 'CompanyRole', roleKey.id, opt.user, 'create');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'CompanyRole',
+			id: roleKey.id,
+			action: 'update',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		return {entity, history}
 	}
 
@@ -237,7 +335,15 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		// Creates history
-		const history = this.formulateHistory(data, 'CompanyRole', roleKey.id, opt.user, 'update');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'CompanyRole',
+			id: roleKey.id,
+			action: 'update',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 
 		return {entity, history}
 	}
@@ -251,7 +357,15 @@ export class DatabaseService extends Datastore{
 			key: platformKey,
 			data: data
 		}
-		const history = this.formulateHistory(data, 'Platform', platformKey.id, opt.user, 'create');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Platform',
+			id: platformKey.id,
+			action: 'create',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		return { entity, history }
 	}
 
@@ -259,7 +373,15 @@ export class DatabaseService extends Datastore{
 		data.lastUpdated = opt.time;
 		const platformKey = this.key(['Platform', +opt.platformId]);
 		const entity = {key: platformKey, data};
-		const history = this.formulateHistory(data, 'Platform', platformKey.id, opt.user, 'update');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Platform',
+			id: platformKey.id,
+			action: 'update',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		return {entity, history}
 	}
 
@@ -276,8 +398,16 @@ export class DatabaseService extends Datastore{
 			key: linkKey,
 			data: data
 		}
-		// Create history
-		const history = this.formulateHistory(data, 'Link', linkKey.id, user, 'create');
+		// Creates history
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Link',
+			id: linkKey.id,
+			action: 'create',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		return { entity, history }
 	}
 
@@ -291,7 +421,15 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		// Creates history
-		const history = this.formulateHistory(data, 'Link', linkKey.id, opt.user, 'update');
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Link',
+			id: platformKey.id,
+			action: 'update',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
 		return { entity, history }
 	}
 }
