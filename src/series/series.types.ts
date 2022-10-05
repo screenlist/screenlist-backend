@@ -1,9 +1,11 @@
 import {
 	Poster, 
-	Still, 
+	Still
+} from '../films/films.types';
+import {
 	Link,
 	Platform,
-} from '../films/films.types';
+} from '../platforms/platforms.types';
 import {
 	Company,
 	CompanyRole
@@ -13,7 +15,7 @@ import {
 	Person,
 } from '../people/people.types';
 
-export interface SeriesDetails {
+export interface Series {
 	id: string;
 	name: string;
 	nameEditable: boolean;
@@ -36,7 +38,7 @@ export interface SeriesDetails {
 }
 
 export interface SeriesType {
-	details: SeriesDetails,
+	details: Series,
 	posters?: Poster[],
 	stills?: Still[],
 	producers?: CompanyRole[],

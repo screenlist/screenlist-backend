@@ -41,12 +41,8 @@ export class CreateStillDto {
 }
 
 export class UpdateStillDto {
-	url: string;
 	description?: string;
-	originalName?: string;
-	quality?: string;
 	lastUpdated?: Date;
-	created?: Date;
 }
 
 // Poster
@@ -60,10 +56,6 @@ export class CreatePosterDto {
 }
 
 export class UpdatePosterDto {
-	url: string;
-	originalName?: string;
-	description?: string;
-	quality?: string;
+	description?: string;	
 	lastUpdated?: Date;
-	created?: Date;
 }
