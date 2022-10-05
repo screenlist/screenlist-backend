@@ -6,6 +6,7 @@ import { UsersModule } from '../users/users.module';
 import { PlatformsModule } from '../platforms/platforms.module';
 import { PeopleModule } from '../people/people.module';
 import { DatabaseModule } from '../database/database.module';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
 	imports: [
@@ -13,7 +14,8 @@ import { DatabaseModule } from '../database/database.module';
 		UsersModule,
 		PlatformsModule,
 		PeopleModule,
-		DatabaseModule
+		DatabaseModule,
+		StorageModule
 	],
 	controllers: [FilmsController],
 	providers: [FilmsService]
