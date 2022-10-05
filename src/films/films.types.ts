@@ -16,7 +16,6 @@ export interface Still {
 	description: string;
 	url: string;
 	quality: string;
-	film: string;
 	lastUpdated: Date;
 	created: Date;
 }
@@ -27,12 +26,11 @@ export interface Poster {
 	description: string;
 	url: string;
 	quality: string;
-	film: string;
 	lastUpdated: Date;
 	created: Date;
 }
 
-export interface FilmDetails {
+export interface Film {
 	id: string;
 	name: string;
 	nameEditable: boolean;
@@ -51,7 +49,7 @@ export interface FilmDetails {
 }
 
 export interface FilmType {
-	details: FilmDetails;
+	details: Film;
 	posters?: Poster[];
 	stills?: Still[];
 	actors?: PersonRole[];
