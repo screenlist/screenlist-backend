@@ -3,7 +3,7 @@ import { DatabaseService } from '../database/database.service';
 import { ConfigService } from '@nestjs/config';
 import { CreateFilmDto, UpdateFilmDto } from './films.dto';
 import { 
-	FilmDetails, 
+	Film, 
 	Poster, 
 	Still,
 	FilmType,
@@ -42,8 +42,8 @@ export class FilmsService {
 		private db: DatabaseService,
 		private storage: StorageService,
 	){
-		this.db = new DatabaseService(configService)
-		this.storage = new StorageService(configService)
+		this.db = new DatabaseService(configService);
+		this.storage = new StorageService(configService);
 	}
 
 	async findAll(): Promise<FilmType[]>{
@@ -52,7 +52,7 @@ export class FilmsService {
 		try {
 			const films = await this.db.runQuery(query)
 			// Loop through each film to retrieve its poster
-			films[0].forEach(async (film: FilmDetails) => {
+			films[0].forEach(async (film: Film) => {
 				film.id = film[this.db.KEY]['id']
 				const posterQuery = this.db.createQuery('Poster')
 					.filter('film', '=', film.name)
@@ -158,7 +158,15 @@ export class FilmsService {
 			data: film
 		})
 		// Write film action into history
-		entities.push(this.db.formulateHistory(film, 'Film',	filmKey.id,	user,	'create'));
+		const historyObj: HistoryOpt = {
+			data: film,
+			user: user,
+			time: time,
+			action: 'create',
+			kind: 'Film',
+			id: filmKey.id
+		}
+		entities.push(this.db.formulateHistory(historyObj));
 
 		try {
 			await this.db.transaction().insert(entities);
@@ -182,7 +190,15 @@ export class FilmsService {
 			data: film
 		}
 		// Create history
-		const history = this.db.formulateHistory(film, 'Film', filmKey.id, user, 'update');
+		const historyObj: HistoryOpt = {
+			data: film,
+			user: user,
+			time: time,
+			action: 'update',
+			kind: 'Film',
+			id: filmKey.id
+		}
+		const history = this.db.formulateHistory(historyObj);
 		try{
 			await this.db.transaction().update(entity);
 			await this.db.transaction().insert(history);
@@ -279,17 +295,18 @@ export class FilmsService {
 				history.push(this.db.formulateHistory(historyObj));
 			})
 			const [film] = await this.db.get(filmKey);
-			await this.db.delete(film);
+			deletion.push(film);
 			// Write action into history
 			const historyObj: HistoryOpt = {
 				data: film,
 				user: user,
-				kind: 'Still',
+				kind: 'Film',
 				id: filmKey.id,
 				action: 'delete',
 				time: time,
 			}
 			history.push(this.db.formulateHistory(historyObj));
+			await this.db.transaction().delete(deletion);
 			await this.db.transaction().insert(history);
 			return {'status': 'deleted'}
 		} catch(err: any){
@@ -316,6 +333,19 @@ export class FilmsService {
 			return {'status': 'uploaded'}
 		} catch{
 			throw new BadRequestException("Could not upload")
+		}
+	}
+
+	async updatePoster(data: UpdatePosterDto, opt: ImageOpt){
+		const posterKey = this.db.key([opt.parentKind, +opt.parentId, 'Poster', +opt.imageId]);
+		data.lastUpdated = opt.time;
+		const {entity, history} = this.db.updatePosterEntity(data, opt);
+		try {
+			await this.db.update(entity);
+			await this.db.insert(history);
+			return {'status': 'updated'}
+		} catch {
+			throw new BadRequestException('Could not edit');
 		}
 	}
 
@@ -362,6 +392,19 @@ export class FilmsService {
 		}
 	}
 
+	async updateStill(data: UpdateStillDto, opt: ImageOpt){
+		const stillKey = this.db.key([opt.parentKind, +opt.parentId, 'Still', +opt.imageId]);
+		data.lastUpdated = opt.time;
+		const {entity, history} = this.db.updateStillEntity(data, opt);
+		try {
+			await this.db.update(entity);
+			await this.db.insert(history);
+			return {'status': 'updated'}
+		} catch {
+			throw new BadRequestException('Could not edit');
+		}
+	}
+
 	async deleteStill(opt: ImageOpt){
 		try{
 			const stillKey = this.db.key([opt.parentKind, +opt.parentId, 'Still', +opt.imageId]);
@@ -374,7 +417,7 @@ export class FilmsService {
 				action: 'delete',
 				time: opt.time,
 			}
-			const history = this.db.formulateHistory(historyObj)
+			const history = this.db.formulateHistory(historyObj);
 			await this.storage.deletePoster(still.originalName);
 			await this.db.insert(history);
 			return {'status': 'deleted'}

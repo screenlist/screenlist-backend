@@ -13,6 +13,7 @@ import {
 	PlatformOpt,
 	LinkOpt
 } from './platforms.types';
+import { HistoryOpt } from '../database/database.types';
 
 @Injectable()
 export class PlatformsService {
@@ -65,6 +66,7 @@ export class PlatformsService {
 	}
 
 	async deleteOne(id: string, user:string){
+		const time = new Date();
 		const platformKey = this.db.key(['{Platform', +id]);
 		const entities = [{key: platformKey}]; // entites to be deleted
 		const history = []; // actions to write into history
@@ -72,11 +74,27 @@ export class PlatformsService {
 		try {
 			const [links] = await this.db.runQuery(linksQuery);
 			const [company] = await this.db.get(platformKey);
-			history.push(this.db.formulateHistory(company, '{Platform', platformKey.id, user, 'delete'));
+			const platformHistoryObj: HistoryOpt = {
+				data: company,
+				kind: 'Platform',
+				id: platformKey.id,
+				time: time,
+				action: 'delete',
+				user: user
+			}
+			history.push(this.db.formulateHistory(platformHistoryObj));
 			links.forEach((link) => {
 				const linkKey = link[this.db.KEY];
 				entities.push({key: linkKey});
-				history.push(this.db.formulateHistory(link, '{PlatformRole', linkKey.id, user, 'delete'));
+				const linkHistoryObj: HistoryOpt = {
+					data: link,
+					kind: 'Link',
+					id: linkKey.id,
+					time: time,
+					action: 'delete',
+					user: user
+				}
+				history.push(this.db.formulateHistory(linkHistoryObj));
 			})
 			await this.db.transaction().delete(entities);
 			await this.db.transaction().insert(history);
@@ -111,7 +129,15 @@ export class PlatformsService {
 		const linkKey = this.db.key(['Platform', +opt.platformId, opt.parentKind, +opt.parentId, 'Link', +opt.linkId]);
 		try {
 			const [link] = await this.db.get(linkKey);
-			const history = this.db.formulateHistory(link, 'PlatformRole', linkKey.id, opt.user, 'delete');
+			const historyObj: HistoryOpt = {
+				data: link,
+				kind: 'Link',
+				id: linkKey.id,
+				time: opt.time,
+				action: 'delete',
+				user: opt.user
+			}
+			const history = this.db.formulateHistory(historyObj);
 			const entity = {key: linkKey};
 			await this.db.delete(entity);
 			await this.db.insert(history);
