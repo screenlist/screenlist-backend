@@ -13,6 +13,7 @@ import {
 	PersonOpt,
 	PersonRoleOpt
 } from './people.types';
+import { HistoryOpt } from '../database/database.types';
 
 @Injectable()
 export class PeopleService {
@@ -64,19 +65,35 @@ export class PeopleService {
 		}
 	}
 
-	async deleteOne(id: string, user:string){
-		const personKey = this.db.key(['{Person', +id]);
+	async deleteOne(opt: PersonOpt){
+		const personKey = this.db.key(['{Person', +opt.personId]);
 		const entities = [{key: personKey}]; // entites to be deleted
 		const history = []; // actions to write into history
 		const rolesQuery = this.db.createQuery('{PersonRole').hasAncestor(personKey);
 		try {
 			const [roles] = await this.db.runQuery(rolesQuery);
-			const [company] = await this.db.get(personKey);
-			history.push(this.db.formulateHistory(company, '{Person', personKey.id, user, 'delete'));
+			const [person] = await this.db.get(personKey);
+			const historyObj: HistoryOpt = {
+				data: person,
+				kind: 'Person',
+				id: personKey.id,
+				time: opt.time,
+				action: 'delete',
+				user: opt.user
+			}
+			history.push(this.db.formulateHistory(historyObj));
 			roles.forEach((role) => {
 				const roleKey = role[this.db.KEY];
 				entities.push({key: roleKey});
-				history.push(this.db.formulateHistory(role, '{PersonRole', roleKey.id, user, 'delete'));
+				const roleHistoryObj: HistoryOpt = {
+					data: role,
+					kind: 'PersonRole',
+					id: roleKey.id,
+					time: opt.time,
+					action: 'delete',
+					user: opt.user
+				}
+				history.push(this.db.formulateHistory(roleHistoryObj));
 			})
 			await this.db.transaction().delete(entities);
 			await this.db.transaction().insert(history);
@@ -88,6 +105,9 @@ export class PeopleService {
 
 	async createOneRole(data: CreatePersonRoleDto, opt: PersonRoleOpt){
 		const {entity, history} = this.db.createPersonRoleEntity(data, opt);
+		if(!data.category){
+			throw new BadRequestException('role category not specified')
+		}
 		try {
 			await this.db.insert([entity, history]);
 			return { 'status': 'successfully created' }
@@ -111,7 +131,15 @@ export class PeopleService {
 		const roleKey = this.db.key(['Person', +opt.personId, opt.parentKind, +opt.parentId, 'CompanyRole', +opt.roleId]);
 		try {
 			const [role] = await this.db.get(roleKey);
-			const history = this.db.formulateHistory(role, 'PersonRole', roleKey.id, opt.user, 'delete');
+			const historyObj: HistoryOpt = {
+				data: role,
+				kind: 'PersonRole',
+				id: roleKey.id,
+				time: opt.time,
+				action: 'delete',
+				user: opt.user
+			}
+			const history = this.db.formulateHistory(historyObj);
 			const entity = {key: roleKey};
 			await this.db.delete(entity);
 			await this.db.insert(history);
