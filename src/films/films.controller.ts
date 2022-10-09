@@ -8,7 +8,8 @@ import {
 	Body,
 	Param,
 	Query,
-	HttpException
+	HttpException,
+	Headers
 } from '@nestjs/common';
 import { Datastore } from '@google-cloud/datastore';
 import * as path from 'path';
@@ -59,7 +60,7 @@ export class FilmsController {
 	}
 
 	@Delete(':id')
-	async deleteOne(@Param('id') id: string, user: string){
+	async deleteOne(@Param('id') id: string, @Headers('UserToken') token: string){
 		return await this.filmsService.deleteOne(id, user);
 	}
 
