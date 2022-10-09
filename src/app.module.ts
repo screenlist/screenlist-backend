@@ -12,6 +12,7 @@ import { StorageModule } from './storage/storage.module';
 import { CompaniesModule } from './companies/companies.module';
 import { DatabaseModule } from './database/database.module';
 import { SessionModule } from './session/session.module';
+import { AuthModule } from './auth/auth.module';
 
 
 @Module({
@@ -28,7 +29,8 @@ import { SessionModule } from './session/session.module';
     StorageModule,
     CompaniesModule,
     DatabaseModule,
-    SessionModule
+    SessionModule,
+    AuthModule
   ],
   controllers: [AppController],
   providers: [AppService],
