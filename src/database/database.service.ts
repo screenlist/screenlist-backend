@@ -4,7 +4,7 @@ import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
 import { HistoryOpt } from './database.types';
 import { 
-	FilmDetails, 
+	Film, 
 	Poster, 
 	Still,
 	ImageOpt
@@ -51,6 +51,17 @@ import {
 	LinkOpt,
 	PlatformOpt
 } from '../platforms/platforms.types';
+import { 
+	CreatePrivilegedUserDto,  
+	UpdatePrivilegedUserDto,
+	CreateVotesDto,
+	UpdateVotesDto,
+	CreateRequestDto,
+	UpdateRequestDto,
+	CreateJournalistInfoDto,
+	UpdateJournalistInfoDto
+} from '../users/users.dto';
+import { UserOpt, VoteOpt, RequestOpt } from '../users/users.types';
 
 @Injectable()
 export class DatabaseService extends Datastore{
@@ -91,6 +102,163 @@ export class DatabaseService extends Datastore{
 			key: key,
 			data: history
 		}
+	}
+
+	// User methods
+	createPrivilegedUserEntity(data: CreatePrivilegedUserDto, opt: UserOpt|VoteOpt){
+		const userKey = this.key(['User', data.uid]);
+		data.lastUpdated = opt.time;
+		data.created = opt.time;
+		const entity = {
+			key: userKey,
+			data: data
+		}
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'User',
+			id: userKey.id,
+			action: 'create',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
+		return {entity, history}
+	}
+
+	updatePrivilegedUserEntity(data: UpdatePrivilegedUserDto, opt: UserOpt|VoteOpt){
+		const userKey = this.key(['User', data.uid]);
+		data.lastUpdated = opt.time;
+		const entity = {
+			key: userKey,
+			data: data
+		}
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'User',
+			id: userKey.id,
+			action: 'update',
+			time: opt.time
+		}
+		const history = this.formulateHistory(historyObj);
+		return {entity, history}
+	}
+
+	createVotesEntity(data: CreateVotesDto, opt: VoteOpt){
+		const voteKey = this.key('Vote');
+		data.lastUpdated = opt.time;
+		data.created = opt.time;
+		const entity = {
+			key: voteKey,
+			data: data
+		}
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Vote',
+			id: voteKey.id,
+			action: 'create',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
+		return {entity, history}
+	}
+
+	updateVotesEntity(data: UpdateVotesDto, opt: VoteOpt){
+		const voteKey = this.key(['Vote', +opt.votesId]);
+		data.lastUpdated = opt.time;
+		const entity = {
+			key: voteKey,
+			data: data
+		}
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Vote',
+			id: voteKey.id,
+			action: 'update',
+			time: opt.time
+		}
+		const history = this.formulateHistory(historyObj);
+		return {entity, history}
+	}
+
+	createRequestEntity(data: CreateRequestDto, opt:RequestOpt){
+		const requestKey = this.key('Request');
+		data.lastUpdated = opt.time;
+		data.created = opt.time;
+		const entity = {
+			key: requestKey,
+			data: data
+		}
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Request',
+			id: requestKey.id,
+			action: 'create',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
+		return {entity, history}
+	}
+
+	updateRequestEntity(data: UpdateRequestDto, opt:RequestOpt){
+		const requestKey = this.key(['Request', +opt.requestId]);
+		data.lastUpdated = opt.time;
+		const entity = {
+			key: requestKey,
+			data: data
+		}
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'Request',
+			id: requestKey.id,
+			action: 'update',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
+		return {entity, history}
+	}
+
+	createJournalistInfoEntity(data: CreateJournalistInfoDto, opt: UserOpt){
+		const infoKey = this.key(['User', opt.user, 'JournalistInfo']);
+		data.lastUpdated = opt.time;
+		data.created = opt.time;
+		const entity = {
+			key: infoKey,
+			data: data
+		}
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'JournalistInfo',
+			id: infoKey.id,
+			action: 'create',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
+		return {entity, history}
+	}
+
+	updateJournalistInfoEntity(data: UpdateJournalistInfoDto, opt: UserOpt){
+		const infoKey = this.key(['User', opt.user, 'JournalistInfo']);
+		data.lastUpdated = opt.time;
+		const entity = {
+			key: infoKey,
+			data: data
+		}
+		const historyObj: HistoryOpt = {
+			data,
+			user: opt.user,
+			kind: 'JournalistInfo',
+			id: infoKey.id,
+			action: 'update',
+			time: opt.time,
+		}
+		const history = this.formulateHistory(historyObj);
+		return {entity, history}
 	}
 
 	// Still methods
