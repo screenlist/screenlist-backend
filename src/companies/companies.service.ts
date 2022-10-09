@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { ConfigService } from '@nestjs/config';
 import {
 	CreateCompanyRoleDto,
 	UpdateCompanyRoleDto,
@@ -18,12 +17,7 @@ import { HistoryOpt } from '../database/database.types';
 
 @Injectable()
 export class CompaniesService {
-	constructor(
-		private configService: ConfigService,
-		private db: DatabaseService
-	){
-		this.db = new DatabaseService(configService)
-	}
+	constructor(private db: DatabaseService){}
 
 	async findAll(): Promise<Company[]>{
 		const query = this.db.createQuery('Company').order('name').limit(100);
