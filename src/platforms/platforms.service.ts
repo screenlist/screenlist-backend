@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { ConfigService } from '@nestjs/config';
 import {
 	CreatePlatformDto,
 	UpdatePlatformDto,
@@ -18,11 +17,8 @@ import { HistoryOpt } from '../database/database.types';
 @Injectable()
 export class PlatformsService {
 	constructor(
-		private configService: ConfigService,
 		private db: DatabaseService
-	){
-		this.db = new DatabaseService(configService)
-	}
+	){}
 
 	async findAll(): Promise<Platform[]>{
 		const query =  this.db.createQuery('Platform').order('name').limit(100);

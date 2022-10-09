@@ -2,6 +2,7 @@ export class CreatePersonDto {
 	name: string;
 	profilePhotoUrl: string;
 	profilePhotoOriginalName: string;
+	description: string;
 	website: string;
 	created: Date;
 	lastUpdated: Date;
@@ -11,6 +12,7 @@ export class UpdatePersonDto {
 	name?: string;
 	profilePhotoUrl?: string;
 	profilePhotoOriginalName?: string;
+	description?: string;
 	website?: string;
 	created?: Date;
 	lastUpdated?: Date;

@@ -32,6 +32,7 @@ import {
 import { PeopleService } from '../people/people.service';
 import { StorageService } from '../storage/storage.service';
 import { HistoryOpt } from '../database/database.types';
+import { AuthService } from '../auth/auth.service';
 
 
 
@@ -41,6 +42,7 @@ export class FilmsService {
 		private configService: ConfigService,
 		private db: DatabaseService,
 		private storage: StorageService,
+		private authService: AuthService
 	){
 		this.db = new DatabaseService(configService);
 		this.storage = new StorageService(configService);
@@ -144,7 +146,7 @@ export class FilmsService {
 
 	async createOne(film: CreateFilmDto, user: string){
 		// A variable to house all entities created
-		let entities = []
+		let entities = [];
 		// Creates the film details entity
 		const filmKey = this.db.key('Film');
 		const filmName = film.name;

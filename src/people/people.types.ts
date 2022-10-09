@@ -1,23 +1,25 @@
 export interface Person {
-	id: string;
-	name: string;
-	nameEditable: boolean;
-	lastUpdated: Date;
-	created: Date;
+	id: string,
+	name: string,
+	profilePhotoUrl: string,
+	profilePhotoOriginalName: string,
+	description: string,
+	lastUpdated: Date,
+	created: Date
 }
 
 export interface PersonRole {
-	id: string;
-	personName: string;
-	personId?: string;
-	ownerKind: string;
-	title: string;
-	subtitle: string;
-	category: string;
-	characterName?: string;
-	characterDescription?: string;
-	lastUpdated: Date;
-	created: Date;
+	id: string,
+	personName: string,
+	personId?: string,
+	ownerKind: string,
+	title: string,
+	subtitle: string,
+	category: string,
+	characterName?: string,
+	characterDescription?: string,
+	lastUpdated: Date,
+	created: Date
 }
 
 // Utility

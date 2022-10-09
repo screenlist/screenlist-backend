@@ -1,20 +1,12 @@
-import { 
-	FilmDetails, 
-	Poster, 
-	Still,
-	Link,
-	Platform,
-	FilmType
-} from '../films/films.types';
-
 export interface Company {
-	id: string;
-	name: string;
-	profilePhotoUrl?: string;
-	profilePhotoOriginalName?: string;
-	website?: string;
-	lastUpdated: Date;
-	created: Date;
+	id: string,
+	name: string,
+	profilePhotoUrl?: string,
+	profilePhotoOriginalName?: string,
+	description: string,
+	website?: string,
+	lastUpdated: Date,
+	created: Date
 }
 
 export interface CompanyRole {
