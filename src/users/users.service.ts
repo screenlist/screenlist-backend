@@ -7,13 +7,18 @@ import {
 } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { DatabaseService } from '../database/database.service';
-import { UserOpt, User, VoteOpt, Votes } from './users.types';
+import { UserOpt, User, VoteOpt, Votes, Request, RequestOpt} from './users.types';
 import { 
 	CreatePrivilegedUserDto,  
 	UpdatePrivilegedUserDto,
 	CreateVotesDto,
-	UpdateVotesDto 
+	UpdateVotesDto,
+	CreateRequestDto,
+	UpdateRequestDto,
+	CreateJournalistInfoDto,
+	UpdateJournalistInfoDto
 } from '../users/users.dto';
+import { HistoryOpt } from '../database/database.types';
 
 @Injectable()
 export class UsersService {
@@ -21,6 +26,115 @@ export class UsersService {
 		private authService: AuthService,
 		private db: DatabaseService
 	){}	
+
+	/** GENERAL METHODS **/
+
+	async findAllJournalists(){
+		try{
+			const users = await this.authService.getPrivilegedUsers('journalist');
+			return users;
+		} catch{
+			throw new BadRequestException("Could not retrieve users");
+		}
+	}
+
+	async applyForJournalistRole(data: CreateRequestDto, opt: RequestOpt){
+		try{
+			const {entity, history} = await this.db.createRequestEntity(data, opt);
+			await this.db.transaction().insert([entity, history]);
+			return {'status': 'created'};
+		} catch{
+			throw new BadRequestException('action failed');
+		}
+	}
+
+	async approveToSetJournalist(data: UpdateRequestDto, opt: RequestOpt){
+		const journalistData: CreatePrivilegedUserDto = {
+			uid: data.requestSubject,
+			role: 'journalist',
+			created: opt.time,
+			lastUpdated: opt.time
+		} 
+		const userOptions: UserOpt = {
+			user: opt.user,
+			time: opt.time
+		}
+		try{
+			const {entity, history} = await this.db.updateRequestEntity(data, opt);
+			const journalist = await this.db.createPrivilegedUserEntity(journalistData, userOptions);
+			await this.db.update(entity);
+			await this.authService.setCustomUserClaims(data.requestSubject, 'journalist');
+			await this.db.insert([history, journalist.entity, journalist.history]);
+			return {'status': 'created'};
+		} catch{
+			throw new BadRequestException('action failed');
+		}
+	}
+
+	async revokePrivilegedRole(uid: string, opt: UserOpt){
+		return await this.authService.updatePrivilegedUserToBasicRole(uid, opt);
+	}
+
+	async checkEmptyThrone(opt: UserOpt){
+		// This method checks if there are admins
+		// If nobody is an admin it checks to see if the current user
+		// ranks high enough to grab the opportunity, and if there is
+		// nobody in a high ranking role, then the admin role is up for grabs to
+		// anyone
+		const currentUserKey = this.db.key(['User', opt.user])
+		try{
+			const admins = await this.findAllAdmins();
+			const curators = await this.findAllCurators();
+			const moderators = await this.findAllAdmins();
+
+			const totalAdmins = admins.length;
+			const totalCurators = curators.length;
+			const totalModerators = moderators.length;
+
+			if(totalAdmins+totalCurators+totalModerators == 0){
+				// If all the upper level roles are empty
+				// make the throne available
+				return {'status': 'available'}
+			} else if(totalAdmins == 0) {
+				const [result] = await this.db.get(currentUserKey);
+				const currentUser: User = result;
+
+				if(totalCurators > 0 && currentUser.role == 'curator'){
+					return {'status': 'available'}
+				} else if(totalModerators > 0 && currentUser.role == 'moderator'){
+					return {'status': 'available'}
+				}
+			} else {
+				return {'status': 'unavailable'}
+			}
+		} catch {
+			throw new NotFoundException('Not available')
+		}
+	}
+
+	async createJournalistInfo(data: CreateJournalistInfoDto, opt: UserOpt){
+		try {
+			const {entity, history} = await this.db.createJournalistInfoEntity(data, opt);
+			await this.db.insert([entity, history]);
+			return {'status': 'created'}
+		} catch {
+			throw new BadRequestException('action failed')
+		}
+	}
+
+	async updateJournalistInfo(data: UpdateJournalistInfoDto, opt: UserOpt){
+		try {
+			const {entity, history} = await this.db.updateJournalistInfoEntity(data, opt);
+			await this.db.update(entity);
+			await this.db.insert(history);
+			return {'status': 'updated'}
+		} catch {
+			throw new BadRequestException('action failed')
+		}
+	}
+
+	/** ROLE VOTING METHODS **/
+
 	// Admin methods
 	async findAllAdmins(){
 		try{
@@ -32,44 +146,11 @@ export class UsersService {
 	}
 
 	async proposeAdminVote(data: CreatePrivilegedUserDto, opt: VoteOpt){
-		try {
-			const admins = await this.findAllAdmins()
-			const totalAdmins = admins.length;
-			const voteEntity: CreateVotesDto = {
-				roleToAttain: 'admin',
-				totalPointsNeeded: totalAdmins*10,
-				adminsTotalPoints: 10,
-				curatorsTotalPoints: 0,
-				moderatorsTotalPoints: 0,
-				userSuggested: data.uid,
-				created: opt.time,
-				lastUpdated: opt.time
-			}
-			const {entity, history} = await this.db.createVotesEntity(voteEntity, opt);
-			await this.db.insert([entity, history]);
-			return {'status': 'created'}
-		} catch{
-			throw new BadRequestException('Action failed')
-		}
+		return await this.proposeRoleVote(data, opt, 'admin');
 	}
 
-	async voteToSetAdmin(data: UpdatePrivilegedUserDto, opt: VoteOpt){
-		const votesKey = this.db.key(['Vote', +opt.votesId]);
-		const currentUserQuery = this.db.createQuery('User').filter('uid', '=', opt.user).limit(1);
-		try {
-			const [result] = await this.db.get(votesKey);
-			const [userResult] = await this.db.runQuery(currentUserQuery);
-			const user: User = userResult[0]
-			const votes: Votes = result;
-			if(user.role === 'admin'){
-				votes.adminsTotalPoints = votes.adminsTotalPoints+10
-				if(votes.totalPointsNeeded === votes.adminsTotalPoints){
-					
-				}
-			}
-		} catch{
-			throw new BadRequestException('Action failed');
-		}
+	async voteToSetAdmin(data: CreatePrivilegedUserDto, opt: VoteOpt){
+		return await this.voteToSetRole(data, opt, 'admin');
 	}
 
 	// Curator methods
@@ -82,9 +163,13 @@ export class UsersService {
 		}
 	}
 
-	async proposeCuratorVote(){}
+	async proposeCuratorVote(data: CreatePrivilegedUserDto, opt: VoteOpt){
+		return await this.proposeRoleVote(data, opt, 'curator');
+	}
 
-	async voteToSetCurator(){}
+	async voteToSetCurator(data: CreatePrivilegedUserDto, opt: VoteOpt){
+		return await this.voteToSetRole(data, opt, 'curator');
+	}
 
 	// Moderator methods
 	async findAllModerators(){
@@ -96,21 +181,165 @@ export class UsersService {
 		}
 	}
 
-	async proposeModeratorVote(){}
+	async proposeModeratorVote(data: CreatePrivilegedUserDto, opt: VoteOpt){
+		return await this.proposeRoleVote(data, opt, 'moderator');
+	}
 
-	async voteToSetModerator(){}
+	async voteToSetModerator(data: CreatePrivilegedUserDto, opt: VoteOpt){
+		return await this.voteToSetRole(data, opt, 'moderator');
+	}
 
-	// Journalist methods
-	async findAllJournalists(){
-		try{
-			const users = await this.authService.getPrivilegedUsers('journalist');
-			return users;
+	// Other methods
+	async voteToSetRole(
+		data: CreatePrivilegedUserDto, 
+		opt: VoteOpt, 
+		role: 'admin'|'curator'|'moderator'
+	){
+		const votesKey = this.db.key(['Vote', +opt.votesId]);
+		const currentUserQuery = this.db.createQuery('User').filter('uid', '=', opt.user).limit(1);
+		const votedUserQuery = this.db.createQuery('User').filter('uid', '=', data.uid).limit(1);
+		try {
+			// Get all stakeholders involved in this vote
+			const [result] = await this.db.get(votesKey);
+			const [currentUserResult] = await this.db.runQuery(currentUserQuery);
+			const [votedUserResult] = await this.db.runQuery(votedUserQuery);
+			const currentUser: User = currentUserResult[0];
+			const votedUser: User = votedUserResult[0];
+			const votes: Votes = result;
+
+			const privilegedRole: CreatePrivilegedUserDto = {
+				uid: data.uid,
+				role: votes.roleToAttain,
+				created: opt.time,
+				lastUpdated: opt.time
+			}
+
+			// To be used to calculate all points of all ranks
+			// including of the currentUser, to determine
+			// whether the motion is a succes or not
+			let totalVotingPoints: number 
+
+			// Add voting points according to the rank of the current user
+			// and the role being voted for
+			if(role == 'admin' || role == 'curator'){
+				if(currentUser.role === 'admin'){
+					votes.adminsTotalPoints = votes.adminsTotalPoints+10
+					totalVotingPoints = votes.adminsTotalPoints
+				}
+			} else if(role == 'moderator'){
+				if(currentUser.role == 'admin'){
+					votes.adminsTotalPoints = votes.adminsTotalPoints+10
+					totalVotingPoints = (votes.adminsTotalPoints+votes.curatorsTotalPoints+votes.moderatorsTotalPoints)
+				} else if(currentUser.role == 'curator'){
+					votes.curatorsTotalPoints = votes.curatorsTotalPoints+5
+					totalVotingPoints = (votes.adminsTotalPoints+votes.curatorsTotalPoints+votes.moderatorsTotalPoints)
+				} else if(currentUser.role == 'moderator'){
+					votes.moderatorsTotalPoints = votes.moderatorsTotalPoints+2
+					totalVotingPoints = (votes.adminsTotalPoints+votes.curatorsTotalPoints+votes.moderatorsTotalPoints)
+				}
+			}
+
+			// Instate the voting outcome if it meets requirements
+			// Or just vote if requirements not met yet
+			if(votes.totalPointsNeeded <= totalVotingPoints){
+				votes.success = true;
+
+				// If the user being voted already holds a certain non basic role
+				// update their existing entity instead of creating a new one
+				if(votedUser){
+					votedUser.role = votes.roleToAttain
+					const historyOptions: HistoryOpt = {
+						action: 'update',
+						user: opt.user,
+						id: data.uid,
+						kind: 'User',
+						data: {'role': votedUser.role},
+						time: opt.time
+					}
+					const history = this.db.formulateHistory(historyOptions)
+					await this.authService.setCustomUserClaims(votedUser.uid, votedUser.role)
+					await this.db.update([votedUser, votes]);
+					await this.db.insert(history);
+					return {'status': 'success'};
+				} else {
+					const {entity, history} = await this.db.createPrivilegedUserEntity(privilegedRole, opt);
+					await this.authService.setCustomUserClaims(privilegedRole.uid, privilegedRole.role);
+					await this.db.update(votes);
+					await this.db.insert([entity, history]);
+					return {'status': 'success'};
+				}
+			} else {
+				const historyOptions: HistoryOpt = {
+					action: 'update',
+					user: opt.user,
+					id: opt.votesId,
+					kind: 'Vote',
+					data: {'adminsTotalPoints': votes.adminsTotalPoints},
+					time: opt.time
+				}
+				await this.db.update(votes);
+				return {'status': 'voted'}
+			}
 		} catch{
-			throw new BadRequestException("Could not retrieve users");
+			throw new BadRequestException('Action failed');
 		}
 	}
 
-	async applyForJournalistRole(){}
+	async proposeRoleVote(
+		data: CreatePrivilegedUserDto, 
+		opt: VoteOpt,
+		role: 'admin'|'curator'|'moderator'
+	){
+		const currentUserKey = this.db.key(['User', opt.user])
+		try {
+			const [result] = await this.db.get(currentUserKey);
+			const admins = await this.findAllAdmins();
+			const curators = await this.findAllCurators();
+			const moderators = await this.findAllAdmins();
 
-	async approveToSetJournalist(){}
+			const totalAdmins = admins.length;
+			const totalCurators = curators.length;
+			const totalModerators = moderators.length;
+
+			const currentUser: User = result;			
+			
+			if(role == 'admin' || role == 'curator'){
+				const voteEntity: CreateVotesDto = {
+					roleToAttain: role,
+					success: false,
+					totalPointsNeeded: totalAdmins*10,
+					adminsTotalPoints: 10,
+					curatorsTotalPoints: 0,
+					moderatorsTotalPoints: 0,
+					userSuggested: data.uid,
+					created: opt.time,
+					lastUpdated: opt.time
+				}
+				const {entity, history} = await this.db.createVotesEntity(voteEntity, opt);
+				await this.db.insert([entity, history]);
+				return {'status': 'created'}
+			} else if(role == 'moderator'){
+				// Only 60% of approval points needed for this motion to succeed
+				const approvalPoints = ((totalAdmins*10)+(totalCurators*5)+(totalModerators*2))*0.6
+				const voteEntity: CreateVotesDto = {
+					roleToAttain: 'curator',
+					success: false,
+					totalPointsNeeded: approvalPoints,
+					adminsTotalPoints: currentUser.role == 'admin' ? 10 : 0,
+					curatorsTotalPoints: currentUser.role == 'curator' ? 5 : 0,
+					moderatorsTotalPoints: currentUser.role == 'moderator' ? 2 : 0,
+					userSuggested: data.uid,
+					created: opt.time,
+					lastUpdated: opt.time
+				}
+				const {entity, history} = await this.db.createVotesEntity(voteEntity, opt);
+				await this.db.insert([entity, history]);
+				return {'status': 'created'}
+			} else {
+				return {'status': 'unsuccessful'}
+			}
+		} catch{
+			throw new BadRequestException('Action failed')
+		}
+	}
 }
