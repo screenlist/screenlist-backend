@@ -11,7 +11,6 @@ import { PeopleModule } from './people/people.module';
 import { StorageModule } from './storage/storage.module';
 import { CompaniesModule } from './companies/companies.module';
 import { DatabaseModule } from './database/database.module';
-import { SessionModule } from './session/session.module';
 import { AuthModule } from './auth/auth.module';
 
 
@@ -29,7 +28,6 @@ import { AuthModule } from './auth/auth.module';
     StorageModule,
     CompaniesModule,
     DatabaseModule,
-    SessionModule,
     AuthModule
   ],
   controllers: [AppController],
