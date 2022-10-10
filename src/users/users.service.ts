@@ -79,6 +79,30 @@ export class UsersService {
 		return await this.authService.updatePrivilegedUserToBasicRole(uid, opt);
 	}
 
+	async findAllJournalistRequests(){
+		const query = this.db.createQuery('Request').filter('request', '=', 'makeJournalist');
+		try{
+			const [requests] = await this.db.runQuery(query);
+			requests.map((request: Request) => {
+				request.id = request[this.db.KEY]['id'];
+				return request
+			})
+			return requests as Request[]
+		} catch{
+			throw new NotFoundException();
+		}
+	}
+
+	async findOneJournalistRequest(id: string){
+		const requestKey = this.db.key(['Request', +id])
+		try{
+			const [request] = await this.db.get(requestKey);
+			return request as Request
+		} catch {
+			throw new NotFoundException();
+		}
+	}
+
 	async checkEmptyThrone(opt: UserOpt){
 		// This method checks if there are admins
 		// If nobody is an admin it checks to see if the current user
