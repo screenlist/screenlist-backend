@@ -109,8 +109,22 @@ export class UsersService {
 		// ranks high enough to grab the opportunity, and if there is
 		// nobody in a high ranking role, then the admin role is up for grabs to
 		// anyone
-		const currentUserKey = this.db.key(['User', opt.user])
+		const currentUserKey = this.db.key(['User', opt.user]);
+		const dayAgo = new Date(Number(opt.time)-(1000*60*60*24));
+		const requestsQuery = this.db.createQuery('Request')
+																	.filter('request', '=', 'makeAdmin')
+																	.filter('createdBy', '=', opt.user)
+																	.filter('requestSubject', '=', opt.user)
+																	.filter('created', '<=', dayAgo);
 		try{
+			// Only give one chance in a day at this, as per the setAdmin method, also give them
+			// 5 minutes to use the opportunity. This means a single user has a 5 minute window in
+			// a 24 hour cycle to become an admin.
+			const [requests] = await this.db.runQuery(requestsQuery);
+			if(requests.length > 0){
+				return {'status': 'unavailable'}
+			}
+
 			const admins = await this.findAllAdmins();
 			const curators = await this.findAllCurators();
 			const moderators = await this.findAllAdmins();
