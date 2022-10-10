@@ -3,7 +3,8 @@ import {
 	ParseFileOptions, 
 	BadRequestException, 
 	NotFoundException, 
-	UnauthorizedException 
+	UnauthorizedException,
+	ForbiddenException
 } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { DatabaseService } from '../database/database.service';
@@ -39,6 +40,9 @@ export class UsersService {
 	}
 
 	async applyForJournalistRole(data: CreateRequestDto, opt: RequestOpt){
+		data.request = 'makeJournalist',
+		data.requestSubject = opt.user,
+		data.createdBy = opt.user
 		try{
 			const {entity, history} = await this.db.createRequestEntity(data, opt);
 			await this.db.transaction().insert([entity, history]);
@@ -91,24 +95,42 @@ export class UsersService {
 			const totalCurators = curators.length;
 			const totalModerators = moderators.length;
 
+			// This creates a request which is self-fulfillable
+			// to be required in the setAdmin method
+			const requestDto: CreateRequestDto = {
+				request: 'makeAdmin',
+				requestSubject: opt.user,
+				notes: 'This is a self-service request',
+				createdBy: opt.user,
+				approved: false,
+				created: opt.time,
+				lastUpdated: opt.time,
+			}
+			const request = await this.db.createRequestEntity(requestDto, opt);
+
 			if(totalAdmins+totalCurators+totalModerators == 0){
 				// If all the upper level roles are empty
 				// make the throne available
-				return {'status': 'available'}
+				await this.db.insert([request.entity, request.history]);
+				return {'status': 'available', 'request_id': request.entity.key.id};
 			} else if(totalAdmins == 0) {
 				const [result] = await this.db.get(currentUserKey);
 				const currentUser: User = result;
 
 				if(totalCurators > 0 && currentUser.role == 'curator'){
-					return {'status': 'available'}
+
+					await this.db.insert([request.entity, request.history]);
+					return {'status': 'available', 'request_id': request.entity.key.id}
 				} else if(totalModerators > 0 && currentUser.role == 'moderator'){
-					return {'status': 'available'}
+
+					await this.db.insert([request.entity, request.history]);
+					return {'status': 'available', 'request_id': request.entity.key.id}
 				}
 			} else {
 				return {'status': 'unavailable'}
 			}
 		} catch {
-			throw new NotFoundException('Not available')
+			throw new NotFoundException()
 		}
 	}
 
@@ -151,6 +173,66 @@ export class UsersService {
 
 	async voteToSetAdmin(data: CreatePrivilegedUserDto, opt: VoteOpt){
 		return await this.voteToSetRole(data, opt, 'admin');
+	}
+
+	async setAdmin(opt: UserOpt){
+		// This method enables a user to make themselve an admin.
+		// This is provided they qualify, have went through the neccessary 
+		// steps to get here and also only if they're the first.
+		const currentUserKey = this.db.key(['User', opt.user]);
+		const requestKey = this.db.key(['Request', +opt.objectId])
+		try {
+			const admins = await this.findAllAdmins();
+			const totalAdmins = admins.length;
+
+			const [requestResult] = await this.db.get(requestKey);
+			const request: Request = requestResult;
+
+			const [result] = await this.db.get(currentUserKey);
+			const currentUser: User = result;
+
+			// Statement to test the legitimacy and merit of this request
+			if(
+				totalAdmins > 0 || 
+				request.requestSubject != opt.user || 
+				request.createdBy != opt.user ||
+				request.approved == true ||
+				request.request != 'makeAdmin'
+			){
+				throw new ForbiddenException();
+			}
+
+			const privilegedRole: CreatePrivilegedUserDto = {
+				uid: opt.user,
+				role: 'admin',
+				created: opt.time,
+				lastUpdated: opt.time
+			}
+
+			if(currentUser){
+				currentUser.role = 'admin'
+				const historyOptions: HistoryOpt = {
+					action: 'update',
+					user: opt.user,
+					id: opt.user,
+					kind: 'User',
+					data: {'role': currentUser.role},
+					time: opt.time
+				}
+				const history = this.db.formulateHistory(historyOptions);
+				await this.authService.setCustomUserClaims(currentUser.uid, 'admin');
+				await this.db.update(currentUser);
+				await this.db.insert(history);
+				return {'status': 'success'};
+			} else {
+				const {entity, history} = await this.db.createPrivilegedUserEntity(privilegedRole, opt);
+				await this.authService.setCustomUserClaims(privilegedRole.uid, privilegedRole.role);
+				await this.db.insert([entity, history]);
+				return {'status': 'success'};
+			}
+		} catch {
+			throw new BadRequestException();
+		}
 	}
 
 	// Curator methods
