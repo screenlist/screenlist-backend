@@ -221,7 +221,8 @@ export class UsersService {
 				request.requestSubject != opt.user || 
 				request.createdBy != opt.user ||
 				request.approved == true ||
-				request.request != 'makeAdmin'
+				request.request != 'makeAdmin' ||
+				Number(request.created)+(1000*60*5) > Number(opt.time)
 			){
 				throw new ForbiddenException();
 			}
