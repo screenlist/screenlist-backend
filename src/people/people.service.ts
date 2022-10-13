@@ -13,10 +13,14 @@ import {
 	PersonRoleOpt
 } from './people.types';
 import { HistoryOpt } from '../database/database.types';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class PeopleService {
-	constructor(private db: DatabaseService){}
+	constructor(
+		private storage: StorageService,
+		private db: DatabaseService
+	){}
 
 	async findAll(): Promise<Person[]>{
 		const query =  this.db.createQuery('Person').order('name').limit(100);
@@ -42,7 +46,7 @@ export class PeopleService {
 		const {entity, history} = this.db.createPersonEntity(data, opt);
 		try {
 			await this.db.insert([entity, history]);
-			return { 'status': 'successfully created' };
+			return { 'status': 'successfully created', 'person_id': entity.key.id };
 		} catch(err: any){
 			throw new BadRequestException(err.message);
 		}
@@ -53,7 +57,7 @@ export class PeopleService {
 		try{
 			await this.db.update(entity);
 			await this.db.insert(history);
-			return { 'status': 'successfully updated' };
+			return { 'status': 'successfully updated', 'person_id': entity.key.id };
 		} catch(err: any){
 			throw new BadRequestException(err.message);
 		}
@@ -97,6 +101,41 @@ export class PeopleService {
 		}
 	}
 
+	async uploadPhoto(opt: PersonOpt, image: Express.Multer.File){
+		try {
+			const file = await this.storage.uploadProfilePhoto(image)
+			const dto: UpdatePersonDto = {
+				profilePhotoUrl: file.url,
+				profilePhotoOriginalName: file.originalName
+			}
+			const {entity, history} = this.db.updatePersonEntity(dto, opt);
+			await this.db.update(entity);
+			await this.db.insert(history);
+			return { 'status': 'created', 'image_url': entity.data.profilePhotoUrl }
+		} catch {
+			throw new BadRequestException()
+		}
+	}
+
+	async removePhoto(opt: PersonOpt){
+		try{
+			const personKey = this.db.key(['Company', +opt.personId]);
+			const [result] = await this.db.get(personKey);
+			const person: Person = result 
+			const dto: UpdatePersonDto = {
+				profilePhotoUrl: null,
+				profilePhotoOriginalName: null
+			}
+			const {entity, history} = this.db.updatePersonEntity(dto, opt);
+			await this.storage.deletePoster(person.profilePhotoOriginalName);
+			await this.db.update(entity);
+			await this.db.insert(history);
+			return {'status': 'deleted'}
+		} catch {
+			throw new BadRequestException()
+		}
+	}
+
 	async createOneRole(data: CreatePersonRoleDto, opt: PersonRoleOpt){
 		const {entity, history} = this.db.createPersonRoleEntity(data, opt);
 		if(!data.category){
@@ -104,7 +143,7 @@ export class PeopleService {
 		}
 		try {
 			await this.db.insert([entity, history]);
-			return { 'status': 'successfully created' }
+			return { 'status': 'successfully created', 'role_id': entity.key.id }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -115,7 +154,7 @@ export class PeopleService {
 		try {
 			await this.db.update(entity)
 			await this.db.insert(history)
-			return { 'status': 'successfully updated' }
+			return { 'status': 'successfully updated', 'role_id': entity.key.id }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
