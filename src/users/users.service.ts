@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { DatabaseService } from '../database/database.service';
-import { UserOpt, SuperUser, VoteOpt, Votes, Request, RequestOpt} from './users.types';
+import { UserOpt, SuperUser, BasicUser, VoteOpt, Votes, Request, RequestOpt} from './users.types';
 import { 
 	CreatePrivilegedUserDto,  
 	UpdatePrivilegedUserDto,
@@ -22,10 +22,13 @@ import {
 	UpdateUserInfoDto
 } from '../users/users.dto';
 import { HistoryOpt } from '../database/database.types';
+import { ImageOpt } from '../films/films.types';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class UsersService {
 	constructor(
+		private storage: StorageService,
 		private authService: AuthService,
 		private db: DatabaseService
 	){}	
@@ -80,7 +83,19 @@ export class UsersService {
 	}
 
 	async revokePrivilegedRole(uid: string, opt: UserOpt){
-		return await this.authService.updatePrivilegedUserToBasicRole(uid, opt);
+		try{
+			const userKey = this.db.key(['SuperUser', uid]);
+			const [result] =  await this.db.get(userKey);
+			if(result){
+				const superUser: SuperUser = result;
+				if(superUser.role == 'admin'){
+					throw new ForbiddenException();
+				}
+			}
+			return await this.authService.updatePrivilegedUserToBasicRole(uid, opt);
+		} catch {
+			throw new BadRequestException()
+		}
 	}
 
 	async findAllJournalistRequests(){
@@ -197,27 +212,38 @@ export class UsersService {
 		}
 	}
 
+	async checkUserName(userName: string){
+		const key = this.db.key(['UserInfo', userName])
+		try {
+			const [result] = await this.db.get(key)
+			const user: BasicUser = result;
+			if(user){
+				return user.userName
+			} else {
+				throw new NotFoundException()
+			}
+		} catch {
+			throw new NotFoundException()
+		}
+	}
+
 	async createUser(data: CreateUserInfoDto, opt: UserOpt){
 		try {			
 			const {entity, history} = this.db.createUserInfoEntity(data, opt);
 			await this.db.transaction().insert([entity, history]);
 			await this.authService.setCustomUserClaims(opt.user, 'member');
-			return { 'status': 'created', 'user_name': entity.data.userName };
+			return { 'status': 'created', 'username': entity.data.userName };
 		} catch {
 			throw new BadRequestException()
 		}
 	}
 
 	async updateUser(data: UpdateUserInfoDto, opt: UserOpt){
-		const userKey = this.db.key(['SuperUser', opt.user]);
 		try {
-			// Return error if the user attempting to change username has
-			// a privileged role
-
 			const {entity, history} = this.db.updateUserInfoEntity(data, opt);
 			await this.db.update(entity);
 			await this.db.insert(history);
-			return { 'status': 'updated', 'user_name': entity.data.userName };
+			return { 'status': 'updated' };
 		} catch {
 			throw new BadRequestException()
 		}
@@ -231,6 +257,26 @@ export class UsersService {
 			return { 'details': user, 'additional': info };
 		} catch {
 			throw new NotFoundException()
+		}
+	}
+
+	async uploadProfilePhoto(opt: ImageOpt, image: Express.Multer.File){
+		try {
+			const file = await this.storage.uploadProfilePhoto(image);
+			await this.authService.updateProfilePicture(opt.user, file.url);
+			return { 'status': 'created', 'image_url': file.url }
+		} catch {
+			throw new BadRequestException()
+		}
+	}
+
+	async removeProfilePhoto(imageName: string, uid: string){
+		try {
+			await this.storage.deleteProfilePhoto(imageName);
+			await this.authService.removeProfilePicture(uid);
+			return { 'status': 'deleted' }
+		} catch {
+			throw new BadRequestException()
 		}
 	}
 
