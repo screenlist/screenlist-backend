@@ -6,13 +6,12 @@ import {
 	CreatePrivilegedUserDto,  
 	UpdatePrivilegedUserDto 
 } from '../users/users.dto';
-import { UserOpt, User } from '../users/users.types';
+import { UserOpt, SuperUser } from '../users/users.types';
 import { HistoryOpt } from '../database/database.types';
 
 @Injectable()
 export class AuthService {
 	constructor(
-		private configService: ConfigService,
 		private db: DatabaseService
 	){}
 
@@ -25,6 +24,15 @@ export class AuthService {
 			const token = await this.getAuth().verifyIdToken(idToken, true);
 			token ? true : false;
 		} catch{
+			return false
+		}
+	}
+
+	async emailVerified(idToken: string){
+		try {
+			const currentUser = await this.getAuth().verifyIdToken(idToken, true);
+			currentUser.email_verified === true ? true : false
+		} catch {
 			return false
 		}
 	}
@@ -69,7 +77,7 @@ export class AuthService {
 				await this.getAuth().setCustomUserClaims(data.uid, {[data.role]: true});
 				await this.db.update(entity);
 				await this.db.insert(history);
-				return {'status': true};
+				return {'status': 'updated'};
 			}
 		} catch(err: any) {
 			throw new BadRequestException(err.mesaage);
@@ -100,7 +108,11 @@ export class AuthService {
 		}
 	}
 
-	matchRoles(userRole: string, thresholdRole: string){
+	matchRoles(userRole: string, thresholdRole: string, verified: boolean){
+		// Under no circumstance is an unverified user allowed
+		if(verified === false){
+			return false
+		}
 		// All the roles any user can have
 		// sorted according to their hierarchy
 		const allRoles = ['member', 'journalist','moderator', 'curator', 'admin'];
@@ -118,12 +130,56 @@ export class AuthService {
 		}
 	}
 
+	async updateProfilePicture(uid: string, url: string){
+		try {
+			const user =  await this.getAuth().updateUser(uid, { photoURL: url });
+			return user;
+		} catch {
+			throw new BadRequestException();
+		}
+	}
+
+	async removeProfilePicture(uid: string){
+		try {
+			return await this.getAuth().updateUser(uid, { photoURL: null })
+		} catch {
+			throw new BadRequestException()
+		}
+	}
+
+	async updateDisplayName(uid: string, displayName: string){
+		try {
+			const user =  await this.getAuth().updateUser(uid, { displayName: displayName });
+			return user;
+		} catch {
+			throw new BadRequestException();
+		}
+	}
+
+	async disableUserAccount(uid: string){
+		try {
+			const user =  await this.getAuth().updateUser(uid, { disabled: true });
+			return user;
+		} catch {
+			throw new BadRequestException();
+		}
+	}
+
+	async enableUserAccount(uid: string){
+		try {
+			const user =  await this.getAuth().updateUser(uid, { disabled: false });
+			return user;
+		} catch {
+			throw new BadRequestException();
+		}
+	}
+
 	async getUserUid(idToken: string){
 		try {
 			const {uid} = await this.getAuth().verifyIdToken(idToken, true);
 			return uid;
-		} catch(err: any){
-			throw new BadRequestException(err.message);
+		} catch {
+			throw new BadRequestException();
 		}
 	}
 
@@ -131,8 +187,8 @@ export class AuthService {
 		try {
 			const user = await this.getAuth().getUser(uid)
 			return user;
-		} catch(err: any){
-			throw new BadRequestException(err.mesaage);
+		} catch {
+			throw new BadRequestException();
 		}
 	}
 
@@ -141,7 +197,7 @@ export class AuthService {
 		const users = []
 		try {
 			const [admins] = await this.db.runQuery(query);
-			const identifiers = admins.map((user: User) => ({ uid: user.uid}));
+			const identifiers = admins.map((user: SuperUser) => ({ uid: user.uid}));
 			const users = await this.retrieveUsers(identifiers, 100)
 			return users
 		} catch(err: any){
