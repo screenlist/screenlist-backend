@@ -55,7 +55,7 @@ export class SeriesService {
 		}
 	}
 
-	async findOne(id: number, user: string): Promise<SeriesType>{
+	async findOne(id: string): Promise<SeriesType>{
 		const seriesKey = this.db.key(['Series', id]);
 		// Create queries
 		const postersQuery = this.db.createQuery('Poster')

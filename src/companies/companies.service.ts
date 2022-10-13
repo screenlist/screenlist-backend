@@ -14,10 +14,14 @@ import {
 	CompanyRoleOpt
 } from './companies.types';
 import { HistoryOpt } from '../database/database.types';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class CompaniesService {
-	constructor(private db: DatabaseService){}
+	constructor(
+		private storage: StorageService,
+		private db: DatabaseService
+	){}
 
 	async findAll(): Promise<Company[]>{
 		const query = this.db.createQuery('Company').order('name').limit(100);
@@ -72,7 +76,7 @@ export class CompaniesService {
 		const {entity, history} = this.db.createCompanyEntity(data, opt);
 		try {
 			await this.db.insert([entity, history]);
-			return { 'status': 'successfully created' };
+			return { 'status': 'created', 'company_id': entity.key.id };
 		} catch(err: any) {
 			throw new BadRequestException(err.message)
 		}
@@ -83,7 +87,7 @@ export class CompaniesService {
 		try{
 			await this.db.update(entity);
 			await this.db.insert(history);
-			return { 'status': 'successfully updated' }
+			return { 'status': 'updated', 'company_id': entity.key.id }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -121,9 +125,44 @@ export class CompaniesService {
 			})
 			await this.db.transaction().delete(entities);
 			await this.db.transaction().insert(history);
-			return { 'status': 'successfully deleted' };
+			return { 'status': 'deleted' };
 		} catch(err:any) {
 			throw new BadRequestException(err.message)
+		}
+	}
+
+	async uploadPhoto(opt: CompanyOpt, image: Express.Multer.File){
+		try {
+			const file = await this.storage.uploadProfilePhoto(image)
+			const dto: UpdateCompanyDto = {
+				profilePhotoUrl: file.url,
+				profilePhotoOriginalName: file.originalName
+			}
+			const {entity, history} = this.db.updateCompanyEntity(dto, opt);
+			await this.db.update(entity);
+			await this.db.insert(history);
+			return { 'status': 'created', 'image_url': entity.data.profilePhotoUrl }
+		} catch {
+			throw new BadRequestException()
+		}
+	}
+
+	async removePhoto(opt: CompanyOpt){
+		try{
+			const companyKey = this.db.key(['Company', +opt.companyId]);
+			const [result] = await this.db.get(companyKey);
+			const company: Company = result 
+			const dto: UpdateCompanyDto = {
+				profilePhotoUrl: null,
+				profilePhotoOriginalName: null
+			}
+			const {entity, history} = this.db.updateCompanyEntity(dto, opt);
+			await this.storage.deletePoster(company.profilePhotoOriginalName);
+			await this.db.update(entity);
+			await this.db.insert(history);
+			return {'status': 'deleted'}
+		} catch {
+			throw new BadRequestException()
 		}
 	}
 
@@ -134,18 +173,18 @@ export class CompaniesService {
 		}
 		try {
 			await this.db.insert([entity, history]);
-			return { 'status': 'successfully created' }
+			return { 'status': 'created', 'role_id': entity.key.id }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
 	}
 
 	async updateOneRole(data: UpdateCompanyRoleDto, opt: CompanyRoleOpt){
-		const entityData = await this.db.updateCompanyRoleEntity(data, opt);
+		const entityData = this.db.updateCompanyRoleEntity(data, opt);
 		try {
 			await this.db.update(entityData.entity)
 			await this.db.insert(entityData.history)
-			return { 'status': 'successfully updated' }
+			return { 'status': 'updated', 'role_id': entityData.entity.key.id }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -174,7 +213,7 @@ export class CompaniesService {
 			const entity = {key: roleKey};
 			await this.db.delete(entity);
 			await this.db.insert(history);
-			return { 'status': 'successfully deleted' };
+			return { 'status': 'deleted' };
 		} catch (err: any){
 			throw new BadRequestException(err.message)
 		}
