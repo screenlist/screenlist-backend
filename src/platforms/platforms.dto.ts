@@ -12,7 +12,7 @@ export class UpdatePlatformDto {
 	name?: string;
 	profilePhotoUrl?: string;
 	profilePhotoOriginalName?: string;
-	description: string;
+	description?: string;
 	website?: string;
 	created?: Date;
 	lastUpdated?: Date;
@@ -22,7 +22,7 @@ export class CreateLinkDto {
 	accessType: string;
 	url: string;
 	platformName: string;
-	platformId?: number;
+	platformId: number;
 	ownerKind: string;
 	ownerId: string;
 	lastUpdated?: Date;
@@ -30,11 +30,8 @@ export class CreateLinkDto {
 }
 
 export class UpdateLinkDto {
-	id: number;
 	accessType?: string;
 	url?: string;
-	platformName?: string;
-	platformId?: number;
 	lastUpdated?: Date;
 	created?: Date;
 }

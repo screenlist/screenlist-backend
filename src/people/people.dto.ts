@@ -20,6 +20,7 @@ export class UpdatePersonDto {
 
 export class CreatePersonRoleDto {
 	personName: string;
+	personId?: string;
 	ownerKind?: string;
 	ownerId: string;
 	title: string;

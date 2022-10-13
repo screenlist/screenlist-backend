@@ -12,7 +12,7 @@ export class UpdateCompanyDto {
 	name?: string;
 	profilePhotoUrl?: string;
 	profilePhotoOriginalName?: string;
-	description: string;
+	description?: string;
 	website?: string;
 	created?: Date;
 	lastUpdated?: Date;
@@ -22,7 +22,7 @@ export class UpdateCompanyDto {
 // Role
 export class CreateCompanyRoleDto {
 	companyName: string;
-	website?: string;
+	companyId?: string;
 	ownerKind: string;
 	ownerId: string;
 	type: string;
@@ -31,8 +31,6 @@ export class CreateCompanyRoleDto {
 }
 
 export class UpdateCompanyRoleDto {
-	companyName?: string;
-	website?: string;
 	type?: string;
 	lastUpdated?: Date;
 	created?: Date;

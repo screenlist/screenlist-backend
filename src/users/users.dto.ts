@@ -1,6 +1,7 @@
 export class CreatePrivilegedUserDto {
 	uid: string;
 	role: string;
+	userName: string;
 	created: Date;
 	lastUpdated: Date;
 }
@@ -8,6 +9,19 @@ export class CreatePrivilegedUserDto {
 export class UpdatePrivilegedUserDto {
 	uid: string;
 	role: string;
+	userName: string;
+	lastUpdated: Date;
+}
+
+export class CreateUserInfoDto {
+	userName: string;
+	uid: string;
+	created: Date;
+	lastUpdated: Date;
+}
+
+export class UpdateUserInfoDto {
+	bio: string;
 	lastUpdated: Date;
 }
 
