@@ -1,9 +1,19 @@
-export interface User {
+export interface SuperUser {
 	uid: string,
 	role: string,
 	lastUpdated: Date,
 	created: Date
 }
+
+export interface BasicUser {
+	userName: string,
+	uid: string,
+	bio: string,
+	created: Date,
+	lastUpdated: Date
+}
+
+export type UserRoles = 'admin' | 'curator' | 'moderator' | 'journalist' | 'member';
 
 export interface Votes {
 	id: string,
@@ -41,17 +51,20 @@ export interface JournalistInfo {
 export interface UserOpt {
 	time: Date,
 	user: string,
+	userName?: string,
 	objectId?: string
 }
 
 export interface VoteOpt {
 	time: Date,
 	user: string,
+	userName?: string,
 	votesId?: string
 }
 
 export interface RequestOpt {
 	time: Date,
 	user: string,
+	userName?: string,
 	requestId?: string
 }
