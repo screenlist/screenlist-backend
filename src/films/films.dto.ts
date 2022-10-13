@@ -33,7 +33,6 @@ export class UpdateFilmDto {
 // Still
 export class CreateStillDto {
 	url?: string;
-	description: string;
 	originalName: string;
 	quality?: string;
 	lastUpdated?: Date;
@@ -49,7 +48,6 @@ export class UpdateStillDto {
 export class CreatePosterDto {
 	url?: string;
 	originalName: string;
-	description: string;
 	quality?: string;
 	lastUpdated?: Date;
 	created?: Date;

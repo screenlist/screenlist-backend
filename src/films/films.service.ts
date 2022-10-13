@@ -1,7 +1,6 @@
 import { Injectable, ParseFileOptions, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ConfigService } from '@nestjs/config';
-import { CreateFilmDto, UpdateFilmDto } from './films.dto';
 import { 
 	Film, 
 	Poster, 
@@ -13,7 +12,9 @@ import {
 	CreatePosterDto,
 	UpdatePosterDto,
 	CreateStillDto,
-	UpdateStillDto
+	UpdateStillDto,
+	CreateFilmDto, 
+	UpdateFilmDto 
 } from './films.dto';
 import {
 	Company,
@@ -29,7 +30,6 @@ import {
 	Person,
 	PersonRole,
 } from '../people/people.types';
-import { PeopleService } from '../people/people.service';
 import { StorageService } from '../storage/storage.service';
 import { HistoryOpt } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
@@ -39,14 +39,10 @@ import { AuthService } from '../auth/auth.service';
 @Injectable()
 export class FilmsService {
 	constructor(
-		private configService: ConfigService,
 		private db: DatabaseService,
 		private storage: StorageService,
 		private authService: AuthService
-	){
-		this.db = new DatabaseService(configService);
-		this.storage = new StorageService(configService);
-	}
+	){}
 
 	async findAll(): Promise<FilmType[]>{
 		const query = this.db.createQuery('Film').filter('status', '=', 'public').limit(20)
@@ -172,7 +168,7 @@ export class FilmsService {
 
 		try {
 			await this.db.transaction().insert(entities);
-			return {"status": "successfully created"}
+			return { 'status': 'created', 'film_id': filmKey.id }
 		} catch(err: any){
 			throw new BadRequestException(err.message);
 		}
@@ -204,7 +200,7 @@ export class FilmsService {
 		try{
 			await this.db.transaction().update(entity);
 			await this.db.transaction().insert(history);
-			return { 'status': 'successfully updated' };
+			return { 'status': 'updated', 'film_id': entity.key.id };
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -316,38 +312,39 @@ export class FilmsService {
 		}
 	}
 
-	async uploadPoster(info: CreatePosterDto, opt: ImageOpt, image: Express.Multer.File){
+	async uploadPoster(opt: ImageOpt, image: Express.Multer.File){
 		const insertion = []
-		const time = new Date();
+		let hdPoster: {id: string, url: string}
 		try {
 			const data = await this.storage.uploadPoster(image)
 			data.forEach((file) => {
 				const creation: CreatePosterDto = {
 					url: file.url,
 					originalName: file.originalName,
-					quality: file.quality,
-					description: info.description,
+					quality: file.quality
 				}
 				const {entity, history} = this.db.createPosterEntity(creation, opt);
+				if(file.quality == 'HD'){
+					hdPoster.id = entity.key.id;
+					hdPoster.url = entity.data.url
+				}
 				insertion.push(entity, history);
 			})
 			await this.db.transaction().insert(insertion);
-			return {'status': 'uploaded'}
+			return { 'status': 'uploaded', 'image_id': hdPoster.id, 'image_url': hdPoster.url }
 		} catch{
-			throw new BadRequestException("Could not upload")
+			throw new BadRequestException()
 		}
 	}
 
 	async updatePoster(data: UpdatePosterDto, opt: ImageOpt){
-		const posterKey = this.db.key([opt.parentKind, +opt.parentId, 'Poster', +opt.imageId]);
-		data.lastUpdated = opt.time;
 		const {entity, history} = this.db.updatePosterEntity(data, opt);
 		try {
 			await this.db.update(entity);
 			await this.db.insert(history);
-			return {'status': 'updated'}
+			return { 'status': 'updated', 'image_id': entity.key.id}
 		} catch {
-			throw new BadRequestException('Could not edit');
+			throw new BadRequestException();
 		}
 	}
 
@@ -368,13 +365,12 @@ export class FilmsService {
 			await this.db.insert(history);
 			return {'status': 'deleted'}
 		} catch {
-			throw new BadRequestException('Could not delete')
+			throw new BadRequestException()
 		}
 	}
 
-	async uploadStill(info: CreateStillDto, opt: ImageOpt, image: Express.Multer.File){
+	async uploadStill(opt: ImageOpt, image: Express.Multer.File){
 		const insertion = []
-		const time = new Date();
 		try {
 			const file = await this.storage.uploadStill(image);
 			
@@ -382,28 +378,25 @@ export class FilmsService {
 				url: file.url,
 				originalName: file.originalName,
 				quality: file.quality,
-				description: info.description,
 			}
 
 			const {entity, history} = this.db.createStillEntity(creation, opt);
 			insertion.push(entity, history);
 			await this.db.transaction().insert(insertion);
-			return {'status': 'uploaded'}
+			return { 'status': 'uploaded', 'image_id': entity.key.id, 'image_url': entity.data.url }
 		} catch{
-			throw new BadRequestException("Could not upload")
+			throw new BadRequestException()
 		}
 	}
 
 	async updateStill(data: UpdateStillDto, opt: ImageOpt){
-		const stillKey = this.db.key([opt.parentKind, +opt.parentId, 'Still', +opt.imageId]);
-		data.lastUpdated = opt.time;
 		const {entity, history} = this.db.updateStillEntity(data, opt);
 		try {
 			await this.db.update(entity);
 			await this.db.insert(history);
-			return {'status': 'updated'}
+			return { 'status': 'updated', 'image_id': entity.key.id }
 		} catch {
-			throw new BadRequestException('Could not edit');
+			throw new BadRequestException();
 		}
 	}
 
@@ -424,7 +417,7 @@ export class FilmsService {
 			await this.db.insert(history);
 			return {'status': 'deleted'}
 		} catch {
-			throw new BadRequestException('Could not delete')
+			throw new BadRequestException()
 		}
 	}
 }
