@@ -19,8 +19,8 @@ export class StorageService extends Storage {
 		if(poster.mimetype === 'image/png' || poster.mimetype === 'image/jpeg'){
 			const posterBucket = this.bucket(this.configService.get('STORAGE_POSTERS'));
 
-			const blobHighDef = posterBucket.file(poster.originalname.replace(/[^0-9a-z]/gi, '').concat('HD'));
-			const blobStandardDef = posterBucket.file(poster.originalname.replace(/[^0-9a-z]/gi, '').concat('SD'));
+			const blobHighDef = posterBucket.file(poster.originalname.replace(/[^0-9a-z]/gi, '-').concat('HD'));
+			const blobStandardDef = posterBucket.file(poster.originalname.replace(/[^0-9a-z]/gi, '-').concat('SD'));
 			try{
 				// Process to High Definition
 				const bufferHighDef = await sharp(poster.buffer).resize(1000, 1500).toBuffer();
@@ -61,7 +61,7 @@ export class StorageService extends Storage {
 	async uploadStill(still: Express.Multer.File): Promise<UploadedFileDto>{
 		if(still.mimetype === 'image/png' || still.mimetype === 'image/jpeg'){
 			const stillBucket = this.bucket(this.configService.get('STORAGE_STILLS'));
-			const blobHighDef = stillBucket.file(still.originalname.replace(/[^0-9a-z]/gi, '').concat('HD'));
+			const blobHighDef = stillBucket.file(still.originalname.replace(/[^0-9a-z]/gi, '-').concat('HD'));
 			try{
 				const bufferHighDef = await sharp(still.buffer).resize(1920, 1080).toBuffer();
 				await blobHighDef.save(bufferHighDef, {contentType: still.mimetype});
@@ -91,7 +91,7 @@ export class StorageService extends Storage {
 	async uploadProfilePhoto(profile: Express.Multer.File): Promise<UploadedFileDto>{
 		if(profile.mimetype === 'image/png' || profile.mimetype === 'image/jpeg'){
 			const profileBucket = this.bucket(this.configService.get('STORAGE_PROFILES'));
-			const blobHighDef = profileBucket.file(profile.originalname.replace(/[^0-9a-z]/gi, '').concat('HD'));
+			const blobHighDef = profileBucket.file(profile.originalname.replace(/[^0-9a-z]/gi, '-').concat('HD'));
 			try{
 				const bufferHighDef = await sharp(profile.buffer).resize(720, 720).toBuffer();
 				await blobHighDef.save(bufferHighDef, {contentType: profile.mimetype});
