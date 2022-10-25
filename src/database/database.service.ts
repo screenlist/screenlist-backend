@@ -52,18 +52,21 @@ import {
 	PlatformOpt
 } from '../platforms/platforms.types';
 import { 
-	CreatePrivilegedUserDto,  
-	UpdatePrivilegedUserDto,
+	CreateUserDto,  
+	UpdateUserDto,
 	CreateVotesDto,
 	UpdateVotesDto,
 	CreateRequestDto,
 	UpdateRequestDto,
 	CreateJournalistInfoDto,
-	UpdateJournalistInfoDto,
-	CreateUserInfoDto,
-	UpdateUserInfoDto
+	UpdateJournalistInfoDto
 } from '../users/users.dto';
 import { UserOpt, VoteOpt, RequestOpt } from '../users/users.types';
+import {
+	CreateContentDto,
+	UpdateContentDto
+} from '../content/content.dto';
+import { ContentOpt } from '../content/content.types';
 
 @Injectable()
 export class DatabaseService extends Datastore{
@@ -106,20 +109,20 @@ export class DatabaseService extends Datastore{
 		}
 	}
 
-	// User methods
-	createPrivilegedUserEntity(data: CreatePrivilegedUserDto, opt: UserOpt|VoteOpt){
-		const userKey = this.key(['SuperUser', data.uid]);
+	// Content methods
+	createContentEntity(data: CreateContentDto, opt: ContentOpt){
+		const contentKey = this.key('Content');
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
 		const entity = {
-			key: userKey,
+			key: contentKey,
 			data: data
 		}
 		const historyObj: HistoryOpt = {
 			data,
 			user: opt.user,
-			kind: 'SuperUser',
-			id: userKey.id,
+			kind: 'Content',
+			id: contentKey.id,
 			action: 'create',
 			time: opt.time,
 		}
@@ -127,27 +130,28 @@ export class DatabaseService extends Datastore{
 		return {entity, history}
 	}
 
-	updatePrivilegedUserEntity(data: UpdatePrivilegedUserDto, opt: UserOpt|VoteOpt){
-		const userKey = this.key(['SuperUser', data.uid]);
+	updateContentEntity(data: UpdateContentDto, opt: ContentOpt){
+		const contentKey = this.key(['Content', +opt.contentId]);
 		data.lastUpdated = opt.time;
 		const entity = {
-			key: userKey,
+			key: contentKey,
 			data: data
 		}
 		const historyObj: HistoryOpt = {
 			data,
 			user: opt.user,
-			kind: 'SuperUser',
-			id: userKey.id,
+			kind: 'Content',
+			id: contentKey.id,
 			action: 'update',
-			time: opt.time
+			time: opt.time,
 		}
 		const history = this.formulateHistory(historyObj);
 		return {entity, history}
 	}
 
-	createUserInfoEntity(data: CreateUserInfoDto, opt: UserOpt){
-		const userKey = this.key(['UserInfo', opt.userName]);
+	// User methods
+	createUserEntity(data: CreateUserDto, opt: UserOpt){
+		const userKey = this.key(['User', opt.user]);
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
 		const entity = {
@@ -157,8 +161,8 @@ export class DatabaseService extends Datastore{
 		const historyObj: HistoryOpt = {
 			data,
 			user: opt.user,
-			kind: 'UserInfo',
-			id: userKey.id,
+			kind: 'User',
+			id: userKey.name,
 			action: 'create',
 			time: opt.time,
 		}
@@ -166,8 +170,8 @@ export class DatabaseService extends Datastore{
 		return {entity, history}
 	}
 
-	updateUserInfoEntity(data: UpdateUserInfoDto, opt: UserOpt){
-		const userKey = this.key(['UserInfo', opt.userName]);
+	updateUserEntity(data: UpdateUserDto, opt: UserOpt){
+		const userKey = this.key(['User', opt.user]);
 		data.lastUpdated = opt.time;
 		const entity = {
 			key: userKey,
@@ -176,8 +180,8 @@ export class DatabaseService extends Datastore{
 		const historyObj: HistoryOpt = {
 			data,
 			user: opt.user,
-			kind: 'SuperUser',
-			id: userKey.id,
+			kind: 'User',
+			id: userKey.name,
 			action: 'update',
 			time: opt.time
 		}
@@ -624,7 +628,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	updateLinkEntity(data: UpdateLinkDto, opt: LinkOpt){
-		const platformKey = this.key(['Platform', data.platformId]);
+		const platformKey = this.key(['Platform', +opt.platformId]);
 			
 		const linkKey = this.key(['Platform', +platformKey.id, opt.parentKind, +opt.parentId,'Link', +opt.linkId]);
 		data.lastUpdated = opt.time;
