@@ -11,7 +11,9 @@ import {
 	Query,
 	Headers,
 	UploadedFile,
-	UseInterceptors 
+	UseInterceptors,
+	BadRequestException,
+	NotFoundException
 } from '@nestjs/common';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -19,16 +21,14 @@ import { HistoryOpt } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
 import { UserOpt, VoteOpt, RequestOpt} from './users.types';
 import { 
-	CreatePrivilegedUserDto,  
-	UpdatePrivilegedUserDto,
+	CreateUserDto,  
+	UpdateUserDto,
 	CreateVotesDto,
 	UpdateVotesDto,
 	CreateRequestDto,
 	UpdateRequestDto,
 	CreateJournalistInfoDto,
 	UpdateJournalistInfoDto,
-	CreateUserInfoDto,
-	UpdateUserInfoDto
 } from '../users/users.dto';
 import { UsersService } from './users.service';
 import { ImageOpt } from '../films/films.types';
@@ -42,6 +42,8 @@ export class UsersController {
 		private usersService: UsersService
 	){}
 
+	// Similar the authenticateOne method except for the http verb and the latter
+	// returns only a userName
 	@Get(':userName')
 	@Roles('member')
 	async findOne(
@@ -49,7 +51,7 @@ export class UsersController {
 		@Headers('AuthorizationToken') idToken: string
 	){
 		const user = await this.authService.getUserUid(idToken);
-		return await this.usersService.findUserInfo(userName, user);
+		return await this.usersService.findUser(userName, user);
 	}
 
 	@Get('admins')
@@ -80,24 +82,43 @@ export class UsersController {
 	}
 
 	// Every user uses this route to get register more profile infomation
-	@Post('setup')
+	@Post('register')
 	async setupUser(
-		@Body() createUserInfoDto: CreateUserInfoDto,
+		@Body() createUserDto: CreateUserDto,
 		@Headers('AuthorizationToken') idToken: string
 	){
-		const userOptions: UserOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date()
+		try{
+			const userOptions: UserOpt = {
+				user: await this.authService.getUserUid(idToken),
+				time: new Date()
+			}
+			const create = await this.usersService.createUser(createUserDto, userOptions);
+			return create
+		} catch(err: any){
+			throw new BadRequestException(err.message)
 		}
-		return await this.usersService.createUser(createUserInfoDto, userOptions);
+	}
+
+
+	@Post('auth')
+	@Roles('member')
+	async authenticateOne(
+		@Headers('AuthorizationToken') idToken: string
+	){
+		console.log('idToken on /users/auth route')
+		console.log(idToken.slice(0,11)+'...')
+		const user = await this.authService.getUserUid(idToken);
+		console.log("user uid on /users/auth route")
+		console.log(user)
+		return await this.usersService.getUserName(user);
 	}
 
 	// Routes for updating user information
 	@Post(':userName')
 	@Roles('member')
-	async updateUserInfo(
+	async updateUser(
 		@Param('userName') userName: string,
-		@Body() updateUserInfoDto: UpdateUserInfoDto,
+		@Body() updateUserDto: UpdateUserDto,
 		@Headers('AuthorizationToken') idToken: string
 	){
 		const userOptions: UserOpt = {
@@ -105,7 +126,7 @@ export class UsersController {
 			time: new Date(),
 			userName: userName
 		}
-		return await this.usersService.updateUser(updateUserInfoDto, userOptions);
+		return await this.usersService.updateUser(updateUserDto, userOptions);
 	}
 
 	@Post(':userName/photo')
@@ -120,7 +141,7 @@ export class UsersController {
 			user: await this.authService.getUserUid(idToken),
 			time: new Date(),
 			parentId: await this.authService.getUserUid(idToken),
-			parentKind: 'UserInfo'
+			parentKind: 'User'
 		}
 		return await this.usersService.uploadProfilePhoto(imageOptions, profile);
 	}
@@ -196,14 +217,15 @@ export class UsersController {
 	async proposeVoteForAdmin(
 		@Headers('AuthorizationToken') idToken: string,
 		@Query('username') userName: string,
-		@Body() createPrivilegedUserDto: CreatePrivilegedUserDto
+		@Query('vote_for') voteFor: string
 	){
 		const voteOptions: VoteOpt = {
 			user: await this.authService.getUserUid(idToken),
 			userName: userName,
-			time: new Date()
+			time: new Date(),
+			userToVoteFor: voteFor
 		}
-		return await this.usersService.proposeAdminVote(createPrivilegedUserDto, voteOptions);
+		return await this.usersService.proposeAdminVote(voteOptions);
 	}
 
 	@Post('votes/curators')
@@ -211,14 +233,15 @@ export class UsersController {
 	async proposeVoteForCurator(
 		@Headers('AuthorizationToken') idToken: string,
 		@Query('username') userName: string,
-		@Body() createPrivilegedUserDto: CreatePrivilegedUserDto
+		@Query('vote_for') voteFor: string
 	){
 		const voteOptions: VoteOpt = {
 			user: await this.authService.getUserUid(idToken),
 			userName: userName,
-			time: new Date()
+			time: new Date(),
+			userToVoteFor: voteFor
 		}
-		return await this.usersService.proposeCuratorVote(createPrivilegedUserDto, voteOptions);
+		return await this.usersService.proposeCuratorVote(voteOptions);
 	}
 
 	@Post('votes/moderators')
@@ -226,14 +249,15 @@ export class UsersController {
 	async proposeVoteForModerators(
 		@Headers('AuthorizationToken') idToken: string,
 		@Query('username') userName: string,
-		@Body() createPrivilegedUserDto: CreatePrivilegedUserDto
+		@Query('vote_for') voteFor: string
 	){
 		const voteOptions: VoteOpt = {
 			user: await this.authService.getUserUid(idToken),
 			userName: userName,
-			time: new Date()
+			time: new Date(),
+			userToVoteFor: voteFor
 		}
-		return await this.usersService.proposeModeratorVote(createPrivilegedUserDto, voteOptions);
+		return await this.usersService.proposeModeratorVote(voteOptions);
 	}
 
 	// Routes for role voting
@@ -243,15 +267,16 @@ export class UsersController {
 		@Headers('AuthorizationToken') idToken: string,
 		@Query('username') userName: string,
 		@Param('votesId') votesId: string,
-		@Body() CreatePrivilegedUserDto: CreatePrivilegedUserDto
+		@Query('vote_for') voteFor: string
 	){
 		const voteOptions: VoteOpt = {
 			user: await this.authService.getUserUid(idToken),
 			userName: userName,
 			time: new Date(),
-			votesId: votesId
+			votesId: votesId,
+			userToVoteFor: voteFor
 		}
-		return await this.usersService.voteToSetAdmin(CreatePrivilegedUserDto, voteOptions);
+		return await this.usersService.voteToSetAdmin(voteOptions);
 	}
 
 	@Post('votes/:votesId/curators')
@@ -260,15 +285,16 @@ export class UsersController {
 		@Headers('AuthorizationToken') idToken: string,
 		@Query('username') userName: string,
 		@Param('votesId') votesId: string,
-		@Body() CreatePrivilegedUserDto: CreatePrivilegedUserDto
+		@Query('vote_for') voteFor: string
 	){
 		const voteOptions: VoteOpt = {
 			user: await this.authService.getUserUid(idToken),
 			userName: userName,
 			time: new Date(),
-			votesId: votesId
+			votesId: votesId,
+			userToVoteFor: voteFor
 		}
-		return await this.usersService.voteToSetCurator(CreatePrivilegedUserDto, voteOptions);
+		return await this.usersService.voteToSetCurator(voteOptions);
 	}
 
 	@Post('votes/:votesId/moderators')
@@ -277,14 +303,15 @@ export class UsersController {
 		@Headers('AuthorizationToken') idToken: string,
 		@Query('username') userName: string,
 		@Param('votesId') votesId: string,
-		@Body() CreatePrivilegedUserDto: CreatePrivilegedUserDto
+		@Query('vote_for') voteFor: string
 	){
 		const voteOptions: VoteOpt = {
 			user: await this.authService.getUserUid(idToken),
 			userName: userName,
 			time: new Date(),
-			votesId: votesId
+			votesId: votesId,
+			userToVoteFor: voteFor
 		}
-		return await this.usersService.voteToSetModerator(CreatePrivilegedUserDto, voteOptions);
+		return await this.usersService.voteToSetModerator(voteOptions);
 	}
 }
