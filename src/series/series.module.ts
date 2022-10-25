@@ -3,11 +3,21 @@ import { SeriesController } from './series.controller';
 import { SeriesService } from './series.service';
 import { StorageModule } from '../storage/storage.module';
 import { DatabaseModule } from '../database/database.module';
+import { PlatformsModule } from '../platforms/platforms.module';
+import { AuthModule } from '../auth/auth.module';
+import { PeopleModule } from '../people/people.module';
+import { CompaniesModule } from '../companies/companies.module';
+import { FilmsModule } from '../films/films.module';
 
 @Module({
 	imports: [
 		StorageModule,
-		DatabaseModule
+		DatabaseModule,
+		PlatformsModule,
+		AuthModule,
+		PeopleModule,
+		CompaniesModule,
+		FilmsModule
 	],
 	controllers: [SeriesController],
 	providers: [SeriesService]

@@ -20,6 +20,7 @@ import { AuthModule } from '../auth/auth.module';
 		AuthModule
 	],
 	controllers: [FilmsController],
-	providers: [FilmsService]
+	providers: [FilmsService],
+	exports: [FilmsService]
 })
 export class FilmsModule {}
