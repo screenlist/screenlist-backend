@@ -86,28 +86,22 @@ export class SeriesService {
 
 		try {
 			// Run queries
-			const details = await this.db.get(seriesKey);
-			// Check whether the series is public or hidden before continuing
-			if(details[0].status != "public"){
-				throw new NotFoundException("Not available");
-			}
+			const [details] = await this.db.get(seriesKey);
+
 			const platformLinks: Link[] =  await this.db.runQueryFull(linksQuery);
-			const poster = await this.db.runQuery(postersQuery);
-			const stills = await this.db.runQuery(stillsQuery);
+			const [poster] = await this.db.runQuery(postersQuery);
+			const [stills] = await this.db.runQuery(stillsQuery);
 			const producers: CompanyRole[] = await this.db.runQueryFull(producersQuery);
 			const actors: PersonRole[] = await this.db.runQueryFull(actorsQuery);
 			const crew: PersonRole[] = await this.db.runQueryFull(crewQuery);
 
 			// Extact the entity id/name from query to expose to the client
-			details.map(obj => {
-				obj.id = obj[this.db.KEY]["id"]
-				return obj
-			})
+			details.id = details[this.db.KEY]["id"]
+			details.poster = poster[0]
 
 			const film: SeriesType = {
 				details: details[0] as Series,
-				posters: poster[0] as Poster[],
-				stills: stills[0] as Still[],
+				stills: stills as Still[],
 				producers: producers,
 				platforms: platformLinks,
 				actors: actors,
@@ -130,7 +124,6 @@ export class SeriesService {
 		series.slug = filmName.concat("-"+seriesKey.id.toString());
 		series.lastUpdated = time;
 		series.created = time;
-		series.status = "public";
 		entities.push({
 			key: seriesKey,
 			data: series
