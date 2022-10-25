@@ -8,18 +8,16 @@ import {
 } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { DatabaseService } from '../database/database.service';
-import { UserOpt, SuperUser, BasicUser, VoteOpt, Votes, Request, RequestOpt} from './users.types';
+import { UserOpt, User, VoteOpt, Votes, Request, RequestOpt} from './users.types';
 import { 
-	CreatePrivilegedUserDto,  
-	UpdatePrivilegedUserDto,
+	CreateUserDto,  
+	UpdateUserDto,
 	CreateVotesDto,
 	UpdateVotesDto,
 	CreateRequestDto,
 	UpdateRequestDto,
 	CreateJournalistInfoDto,
 	UpdateJournalistInfoDto,
-	CreateUserInfoDto,
-	UpdateUserInfoDto
 } from '../users/users.dto';
 import { HistoryOpt } from '../database/database.types';
 import { ImageOpt } from '../films/films.types';
@@ -36,9 +34,10 @@ export class UsersService {
 	/** GENERAL METHODS **/
 
 	async findAllJournalists(){
+		const query = this.db.createQuery('User').filter('role', '=', 'journalist').order('name');
 		try{
-			const users = await this.authService.getPrivilegedUsers('journalist');
-			return users;
+			const [result] = await this.db.runQuery(query)
+			return result as User[];
 		} catch{
 			throw new BadRequestException("Could not retrieve users");
 		}
@@ -58,21 +57,17 @@ export class UsersService {
 	}
 
 	async approveToSetJournalist(data: UpdateRequestDto, opt: RequestOpt){
-		const journalistData: CreatePrivilegedUserDto = {
-			uid: data.requestSubject,
+		const journalistData: UpdateUserDto = {
 			role: 'journalist',
-			userName: opt.userName,
-			created: opt.time,
 			lastUpdated: opt.time
 		} 
 		const userOptions: UserOpt = {
-			user: opt.user,
-			userName: opt.userName,
+			user: data.requestSubject,
 			time: opt.time
 		}
 		try{
 			const {entity, history} = await this.db.updateRequestEntity(data, opt);
-			const journalist = await this.db.createPrivilegedUserEntity(journalistData, userOptions);
+			const journalist = await this.db.updateUserEntity(journalistData, userOptions);
 			await this.db.update(entity);
 			await this.authService.setCustomUserClaims(data.requestSubject, 'journalist');
 			await this.db.insert([history, journalist.entity, journalist.history]);
@@ -84,15 +79,28 @@ export class UsersService {
 
 	async revokePrivilegedRole(uid: string, opt: UserOpt){
 		try{
-			const userKey = this.db.key(['SuperUser', uid]);
+			const userKey = this.db.key(['User', uid]);
 			const [result] =  await this.db.get(userKey);
 			if(result){
-				const superUser: SuperUser = result;
-				if(superUser.role == 'admin'){
+				const user: User = result;
+				if(user.role == 'admin'){
 					throw new ForbiddenException();
 				}
 			}
-			return await this.authService.updatePrivilegedUserToBasicRole(uid, opt);
+
+			const updateUser: UpdateUserDto = {
+				lastUpdated: opt.time,
+				role: 'member'
+			}
+
+			const updateUserOptions: UserOpt = {
+				user: uid,
+				time: opt.time
+			}
+			const {entity, history} = this.db.updateUserEntity(updateUser, updateUserOptions)
+			await this.authService.setCustomUserClaims(uid, 'member');
+			await this.db.update(entity)
+			await this.db.insert(history)
 		} catch {
 			throw new BadRequestException()
 		}
@@ -128,7 +136,7 @@ export class UsersService {
 		// ranks high enough to grab the opportunity, and if there is
 		// nobody in a high ranking role, then the admin role is up for grabs to
 		// anyone
-		const currentUserKey = this.db.key(['SuperUser', opt.user]);
+		const currentUserKey = this.db.key(['User', opt.user]);
 		const dayAgo = new Date(Number(opt.time)-(1000*60*60*24));
 		const requestsQuery = this.db.createQuery('Request')
 																	.filter('request', '=', 'makeAdmin')
@@ -172,7 +180,7 @@ export class UsersService {
 				return {'status': 'available', 'request_id': request.entity.key.id};
 			} else if(totalAdmins == 0) {
 				const [result] = await this.db.get(currentUserKey);
-				const currentUser: SuperUser = result;
+				const currentUser: User = result;
 
 				if(totalCurators > 0 && currentUser.role == 'curator'){
 
@@ -213,34 +221,45 @@ export class UsersService {
 	}
 
 	async checkUserName(userName: string){
-		const key = this.db.key(['UserInfo', userName])
+		const query = this.db.createQuery('User').filter('userName', '=', userName);
 		try {
-			const [result] = await this.db.get(key)
-			const user: BasicUser = result;
-			if(user){
-				return user.userName
-			} else {
-				throw new NotFoundException()
-			}
-		} catch {
-			throw new NotFoundException()
+			const [result] = await this.db.runQuery(query)
+			const users = result.length;
+			return users
+		} catch(err: any) {
+			throw new NotFoundException(err.message)
 		}
 	}
 
-	async createUser(data: CreateUserInfoDto, opt: UserOpt){
-		try {			
-			const {entity, history} = this.db.createUserInfoEntity(data, opt);
+	async createUser(data: CreateUserDto, opt: UserOpt){
+		try {	
+			const similarUserNames = await this.checkUserName(data.userName);
+			
+			if(similarUserNames > 0){
+				throw new BadRequestException('Username already taken');
+			}
+
+			const {entity, history} = this.db.createUserEntity(data, opt);
 			await this.db.transaction().insert([entity, history]);
 			await this.authService.setCustomUserClaims(opt.user, 'member');
+			console.log(entity, history)
 			return { 'status': 'created', 'username': entity.data.userName };
-		} catch {
-			throw new BadRequestException()
+		} catch(err: any) {
+			throw new BadRequestException(err.message)
 		}
 	}
 
-	async updateUser(data: UpdateUserInfoDto, opt: UserOpt){
+	async updateUser(data: UpdateUserDto, opt: UserOpt){
 		try {
-			const {entity, history} = this.db.updateUserInfoEntity(data, opt);
+			if(data.userName){
+				const similarUserNames = await this.checkUserName(data.userName);
+
+				if(similarUserNames > 0){
+					throw new BadRequestException('Username already taken');
+				}
+			}
+
+			const {entity, history} = this.db.updateUserEntity(data, opt);
 			await this.db.update(entity);
 			await this.db.insert(history);
 			return { 'status': 'updated' };
@@ -249,14 +268,28 @@ export class UsersService {
 		}
 	}
 
-	async findUserInfo(uid: string, userName: string){
-		const infoKey = this.db.key(['UserInfo', userName]);
+	async findUser(uid: string, userName: string){
+		const userKey = this.db.key(['User', uid]);
 		try {
 			const user = await this.authService.getUser(uid);
-			const [info] = await this.db.get(infoKey);
+			const [info] = await this.db.get(userKey);
 			return { 'details': user, 'additional': info };
 		} catch {
 			throw new NotFoundException()
+		}
+	}
+
+	async getUserName(uid: string){
+		const userKey = this.db.key(['User', uid]);
+		console.log(userKey)
+		try {
+			const [info] = await this.db.get(userKey);
+			console.log(info)
+			const user: User = info;
+			return { 'userName': user.userName };
+		} catch(err: any) {
+			console.log(err.message)
+			throw new NotFoundException(err.message)
 		}
 	}
 
@@ -284,27 +317,28 @@ export class UsersService {
 
 	// Admin methods
 	async findAllAdmins(){
+		const query = this.db.createQuery('User').filter('role', '=', 'admin').order('name');
 		try{
-			const users = await this.authService.getPrivilegedUsers('admin');
-			return users;
+			const [result] = await this.db.runQuery(query);
+			return result as User[];
 		} catch{
-			throw new BadRequestException("Could not retrieve users");
+			throw new NotFoundException();
 		}
 	}
 
-	async proposeAdminVote(data: CreatePrivilegedUserDto, opt: VoteOpt){
-		return await this.proposeRoleVote(data, opt, 'admin');
+	async proposeAdminVote(opt: VoteOpt){
+		return await this.proposeRoleVote(opt, 'admin');
 	}
 
-	async voteToSetAdmin(data: CreatePrivilegedUserDto, opt: VoteOpt){
-		return await this.voteToSetRole(data, opt, 'admin');
+	async voteToSetAdmin(opt: VoteOpt){
+		return await this.voteToSetRole(opt, 'admin');
 	}
 
 	async setAdmin(opt: UserOpt){
-		// This method enables a user to make themselve an admin.
+		// This method enables a user to make themselves an admin.
 		// This is provided they qualify, have went through the neccessary 
 		// steps to get here and also only if they're the first.
-		const currentUserKey = this.db.key(['SuperUser', opt.user]);
+		const currentUserKey = this.db.key(['User', opt.user]);
 		const requestKey = this.db.key(['Request', +opt.objectId])
 		try {
 			const admins = await this.findAllAdmins();
@@ -314,7 +348,7 @@ export class UsersService {
 			const request: Request = requestResult;
 
 			const [result] = await this.db.get(currentUserKey);
-			const currentUser: SuperUser = result;
+			const currentUser: User = result;
 
 			// Statement to test the legitimacy and merit of this request
 			if(
@@ -328,35 +362,15 @@ export class UsersService {
 				throw new ForbiddenException();
 			}
 
-			const privilegedRole: CreatePrivilegedUserDto = {
-				uid: opt.user,
+			const privilegedRole: UpdateUserDto = {
 				role: 'admin',
-				userName: opt.userName,
-				created: opt.time,
 				lastUpdated: opt.time
 			}
-
-			if(currentUser){
-				currentUser.role = 'admin'
-				const historyOptions: HistoryOpt = {
-					action: 'update',
-					user: opt.user,
-					id: opt.user,
-					kind: 'SuperUser',
-					data: {'role': currentUser.role},
-					time: opt.time
-				}
-				const history = this.db.formulateHistory(historyOptions);
-				await this.authService.setCustomUserClaims(currentUser.uid, 'admin');
-				await this.db.update(currentUser);
-				await this.db.insert(history);
-				return {'status': 'success'};
-			} else {
-				const {entity, history} = await this.db.createPrivilegedUserEntity(privilegedRole, opt);
-				await this.authService.setCustomUserClaims(privilegedRole.uid, privilegedRole.role);
-				await this.db.insert([entity, history]);
-				return {'status': 'success'};
-			}
+			
+			const {entity, history} = await this.db.updateUserEntity(privilegedRole, opt);
+			await this.authService.setCustomUserClaims(opt.user, privilegedRole.role);
+			await this.db.insert([entity, history]);
+			return {'status': 'success'};
 		} catch {
 			throw new BadRequestException();
 		}
@@ -364,65 +378,68 @@ export class UsersService {
 
 	// Curator methods
 	async findAllCurators(){
+		const query = this.db.createQuery('User').filter('role', '=', 'curator').order('name');
 		try{
-			const users = await this.authService.getPrivilegedUsers('curator');
-			return users;
+			const [result] = await this.db.runQuery(query);
+			return result as User[];
 		} catch{
-			throw new BadRequestException("Could not retrieve users");
+			throw new NotFoundException();
 		}
 	}
 
-	async proposeCuratorVote(data: CreatePrivilegedUserDto, opt: VoteOpt){
-		return await this.proposeRoleVote(data, opt, 'curator');
+	async proposeCuratorVote(opt: VoteOpt){
+		return await this.proposeRoleVote(opt, 'curator');
 	}
 
-	async voteToSetCurator(data: CreatePrivilegedUserDto, opt: VoteOpt){
-		return await this.voteToSetRole(data, opt, 'curator');
+	async voteToSetCurator(opt: VoteOpt){
+		return await this.voteToSetRole(opt, 'curator');
 	}
 
 	// Moderator methods
 	async findAllModerators(){
+		const query = this.db.createQuery('User').filter('role', '=', 'moderator').order('name');
 		try{
-			const users = await this.authService.getPrivilegedUsers('moderator');
-			return users;
+			const [result] = await this.db.runQuery(query);
+			return result as User[];
 		} catch{
-			throw new BadRequestException("Could not retrieve users");
+			throw new NotFoundException();
 		}
 	}
 
-	async proposeModeratorVote(data: CreatePrivilegedUserDto, opt: VoteOpt){
-		return await this.proposeRoleVote(data, opt, 'moderator');
+	async proposeModeratorVote(opt: VoteOpt){
+		return await this.proposeRoleVote(opt, 'moderator');
 	}
 
-	async voteToSetModerator(data: CreatePrivilegedUserDto, opt: VoteOpt){
-		return await this.voteToSetRole(data, opt, 'moderator');
+	async voteToSetModerator(opt: VoteOpt){
+		return await this.voteToSetRole(opt, 'moderator');
 	}
 
 	// Other methods
 	async voteToSetRole(
-		data: CreatePrivilegedUserDto, 
 		opt: VoteOpt, 
 		role: 'admin'|'curator'|'moderator'
 	){
 		const votesKey = this.db.key(['Vote', +opt.votesId]);
 		// There are two users, the one performing the action and the subject thereof.
-		const currentUserQuery = this.db.createQuery('SuperUser').filter('uid', '=', opt.user).limit(1);
-		const votedUserQuery = this.db.createQuery('SuperUser').filter('uid', '=', data.uid).limit(1);
+		const currentUserKey = this.db.key(['User', opt.user]);
+		const userToVoteForKey = this.db.key(['User', opt.userToVoteFor]);
 		try {
 			// Get all stakeholders involved in this vote
-			const [result] = await this.db.get(votesKey);
-			const [currentUserResult] = await this.db.runQuery(currentUserQuery);
-			const [votedUserResult] = await this.db.runQuery(votedUserQuery);
-			const currentUser: SuperUser = currentUserResult[0];
-			const votedUser: SuperUser = votedUserResult[0];
-			const votes: Votes = result;
+			const [votesResult] = await this.db.get(votesKey);
+			const [currentUserResult] = await this.db.get(currentUserKey);
+			const [userToVoteForResult] = await this.db.get(userToVoteForKey);
+			const currentUser: User = currentUserResult;
+			const userToVoteFor: User = userToVoteForResult;
+			const votes: Votes = votesResult;
 
-			const privilegedRole: CreatePrivilegedUserDto = {
-				uid: data.uid,
-				userName: data.userName,
+			const privilegedRole: UpdateUserDto = {
 				role: votes.roleToAttain,
-				created: opt.time,
 				lastUpdated: opt.time
+			}
+
+			const privilegedRoleOptions: UserOpt = {
+				user: opt.userToVoteFor,
+				time: opt.time
 			}
 
 			// To be used to calculate all points of all ranks
@@ -454,38 +471,19 @@ export class UsersService {
 			// Or just vote if requirements not met yet
 			if(votes.totalPointsNeeded <= totalVotingPoints){
 				votes.success = true;
-
-				// If the user being voted already holds a certain non basic role
-				// update their existing entity instead of creating a new one
-				if(votedUser){
-					votedUser.role = votes.roleToAttain
-					const historyOptions: HistoryOpt = {
-						action: 'update',
-						user: opt.user,
-						id: data.uid,
-						kind: 'SuperUser',
-						data: {'role': votedUser.role},
-						time: opt.time
-					}
-					const history = this.db.formulateHistory(historyOptions)
-					await this.authService.setCustomUserClaims(votedUser.uid, votedUser.role)
-					await this.db.update([votedUser, votes]);
-					await this.db.insert(history);
-					return {'status': 'success'};
-				} else {
-					const {entity, history} = await this.db.createPrivilegedUserEntity(privilegedRole, opt);
-					await this.authService.setCustomUserClaims(privilegedRole.uid, privilegedRole.role);
-					await this.db.update(votes);
-					await this.db.insert([entity, history]);
-					return {'status': 'success'};
-				}
+				// Update the role of the user being voted for and the votes				
+				const {entity, history} = await this.db.updateUserEntity(privilegedRole, privilegedRoleOptions);
+				await this.authService.setCustomUserClaims(userToVoteFor.uid, privilegedRole.role);
+				await this.db.update([votes, entity]);
+				await this.db.insert(history);
+				return {'status': 'success'};
 			} else {
 				const historyOptions: HistoryOpt = {
 					action: 'update',
 					user: opt.user,
 					id: opt.votesId,
 					kind: 'Vote',
-					data: {'adminsTotalPoints': votes.adminsTotalPoints},
+					data: votes,
 					time: opt.time
 				}
 				await this.db.update(votes);
@@ -496,12 +494,11 @@ export class UsersService {
 		}
 	}
 
-	async proposeRoleVote(
-		data: CreatePrivilegedUserDto, 
+	async proposeRoleVote( 
 		opt: VoteOpt,
 		role: 'admin'|'curator'|'moderator'
 	){
-		const currentUserKey = this.db.key(['SuperUser', opt.user])
+		const currentUserKey = this.db.key(['User', opt.user])
 		try {
 			const [result] = await this.db.get(currentUserKey);
 			const admins = await this.findAllAdmins();
@@ -512,7 +509,7 @@ export class UsersService {
 			const totalCurators = curators.length;
 			const totalModerators = moderators.length;
 
-			const currentUser: SuperUser = result;			
+			const currentUser: User = result;			
 			
 			if(role == 'admin' || role == 'curator'){
 				const voteEntity: CreateVotesDto = {
@@ -522,7 +519,7 @@ export class UsersService {
 					adminsTotalPoints: 10,
 					curatorsTotalPoints: 0,
 					moderatorsTotalPoints: 0,
-					userSuggested: data.uid,
+					userSuggested: opt.userToVoteFor,
 					created: opt.time,
 					lastUpdated: opt.time
 				}
@@ -533,13 +530,13 @@ export class UsersService {
 				// Only 60% of approval points needed for this motion to succeed
 				const approvalPoints = ((totalAdmins*10)+(totalCurators*5)+(totalModerators*2))*0.6
 				const voteEntity: CreateVotesDto = {
-					roleToAttain: 'curator',
+					roleToAttain: 'moderator',
 					success: false,
 					totalPointsNeeded: approvalPoints,
 					adminsTotalPoints: currentUser.role == 'admin' ? 10 : 0,
 					curatorsTotalPoints: currentUser.role == 'curator' ? 5 : 0,
 					moderatorsTotalPoints: currentUser.role == 'moderator' ? 2 : 0,
-					userSuggested: data.uid,
+					userSuggested: opt.userToVoteFor,
 					created: opt.time,
 					lastUpdated: opt.time
 				}
