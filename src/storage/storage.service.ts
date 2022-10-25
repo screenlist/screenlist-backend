@@ -117,4 +117,24 @@ export class StorageService extends Storage {
 			throw new BadRequestException(err.message);
 		}
 	}
+
+	async uploadContentPhoto(photo: Express.Multer.File): Promise<UploadedFileDto>{
+		if(photo.mimetype === 'image/png' || photo.mimetype === 'image/jpeg'){
+			const photoBucket = this.bucket(this.configService.get('STORAGE_PROFILES'));
+			const blobHighDef = photoBucket.file(photo.originalname.replace(/[^0-9a-z]/gi, '-').concat('HD'));
+			try{
+				const bufferHighDef = await sharp(photo.buffer).resize(1280, 720).toBuffer();
+				await blobHighDef.save(bufferHighDef, {contentType: photo.mimetype});
+				return {
+					originalName: blobHighDef.name, 
+					quality: "HD",
+					url: `https://storage.googleapis.com/${photoBucket.name}/${blobHighDef.name}`
+				}
+			} catch(err: any){
+				throw new BadRequestException(err?.message);
+			}
+		} else { 
+			throw new BadRequestException("Unrecognised file extension");
+		}
+	}
 }
