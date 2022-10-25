@@ -12,6 +12,7 @@ import { StorageModule } from './storage/storage.module';
 import { CompaniesModule } from './companies/companies.module';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
+import { ContentModule } from './content/content.module';
 
 
 @Module({
@@ -28,7 +29,8 @@ import { AuthModule } from './auth/auth.module';
     StorageModule,
     CompaniesModule,
     DatabaseModule,
-    AuthModule
+    AuthModule,
+    ContentModule
   ],
   controllers: [AppController],
   providers: [AppService],
