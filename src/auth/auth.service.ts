@@ -1,12 +1,9 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
+import * as path from 'path';
 import { DatabaseService } from '../database/database.service';
 import { ConfigService } from '@nestjs/config';
-import { 
-	CreatePrivilegedUserDto,  
-	UpdatePrivilegedUserDto 
-} from '../users/users.dto';
-import { UserOpt, SuperUser } from '../users/users.types';
+import { UserOpt, User } from '../users/users.types';
 import { HistoryOpt } from '../database/database.types';
 
 @Injectable()
@@ -16,7 +13,7 @@ export class AuthService {
 	){}
 
 	private app = admin.initializeApp({
-		credential: admin.credential.cert('../../config/id.json')
+		credential: admin.credential.cert(path.join(__dirname,'../../config/id.json'))
 	})
 	private getAuth = this.app.auth;
 	async verifyRequest(idToken: string){
@@ -31,29 +28,10 @@ export class AuthService {
 	async emailVerified(idToken: string){
 		try {
 			const currentUser = await this.getAuth().verifyIdToken(idToken, true);
-			currentUser.email_verified === true ? true : false
+			console.log(currentUser.email_verified)
+			return currentUser.email_verified
 		} catch {
 			return false
-		}
-	}
-
-	async setUserRole(data: CreatePrivilegedUserDto, opt: UserOpt){
-		try {
-			await this.getAuth().setCustomUserClaims(data.uid, {[data.role]: true});
-			// Persist priviledged users in the database for easy quering later
-			if(data.role == 'admin'|| 
-				data.role == 'curator' || 
-				data.role == 'moderator' || 
-				data.role == 'journalist'
-			){
-				const {entity, history} = this.db.createPrivilegedUserEntity(data, opt);
-				await this.db.insert([entity, history]);
-				return {'status': true};
-			} else {
-				return {'status': true};
-			}
-		} catch(err: any) {
-			throw new BadRequestException(err.mesaage);
 		}
 	}
 
@@ -65,52 +43,11 @@ export class AuthService {
 		}
 	}
 
-	async updateUserToPriviledgedRole(data: UpdatePrivilegedUserDto, opt: UserOpt){
-		try {
-			// Update priviledged user in the database for easy quering later
-			if(data.role == 'admin'|| 
-				data.role == 'curator' || 
-				data.role == 'moderator' || 
-				data.role == 'journalist'
-			){
-				const {entity, history} = this.db.updatePrivilegedUserEntity(data, opt);
-				await this.getAuth().setCustomUserClaims(data.uid, {[data.role]: true});
-				await this.db.update(entity);
-				await this.db.insert(history);
-				return {'status': 'updated'};
-			}
-		} catch(err: any) {
-			throw new BadRequestException(err.mesaage);
-		}
-	}
-
-	async updatePrivilegedUserToBasicRole(user: string, opt: UserOpt){
-		try {
-			// Delete priviledged user from the database
-			// Set custom claims to just "user"
-			const userKey = this.db.key(['User', user]) 
-			const [userEntity] = await this.db.get(userKey)
-			const historyOptions: HistoryOpt = {
-				data: userEntity,
-				time: opt.time,
-				action: 'delete',
-				user: opt.user,
-				id: user,
-				kind: 'User'
-			}
-			const history = this.db.formulateHistory(historyOptions);
-			await this.getAuth().setCustomUserClaims(user, {'member': true});
-			await this.db.delete(userEntity);
-			await this.db.insert(history);
-			return {'status': true};
-		} catch(err: any) {
-			throw new BadRequestException(err.mesaage);
-		}
-	}
-
-	matchRoles(userRole: string, thresholdRole: string, verified: boolean){
+	matchRoles(userRole: string, thresholdRole: string, verified: boolean, path: string){
 		// Under no circumstance is an unverified user allowed
-		if(verified === false){
+		if(verified === false && path == '/users/auth'){
+			return true
+		} else if(verified === false){
 			return false
 		}
 		// All the roles any user can have
@@ -118,7 +55,8 @@ export class AuthService {
 		const allRoles = ['member', 'journalist','moderator', 'curator', 'admin'];
 		const thresholdRoleIndex = allRoles.indexOf(thresholdRole);
 		const userRoleIndex = allRoles.indexOf(userRole);
-
+		console.log(thresholdRoleIndex)
+		console.log(userRoleIndex)
 		// Allow access to users who meet the specified
 		// threshold role
 		if((userRoleIndex == 2 || userRoleIndex == 3) && thresholdRoleIndex == 1){
@@ -178,8 +116,8 @@ export class AuthService {
 		try {
 			const {uid} = await this.getAuth().verifyIdToken(idToken, true);
 			return uid;
-		} catch {
-			throw new BadRequestException();
+		} catch(err: any) {
+			throw new BadRequestException(err.mesaage);
 		}
 	}
 
@@ -192,22 +130,8 @@ export class AuthService {
 		}
 	}
 
-	async getPrivilegedUsers(role: string){
-		const query = this.db.createQuery('User').filter('role', '=', role).order('uid');
-		const users = []
+	async getUserRole(uid: string){
 		try {
-			const [admins] = await this.db.runQuery(query);
-			const identifiers = admins.map((user: SuperUser) => ({ uid: user.uid}));
-			const users = await this.retrieveUsers(identifiers, 100)
-			return users
-		} catch(err: any){
-			throw new BadRequestException(err.message)
-		}
-	}
-
-	async getUserRole(idToken: string){
-		try {
-			const {uid} = await this.getAuth().verifyIdToken(idToken, true);
 			const {customClaims} = await this.getAuth().getUser(uid);
 			if(customClaims['admin']){
 				return 'admin';
@@ -221,10 +145,13 @@ export class AuthService {
 				return 'journalist';
 			}
 		} catch(err: any){
-			throw new BadRequestException(err.mesaage);
+			console.log('getUserRole error')
+			console.log(err.errorInfo.message)
+			throw new BadRequestException(err.message);
 		}
 	}
 
+	// Redundant for now
 	async retrieveUsers(
 		identifiersArray: Array<{uid: string}>, 
 		end: number
