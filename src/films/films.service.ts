@@ -104,29 +104,62 @@ export class FilmsService {
 
 		try {
 			// Run queries
-			const details = await this.db.get(filmKey);
+			const [details] = await this.db.get(filmKey);
 			// Check whether the film is public or deleted before continuing
 			if(details[0].status != "public"){
 				throw new NotFoundException("Not available");
 			}
-			const platformLinks: Link[] =  await this.db.runQueryFull(linksQuery);
-			const poster = await this.db.runQuery(postersQuery);
-			const stills = await this.db.runQuery(stillsQuery);
-			const distributors: CompanyRole[] = await this.db.runQueryFull(distributorsQuery);
-			const producers: CompanyRole[] = await this.db.runQueryFull(producersQuery);
-			const actors: PersonRole[] = await this.db.runQueryFull(actorsQuery);
-			const crew: PersonRole[] = await this.db.runQueryFull(crewQuery);
+			const [platformLinks] =  await this.db.runQuery(linksQuery);
+			const [poster] = await this.db.runQuery(postersQuery);
+			const [stills] = await this.db.runQuery(stillsQuery);
+			const [distributors] = await this.db.runQuery(distributorsQuery);
+			const [producers] = await this.db.runQuery(producersQuery);
+			const [actors] = await this.db.runQuery(actorsQuery);
+			const [crew] = await this.db.runQuery(crewQuery);
 
 			// Extact the entity id/name from query to expose to the client
-			details.map(obj => {
-				obj.id = obj[this.db.KEY]["id"]
-				return obj
+			details.id = details[this.db.KEY]["id"]
+			details.poster = poster[0]
+
+			distributors.map(async (item: CompanyRole) => {
+				const key = this.db.key(['Company', +item.companyId])
+				const [company] = await this.db.get(key)
+				return {
+					...item,
+					photoUrl: company.profilePhotoUrl
+				}
+			})
+			
+			producers.map(async (item: CompanyRole) => {
+				const key = this.db.key(['Company', +item.companyId])
+				const [company] = await this.db.get(key)
+				return {
+					...item,
+					photoUrl: company.profilePhotoUrl
+				}
+			})
+
+			actors.map(async (item: PersonRole) => {
+				const key = this.db.key(['Company', +item.personId])
+				const [person] = await this.db.get(key)
+				return {
+					...item,
+					photoUrl: person.profilePhotoUrl
+				}
+			})
+
+			crew.map(async (item: PersonRole) => {
+				const key = this.db.key(['Company', +item.personId])
+				const [person] = await this.db.get(key)
+				return {
+					...item,
+					photoUrl: person.profilePhotoUrl
+				}
 			})
 
 			const film: FilmType = {
-				details: details[0],
-				posters: poster[0] as Poster[],
-				stills: stills[0] as Still[],
+				details: details,
+				stills: stills as Still[],
 				producers: producers,
 				distributors: distributors,
 				platforms: platformLinks,
@@ -150,7 +183,6 @@ export class FilmsService {
 		film.slug = filmName.concat("-"+filmKey.id.toString());
 		film.lastUpdated = time;
 		film.created = time;
-		film.status = "public";
 		entities.push({
 			key: filmKey,
 			data: film
