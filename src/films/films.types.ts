@@ -33,9 +33,9 @@ export interface Poster {
 export interface Film {
 	id: string;
 	name: string;
-	nameEditable: boolean;
 	trailerUrl?: string;
 	type: string;
+	format: string;
 	productionStage: string;
 	runtime?: number;
 	logline: string;

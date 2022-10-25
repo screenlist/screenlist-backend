@@ -18,9 +18,7 @@ import {
 export interface Series {
 	id: string;
 	name: string;
-	nameEditable: boolean;
 	trailerUrl?: string;
-	status: string;
 	seasons: number;
 	type?: string;
 	genres?: [string];
@@ -29,8 +27,8 @@ export interface Series {
 	episodeRuntime?: number;
 	productionStage: string;
 	plotSummary?: string;
-	released?: Date;
-	finalEpisodeDate?: Date;
+	releaseDate?: Date;
+	lastEpisodeDate?: Date;
 	originalPlatform?: string;
 	slug?: string;
 	lastUpdated?: Date;
