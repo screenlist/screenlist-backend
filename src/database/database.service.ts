@@ -154,6 +154,7 @@ export class DatabaseService extends Datastore{
 		const userKey = this.key(['User', opt.user]);
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
+		data.uid = opt.user;
 		const entity = {
 			key: userKey,
 			data: data
@@ -167,6 +168,8 @@ export class DatabaseService extends Datastore{
 			time: opt.time,
 		}
 		const history = this.formulateHistory(historyObj);
+		console.log('history on createUserEntity', history)
+		console.log('entity on createUserEntity', entity)
 		return {entity, history}
 	}
 
