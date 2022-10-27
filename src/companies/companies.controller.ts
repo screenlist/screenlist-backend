@@ -13,8 +13,8 @@ import {
 	UseInterceptors,
 	UploadedFile
 } from '@nestjs/common';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../users/roles.guard';
+import { Roles } from '../users/roles.decorator';
 import { CompaniesService } from './companies.service';
 import {
 	CreateCompanyRoleDto,

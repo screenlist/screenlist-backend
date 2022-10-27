@@ -13,8 +13,8 @@ import {
 	UploadedFile,
 	UseInterceptors 
 } from '@nestjs/common';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../users/roles.guard';
+import { Roles } from '../users/roles.decorator';
 import { HistoryOpt } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
 import { FilmsService } from './films.service';
