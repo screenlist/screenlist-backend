@@ -1,4 +1,4 @@
 import { SetMetadata } from '@nestjs/common';
-import { UserRoles } from '../users/users.types';
+import { UserRoles } from './users.types';
 
 export const Roles = (role: UserRoles) => SetMetadata('roles', role);

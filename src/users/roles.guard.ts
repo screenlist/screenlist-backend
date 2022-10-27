@@ -1,12 +1,14 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core'
-import { AuthService } from './auth.service'
+import { AuthService } from '../auth/auth.service'
+import { UsersService } from './users.service'
 
 @Injectable()
 export class RolesGuard implements CanActivate {
 	constructor(
 		private authService: AuthService,
-		private reflector: Reflector
+		private reflector: Reflector,
+		private usersService: UsersService
 	){}
 
 	async canActivate(
@@ -26,9 +28,14 @@ export class RolesGuard implements CanActivate {
 		console.log(token)
 		console.log(path)
 		const uid = await this.authService.getUserUid(token)
-		const userRole = await this.authService.getUserRole(uid);
+		const user = await this.usersService.findUser(uid)
+		
+		if(!user){
+			return false
+		}
+
+		const userRole = user.role as string
 		console.log(userRole)
-		console.log(await this.authService.emailVerified(token))
 		const emailVerified = await this.authService.emailVerified(token);
 		console.log(emailVerified)
 		return this.authService.matchRoles(userRole, roleAllowed, emailVerified, path);
