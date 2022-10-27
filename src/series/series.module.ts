@@ -8,6 +8,7 @@ import { AuthModule } from '../auth/auth.module';
 import { PeopleModule } from '../people/people.module';
 import { CompaniesModule } from '../companies/companies.module';
 import { FilmsModule } from '../films/films.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
 	imports: [
@@ -17,7 +18,8 @@ import { FilmsModule } from '../films/films.module';
 		AuthModule,
 		PeopleModule,
 		CompaniesModule,
-		FilmsModule
+		FilmsModule,
+		UsersModule
 	],
 	controllers: [SeriesController],
 	providers: [SeriesService]
