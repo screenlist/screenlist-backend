@@ -3,6 +3,7 @@ export interface User {
 	userName: string,
 	bio: string,
 	role: string,
+	url: string,
 	lastUpdated: Date,
 	created: Date
 }
