@@ -11,11 +11,13 @@ import {
 } from 'class-validator';
 
 export class CreateUserDto {
-	@IsNotEmpty()
+	@IsOptional()
+	@IsEmpty()
 	@IsString()
 	uid: string;
 
 	@IsNotEmpty()
+	@IsString()
 	@MaxLength(20)
 	userName: string;
 
