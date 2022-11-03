@@ -69,7 +69,6 @@ export class UsersService {
 			const {entity, history} = await this.db.updateRequestEntity(data, opt);
 			const journalist = await this.db.updateUserEntity(journalistData, userOptions);
 			await this.db.update(entity);
-			await this.authService.setCustomUserClaims(data.requestSubject, 'journalist');
 			await this.db.insert([history, journalist.entity, journalist.history]);
 			return {'status': 'created'};
 		} catch{
@@ -98,7 +97,6 @@ export class UsersService {
 				time: opt.time
 			}
 			const {entity, history} = this.db.updateUserEntity(updateUser, updateUserOptions)
-			await this.authService.setCustomUserClaims(uid, 'member');
 			await this.db.update(entity)
 			await this.db.insert(history)
 		} catch {
@@ -221,6 +219,7 @@ export class UsersService {
 	}
 
 	async checkUserName(userName: string){
+		console.log('checkUserName invoked')
 		const query = this.db.createQuery('User').filter('userName', '=', userName);
 		try {
 			const [result] = await this.db.runQuery(query)
@@ -232,19 +231,21 @@ export class UsersService {
 	}
 
 	async createUser(data: CreateUserDto, opt: UserOpt){
+		console.log(data)
+		data.role = 'member' // assign every new user the member role
 		try {	
 			const similarUserNames = await this.checkUserName(data.userName);
-			
+			console.log(similarUserNames)
 			if(similarUserNames > 0){
 				throw new BadRequestException('Username already taken');
 			}
 
 			const {entity, history} = this.db.createUserEntity(data, opt);
-			await this.db.transaction().insert([entity, history]);
-			await this.authService.setCustomUserClaims(opt.user, 'member');
-			console.log(entity, history)
+			const l = await this.db.insert([entity, history]);
+			console.log(l)
 			return { 'status': 'created', 'username': entity.data.userName };
 		} catch(err: any) {
+			console.log(err.message)
 			throw new BadRequestException(err.message)
 		}
 	}
@@ -268,14 +269,23 @@ export class UsersService {
 		}
 	}
 
-	async findUser(uid: string, userName: string){
+	async findUser(uid: string){
 		const userKey = this.db.key(['User', uid]);
 		try {
-			const user = await this.authService.getUser(uid);
-			const [info] = await this.db.get(userKey);
-			return { 'details': user, 'additional': info };
-		} catch {
-			throw new NotFoundException()
+			const info = await this.db.get(userKey);
+			return info[0];
+		} catch(err: any) {
+			throw new NotFoundException(err.message)
+		}
+	}
+
+	async findAllUsers(){
+		const query = this.db.createQuery('User').order('userName');
+		try {
+			const [users] = await this.db.runQuery(query);
+			return users
+		} catch (err){
+			throw new NotFoundException(err.message)
 		}
 	}
 
@@ -286,17 +296,26 @@ export class UsersService {
 			const [info] = await this.db.get(userKey);
 			console.log(info)
 			const user: User = info;
-			return { 'userName': user.userName };
+			return { 'username': user.userName };
 		} catch(err: any) {
 			console.log(err.message)
-			throw new NotFoundException(err.message)
+			throw new NotFoundException(err.message);
+		}
+	}
+
+	async findUserByUsername(username: string){
+		const query = this.db.createQuery('User').filter('userName', '=', username).order('userName').limit(1);
+		try {
+			const [results] = await this.db.runQuery(query);
+			return results[0]
+		} catch (err: any){
+			throw new NotFoundException(err)
 		}
 	}
 
 	async uploadProfilePhoto(opt: ImageOpt, image: Express.Multer.File){
 		try {
 			const file = await this.storage.uploadProfilePhoto(image);
-			await this.authService.updateProfilePicture(opt.user, file.url);
 			return { 'status': 'created', 'image_url': file.url }
 		} catch {
 			throw new BadRequestException()
@@ -306,7 +325,6 @@ export class UsersService {
 	async removeProfilePhoto(imageName: string, uid: string){
 		try {
 			await this.storage.deleteProfilePhoto(imageName);
-			await this.authService.removeProfilePicture(uid);
 			return { 'status': 'deleted' }
 		} catch {
 			throw new BadRequestException()
@@ -368,7 +386,6 @@ export class UsersService {
 			}
 			
 			const {entity, history} = await this.db.updateUserEntity(privilegedRole, opt);
-			await this.authService.setCustomUserClaims(opt.user, privilegedRole.role);
 			await this.db.insert([entity, history]);
 			return {'status': 'success'};
 		} catch {
@@ -473,7 +490,6 @@ export class UsersService {
 				votes.success = true;
 				// Update the role of the user being voted for and the votes				
 				const {entity, history} = await this.db.updateUserEntity(privilegedRole, privilegedRoleOptions);
-				await this.authService.setCustomUserClaims(userToVoteFor.uid, privilegedRole.role);
 				await this.db.update([votes, entity]);
 				await this.db.insert(history);
 				return {'status': 'success'};

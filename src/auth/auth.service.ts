@@ -22,8 +22,7 @@ export class AuthService {
 
 	async emailVerified(idToken: string){
 		try {
-			const currentUser = await this.getAuth().verifyIdToken(idToken, true);
-			console.log(currentUser.email_verified)
+			const currentUser = await this.getAuth().verifyIdToken(idToken, true)
 			return currentUser.email_verified
 		} catch {
 			return false
@@ -31,6 +30,7 @@ export class AuthService {
 	}
 
 	matchRoles(userRole: string, thresholdRole: string, verified: boolean, path: string){
+		console.log({userRole, thresholdRole, verified, path})
 		// Under no circumstance is an unverified user allowed
 		if(verified === false && path == '/users/auth'){
 			return true
@@ -48,8 +48,13 @@ export class AuthService {
 			// This prevents Moderators and Curators from acting as
 			// Journalists
 			return false
-		} else {
-			thresholdRoleIndex >= userRoleIndex ? true : false;
+		}
+
+		// thresholdRoleIndex >= userRoleIndex ? true : false;
+		if(thresholdRoleIndex >= userRoleIndex){
+			return true
+		}	else {
+			return false
 		}
 	}
 

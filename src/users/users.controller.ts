@@ -15,8 +15,8 @@ import {
 	BadRequestException,
 	NotFoundException
 } from '@nestjs/common';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from './roles.guard';
+import { Roles } from './roles.decorator';
 import { HistoryOpt } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
 import { UserOpt, VoteOpt, RequestOpt} from './users.types';
@@ -42,44 +42,58 @@ export class UsersController {
 		private usersService: UsersService
 	){}
 
-	// Similar the authenticateOne method except for the http verb and the latter
-	// returns only a userName
-	@Get(':userName')
-	@Roles('member')
-	async findOne(
-		@Param('userName') userName: string,
-		@Headers('AuthorizationToken') idToken: string
-	){
-		const user = await this.authService.getUserUid(idToken);
-		return await this.usersService.findUser(userName, user);
+	@Get()
+	async findAllUsers(){
+		return await this.usersService.findAllUsers()
 	}
 
-	@Get('admins')
-	async findAdmins(){
-		return await this.usersService.findAllAdmins();
+	@Get('search')
+	async searchUsername(@Query('q') username: string){
+		console.log('searchUsername')
+		return await this.usersService.checkUserName(username)
 	}
 
-	@Get('curators')
-	async findCurators(){
-		return await this.usersService.findAllCurators();
-	}
-
-	@Get('moderators')
-	async findModerators(){
-		return await this.usersService.findAllModerators();
-	}
-
-	@Get('journalists')
-	async findJournalists(){
-		return await this.usersService.findAllJournalists();
-	}
 	// Check for existing userName
 	@Get('check')
 	async checkExisitingUser(
 		@Query('username') userName: string
 	){
+		console.log('checkExisitingUser')
 		return await this.usersService.checkUserName(userName);
 	}
+
+	// Similar the authenticateOne method except for the http verb and the latter
+	// returns only a userName
+	@Get(':userName')
+	async findOne(@Param('userName') userName: string){
+		console.log('findOne')
+		return await this.usersService.findUserByUsername(userName);
+	}
+
+	@Get('admins')
+	async findAdmins(){
+		console.log('findAdmins')
+		return await this.usersService.findAllAdmins();
+	}
+
+	@Get('curators')
+	async findCurators(){
+		console.log('findCurators')
+		return await this.usersService.findAllCurators();
+	}
+
+	@Get('moderators')
+	async findModerators(){
+		console.log('findModerators')
+		return await this.usersService.findAllModerators();
+	}
+
+	@Get('journalists')
+	async findJournalists(){
+		console.log('findJournalists')
+		return await this.usersService.findAllJournalists();
+	}
+	
 
 	// Every user uses this route to get register more profile infomation
 	@Post('register')
@@ -87,6 +101,7 @@ export class UsersController {
 		@Body() createUserDto: CreateUserDto,
 		@Headers('AuthorizationToken') idToken: string
 	){
+		console.log('setupUser', createUserDto, idToken.slice(0,10))
 		try{
 			const userOptions: UserOpt = {
 				user: await this.authService.getUserUid(idToken),
@@ -105,6 +120,7 @@ export class UsersController {
 	async authenticateOne(
 		@Headers('AuthorizationToken') idToken: string
 	){
+		console.log('authenticateOne')
 		console.log('idToken on /users/auth route')
 		console.log(idToken.slice(0,11)+'...')
 		const user = await this.authService.getUserUid(idToken);
@@ -121,6 +137,7 @@ export class UsersController {
 		@Body() updateUserDto: UpdateUserDto,
 		@Headers('AuthorizationToken') idToken: string
 	){
+		console.log('updateUser')
 		const userOptions: UserOpt = {
 			user: await this.authService.getUserUid(idToken),
 			time: new Date(),
@@ -137,6 +154,7 @@ export class UsersController {
 		@Headers('AuthorizationToken') idToken: string,
 		@UploadedFile() profile: Express.Multer.File
 	){
+		console.log('updateUserPhoto')
 		const imageOptions: ImageOpt = {
 			user: await this.authService.getUserUid(idToken),
 			time: new Date(),
@@ -152,6 +170,7 @@ export class UsersController {
 		@Headers('AuthorizationToken') idToken: string,
 		@Query('image_name') imageName: string
 	){
+		console.log('deleteUserPhoto')
 		const user = await this.authService.getUserUid(idToken);
 		return await this.usersService.removeProfilePhoto(imageName, user);
 	}
@@ -160,6 +179,7 @@ export class UsersController {
 	@Get('admin/journalists/requests')
 	@Roles('admin')
 	async findJournalistRequests(){
+		console.log('findJournalistRequests')
 		return await this.usersService.findAllJournalistRequests();
 	}
 
@@ -172,6 +192,7 @@ export class UsersController {
 		@Body() updateRequestDto: UpdateRequestDto,
 		@Headers('AuthorizationToken') idToken: string
 	){
+		console.log('approveJournalist')
 		const requestOptions: RequestOpt = {
 			userName: userName,
 			user: await this.authService.getUserUid(idToken),
@@ -189,6 +210,7 @@ export class UsersController {
 		@Body() createRequestDto: CreateRequestDto,
 		@Headers('AuthorizationToken') idToken: string
 	){
+		console.log('requestJournalistRole')
 		const requestOptions: RequestOpt = {
 			userName: userName,
 			user: await this.authService.getUserUid(idToken),
@@ -204,6 +226,7 @@ export class UsersController {
 		@Headers('AuthorizationToken') idToken: string,
 		@Query('username') subjectUid: string
 	){
+		console.log('revokeSuperRole')
 		const userOptions: UserOpt = {
 			user: await this.authService.getUserUid(idToken),
 			time: new Date()
@@ -219,6 +242,7 @@ export class UsersController {
 		@Query('username') userName: string,
 		@Query('vote_for') voteFor: string
 	){
+		console.log('proposeVoteForAdmin')
 		const voteOptions: VoteOpt = {
 			user: await this.authService.getUserUid(idToken),
 			userName: userName,
@@ -235,6 +259,7 @@ export class UsersController {
 		@Query('username') userName: string,
 		@Query('vote_for') voteFor: string
 	){
+		console.log('proposeVoteForCurator')
 		const voteOptions: VoteOpt = {
 			user: await this.authService.getUserUid(idToken),
 			userName: userName,
@@ -246,11 +271,12 @@ export class UsersController {
 
 	@Post('votes/moderators')
 	@Roles('moderator')
-	async proposeVoteForModerators(
+	async proposeVoteForModerator(
 		@Headers('AuthorizationToken') idToken: string,
 		@Query('username') userName: string,
 		@Query('vote_for') voteFor: string
 	){
+		console.log('proposeVoteForModerator')
 		const voteOptions: VoteOpt = {
 			user: await this.authService.getUserUid(idToken),
 			userName: userName,
@@ -269,6 +295,7 @@ export class UsersController {
 		@Param('votesId') votesId: string,
 		@Query('vote_for') voteFor: string
 	){
+		console.log('voteForAdmin')
 		const voteOptions: VoteOpt = {
 			user: await this.authService.getUserUid(idToken),
 			userName: userName,
@@ -287,6 +314,7 @@ export class UsersController {
 		@Param('votesId') votesId: string,
 		@Query('vote_for') voteFor: string
 	){
+		console.log('voteForCurator')
 		const voteOptions: VoteOpt = {
 			user: await this.authService.getUserUid(idToken),
 			userName: userName,
@@ -305,6 +333,7 @@ export class UsersController {
 		@Param('votesId') votesId: string,
 		@Query('vote_for') voteFor: string
 	){
+		console.log('voteForModerator')
 		const voteOptions: VoteOpt = {
 			user: await this.authService.getUserUid(idToken),
 			userName: userName,
