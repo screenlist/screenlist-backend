@@ -53,10 +53,9 @@ export class PlatformsService {
 	}
 
 	async updateOne(data: UpdatePlatformDto, opt: PlatformOpt){
-		const {entity, history} = this.db.updatePlatformEntity(data, opt);
+		const {entity, history} = await this.db.updatePlatformEntity(data, opt);
 		try{
-			await this.db.update(entity);
-			await this.db.insert(history);
+			await this.db.upsert([entity, history]);
 			return { 'status': 'updated', 'platform_id': entity.key.id };
 		} catch(err: any){
 			throw new BadRequestException(err.message);
@@ -72,7 +71,7 @@ export class PlatformsService {
 			const [links] = await this.db.runQuery(linksQuery);
 			const [company] = await this.db.get(platformKey);
 			const platformHistoryObj: HistoryOpt = {
-				data: company,
+				dataObject: company,
 				kind: 'Platform',
 				id: platformKey.id,
 				time: opt.time,
@@ -84,7 +83,7 @@ export class PlatformsService {
 				const linkKey = link[this.db.KEY];
 				entities.push({key: linkKey});
 				const linkHistoryObj: HistoryOpt = {
-					data: link,
+					dataObject: link,
 					kind: 'Link',
 					id: linkKey.id,
 					time: opt.time,
@@ -108,9 +107,8 @@ export class PlatformsService {
 				profilePhotoUrl: file.url,
 				profilePhotoOriginalName: file.originalName
 			}
-			const {entity, history} = this.db.updatePlatformEntity(dto, opt);
-			await this.db.update(entity);
-			await this.db.insert(history);
+			const {entity, history} = await this.db.updatePlatformEntity(dto, opt);
+			await this.db.upsert([entity, history]);
 			return { 'status': 'created', 'image_url': entity.data.profilePhotoUrl }
 		} catch {
 			throw new BadRequestException()
@@ -126,10 +124,9 @@ export class PlatformsService {
 				profilePhotoUrl: null,
 				profilePhotoOriginalName: null
 			}
-			const {entity, history} = this.db.updatePlatformEntity(dto, opt);
+			const {entity, history} = await this.db.updatePlatformEntity(dto, opt);
 			await this.storage.deletePoster(platform.profilePhotoOriginalName);
-			await this.db.update(entity);
-			await this.db.insert(history);
+			await this.db.upsert([entity, history]);
 			return {'status': 'deleted'}
 		} catch {
 			throw new BadRequestException()
@@ -140,7 +137,7 @@ export class PlatformsService {
 		const {entity, history} = this.db.createLinkEntity(data, opt);
 		try {
 			await this.db.insert([entity, history]);
-			return { 'status': 'created', 'link_id': entity.key.id }
+			return { 'status': 'created', 'link_id': entity[this.db.KEY]['id'] }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -149,9 +146,8 @@ export class PlatformsService {
 	async updateOneLink(data: UpdateLinkDto, opt: LinkOpt){
 		const {entity, history} = await this.db.updateLinkEntity(data, opt);
 		try {
-			await this.db.update(entity)
-			await this.db.insert(history)
-			return { 'status': 'updated', 'link_id': entity.key.id }
+			await this.db.upsert([entity, history]);
+			return { 'status': 'updated', 'link_id': entity[this.db.KEY]['id'] }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -162,7 +158,7 @@ export class PlatformsService {
 		try {
 			const [link] = await this.db.get(linkKey);
 			const historyObj: HistoryOpt = {
-				data: link,
+				dataObject: link,
 				kind: 'Link',
 				id: linkKey.id,
 				time: opt.time,

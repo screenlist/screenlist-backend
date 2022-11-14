@@ -180,7 +180,8 @@ export class FilmsService {
 		const filmKey = this.db.key('Film');
 		const filmName = film.name;
 		const time = new Date();
-		film.slug = filmName.concat("-"+filmKey.id.toString());
+		film.name = this.db.formatTitle(filmName)
+		film.slug = encodeURIComponent(filmName.toLowerCase().concat("-"+filmKey.id.toString()));
 		film.lastUpdated = time;
 		film.created = time;
 		entities.push({
@@ -189,7 +190,7 @@ export class FilmsService {
 		})
 		// Write film action into history
 		const historyObj: HistoryOpt = {
-			data: film,
+			dataObject: film,
 			user: user,
 			time: time,
 			action: 'create',
@@ -199,7 +200,7 @@ export class FilmsService {
 		entities.push(this.db.formulateHistory(historyObj));
 
 		try {
-			await this.db.transaction().insert(entities);
+			await this.db.insert(entities);
 			return { 'status': 'created', 'film_id': filmKey.id }
 		} catch(err: any){
 			throw new BadRequestException(err.message);
@@ -221,7 +222,7 @@ export class FilmsService {
 		}
 		// Create history
 		const historyObj: HistoryOpt = {
-			data: film,
+			dataObject: film,
 			user: user,
 			time: time,
 			action: 'update',
@@ -230,8 +231,7 @@ export class FilmsService {
 		}
 		const history = this.db.formulateHistory(historyObj);
 		try{
-			await this.db.transaction().update(entity);
-			await this.db.transaction().insert(history);
+			await this.db.upsert([entity, history]);
 			return { 'status': 'updated', 'film_id': entity.key.id };
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -258,7 +258,7 @@ export class FilmsService {
 				if(removal){
 					deletion.push(poster);
 					const historyObj: HistoryOpt = {
-						data: poster,
+						dataObject: poster,
 						user: user,
 						kind: 'Poster',
 						id: poster[this.db.KEY]['id'],
@@ -273,7 +273,7 @@ export class FilmsService {
 				if(removal){
 					deletion.push(still);
 					const historyObj: HistoryOpt = {
-						data: still,
+						dataObject: still,
 						user: user,
 						kind: 'Still',
 						id: still[this.db.KEY]['id'],
@@ -291,7 +291,7 @@ export class FilmsService {
 			links.forEach((link: Link) => {
 				deletion.push(link);
 				const historyObj: HistoryOpt = {
-					data: link,
+					dataObject: link,
 					user: user,
 					kind: 'Link',
 					id: link[this.db.KEY]['id'],
@@ -303,7 +303,7 @@ export class FilmsService {
 			companiesRoles.forEach((role: CompanyRole) => {
 				deletion.push(role);
 				const historyObj: HistoryOpt = {
-					data: role,
+					dataObject: role,
 					user: user,
 					kind: 'CompanyRole',
 					id: role[this.db.KEY]['id'],
@@ -315,7 +315,7 @@ export class FilmsService {
 			peopleRoles.forEach((role: PersonRole) => {
 				deletion.push(role);
 				const historyObj: HistoryOpt = {
-					data: role,
+					dataObject: role,
 					user: user,
 					kind: 'PersonRole',
 					id: role[this.db.KEY]['id'],
@@ -328,7 +328,7 @@ export class FilmsService {
 			deletion.push(film);
 			// Write action into history
 			const historyObj: HistoryOpt = {
-				data: film,
+				dataObject: film,
 				user: user,
 				kind: 'Film',
 				id: filmKey.id,
@@ -370,10 +370,9 @@ export class FilmsService {
 	}
 
 	async updatePoster(data: UpdatePosterDto, opt: ImageOpt){
-		const {entity, history} = this.db.updatePosterEntity(data, opt);
+		const {entity, history} = await this.db.updatePosterEntity(data, opt);
 		try {
-			await this.db.update(entity);
-			await this.db.insert(history);
+			await this.db.upsert([entity, history]);
 			return { 'status': 'updated', 'image_id': entity.key.id}
 		} catch {
 			throw new BadRequestException();
@@ -385,7 +384,7 @@ export class FilmsService {
 			const posterKey = this.db.key([opt.parentKind, +opt.parentId, 'Poster', +opt.imageId]);
 			const [poster] = await this.db.get(posterKey);
 			const historyObj: HistoryOpt = {
-				data: poster,
+				dataObject: poster,
 				user: opt.user,
 				kind: 'Poster',
 				id: posterKey.id,
@@ -422,10 +421,9 @@ export class FilmsService {
 	}
 
 	async updateStill(data: UpdateStillDto, opt: ImageOpt){
-		const {entity, history} = this.db.updateStillEntity(data, opt);
+		const {entity, history} = await this.db.updateStillEntity(data, opt);
 		try {
-			await this.db.update(entity);
-			await this.db.insert(history);
+			await this.db.upsert([entity, history]);
 			return { 'status': 'updated', 'image_id': entity.key.id }
 		} catch {
 			throw new BadRequestException();
@@ -437,7 +435,7 @@ export class FilmsService {
 			const stillKey = this.db.key([opt.parentKind, +opt.parentId, 'Still', +opt.imageId]);
 			const [still] = await this.db.get(stillKey);
 			const historyObj: HistoryOpt = {
-				data: still,
+				dataObject: still,
 				user: opt.user,
 				kind: 'Still',
 				id:stillKey.id,

@@ -53,7 +53,7 @@ export class PeopleService {
 	}
 
 	async updateOne(data: UpdatePersonDto, opt: PersonOpt){
-		const {entity, history} = this.db.updatePersonEntity(data, opt);
+		const {entity, history} = await this.db.updatePersonEntity(data, opt);
 		try{
 			await this.db.update(entity);
 			await this.db.insert(history);
@@ -72,7 +72,7 @@ export class PeopleService {
 			const [roles] = await this.db.runQuery(rolesQuery);
 			const [person] = await this.db.get(personKey);
 			const historyObj: HistoryOpt = {
-				data: person,
+				dataObject: person,
 				kind: 'Person',
 				id: personKey.id,
 				time: opt.time,
@@ -84,7 +84,7 @@ export class PeopleService {
 				const roleKey = role[this.db.KEY];
 				entities.push({key: roleKey});
 				const roleHistoryObj: HistoryOpt = {
-					data: role,
+					dataObject: role,
 					kind: 'PersonRole',
 					id: roleKey.id,
 					time: opt.time,
@@ -108,7 +108,7 @@ export class PeopleService {
 				profilePhotoUrl: file.url,
 				profilePhotoOriginalName: file.originalName
 			}
-			const {entity, history} = this.db.updatePersonEntity(dto, opt);
+			const {entity, history} = await this.db.updatePersonEntity(dto, opt);
 			await this.db.update(entity);
 			await this.db.insert(history);
 			return { 'status': 'created', 'image_url': entity.data.profilePhotoUrl }
@@ -126,7 +126,7 @@ export class PeopleService {
 				profilePhotoUrl: null,
 				profilePhotoOriginalName: null
 			}
-			const {entity, history} = this.db.updatePersonEntity(dto, opt);
+			const {entity, history} = await this.db.updatePersonEntity(dto, opt);
 			await this.storage.deletePoster(person.profilePhotoOriginalName);
 			await this.db.update(entity);
 			await this.db.insert(history);
@@ -152,8 +152,7 @@ export class PeopleService {
 	async updateOneRole(data: UpdatePersonRoleDto, opt: PersonRoleOpt){
 		const {entity, history} = await this.db.updatePersonRoleEntity(data, opt);
 		try {
-			await this.db.update(entity)
-			await this.db.insert(history)
+			await this.db.upsert([entity, history]);
 			return { 'status': 'successfully updated', 'role_id': entity.key.id }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -165,7 +164,7 @@ export class PeopleService {
 		try {
 			const [role] = await this.db.get(roleKey);
 			const historyObj: HistoryOpt = {
-				data: role,
+				dataObject: role,
 				kind: 'PersonRole',
 				id: roleKey.id,
 				time: opt.time,

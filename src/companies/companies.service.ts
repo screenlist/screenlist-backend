@@ -83,10 +83,9 @@ export class CompaniesService {
 	}
 
 	async updateOne(data: UpdateCompanyDto, opt: CompanyOpt){
-		const {entity, history} = this.db.updateCompanyEntity(data, opt);
+		const {entity, history} = await this.db.updateCompanyEntity(data, opt);
 		try{
-			await this.db.update(entity);
-			await this.db.insert(history);
+			await this.db.upsert([entity, history]);
 			return { 'status': 'updated', 'company_id': entity.key.id }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -102,7 +101,7 @@ export class CompaniesService {
 			const [roles] = await this.db.runQuery(rolesQuery);
 			const [company] = await this.db.get(companyKey);
 			const historyObj: HistoryOpt = {
-				data: company,
+				dataObject: company,
 				kind: 'Company',
 				id: companyKey.id,
 				time: opt.time,
@@ -114,7 +113,7 @@ export class CompaniesService {
 				const roleKey = role[this.db.KEY];
 				entities.push({key: roleKey});
 				const roleHistoryObj: HistoryOpt = {
-					data: role,
+					dataObject: role,
 					kind: 'CompanyRole',
 					id: roleKey.id,
 					time: opt.time,
@@ -123,8 +122,8 @@ export class CompaniesService {
 				}
 				history.push(this.db.formulateHistory(roleHistoryObj));
 			})
-			await this.db.transaction().delete(entities);
-			await this.db.transaction().insert(history);
+			await this.db.delete(entities);
+			await this.db.insert(history);
 			return { 'status': 'deleted' };
 		} catch(err:any) {
 			throw new BadRequestException(err.message)
@@ -138,9 +137,8 @@ export class CompaniesService {
 				profilePhotoUrl: file.url,
 				profilePhotoOriginalName: file.originalName
 			}
-			const {entity, history} = this.db.updateCompanyEntity(dto, opt);
-			await this.db.update(entity);
-			await this.db.insert(history);
+			const {entity, history} = await this.db.updateCompanyEntity(dto, opt);
+			await this.db.upsert([entity, history]);
 			return { 'status': 'created', 'image_url': entity.data.profilePhotoUrl }
 		} catch {
 			throw new BadRequestException()
@@ -156,10 +154,9 @@ export class CompaniesService {
 				profilePhotoUrl: null,
 				profilePhotoOriginalName: null
 			}
-			const {entity, history} = this.db.updateCompanyEntity(dto, opt);
+			const {entity, history} = await this.db.updateCompanyEntity(dto, opt);
 			await this.storage.deletePoster(company.profilePhotoOriginalName);
-			await this.db.update(entity);
-			await this.db.insert(history);
+			await this.db.upsert([entity, history]);
 			return {'status': 'deleted'}
 		} catch {
 			throw new BadRequestException()
@@ -173,18 +170,17 @@ export class CompaniesService {
 		}
 		try {
 			await this.db.insert([entity, history]);
-			return { 'status': 'created', 'role_id': entity.key.id }
+			return { 'status': 'created', 'role_id': entity[this.db.KEY]['id'] }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
 	}
 
 	async updateOneRole(data: UpdateCompanyRoleDto, opt: CompanyRoleOpt){
-		const entityData = this.db.updateCompanyRoleEntity(data, opt);
+		const entityData = await this.db.updateCompanyRoleEntity(data, opt);
 		try {
-			await this.db.update(entityData.entity)
-			await this.db.insert(entityData.history)
-			return { 'status': 'updated', 'role_id': entityData.entity.key.id }
+			await this.db.upsert([entityData.entity, entityData.history]);
+			return { 'status': 'updated', 'role_id': entityData.entity[this.db.KEY]['id'] }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -202,7 +198,7 @@ export class CompaniesService {
 		try {
 			const [role] = await this.db.get(roleKey);
 			const historyObj: HistoryOpt = {
-				data: role,
+				dataObject: role,
 				kind: 'CompanyRole',
 				id: roleKey.id,
 				time: opt.time,

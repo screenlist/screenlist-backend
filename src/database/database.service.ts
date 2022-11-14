@@ -91,21 +91,37 @@ export class DatabaseService extends Datastore{
 		return obj
 	}
 
+	formatTitle(title: string){
+		const finalSentence = title.split(" ")
+		return finalSentence.map((word, index) => {
+			const specialWords = ["a", "A", "an", "An", "the", "The", "of", "Of"]
+			// If these words are in the middle of a sentence
+			if(index !== 0 && specialWords.indexOf(word) < 0){
+				return word.toLowerCase()
+			} else {
+				
+				if(word.length == 1){
+					return word.toUpperCase()
+				}
+
+				return word[0].toUpperCase() + word.substring(1)
+			}
+		}).join(" ")
+	}
+
 	// History methods
 	formulateHistory(opt: HistoryOpt){
-		if(opt.data[this.KEY]){
-			delete opt.data[this.KEY];
-		}
 		const key = this.key('History');
-		const history = opt.data;
-		history.entityIdentifier = opt.id;
-		history.entityKind = opt.kind
-		history.resultingAction = opt.action;
-		history.triggeredByUser = opt.user;
-		history.timestamp = opt.time;
 		return {
 			key: key,
-			data: history
+			data: {
+				...opt.dataObject,
+				entityIdentifier: opt.id,
+				entityKind: opt.kind,
+				resultingAction: opt.action,
+				triggeredByUser: opt.user,
+				timestamp: opt.time,
+			}
 		}
 	}
 
@@ -119,7 +135,7 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		const historyObj: HistoryOpt = {
-			data,
+			dataObject: data,
 			user: opt.user,
 			kind: 'Content',
 			id: contentKey.id,
@@ -130,23 +146,37 @@ export class DatabaseService extends Datastore{
 		return {entity, history}
 	}
 
-	updateContentEntity(data: UpdateContentDto, opt: ContentOpt){
+	async updateContentEntity(data: UpdateContentDto, opt: ContentOpt){
 		const contentKey = this.key(['Content', +opt.contentId]);
 		data.lastUpdated = opt.time;
-		const entity = {
-			key: contentKey,
-			data: data
+		try{
+			const [entity] = await this.get(contentKey)
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+			
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'Content',
+				id: contentKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = this.formulateHistory(historyObj);
+			return {entity, history}
+		} catch (err){
+			throw new BadRequestException(err.message);
 		}
-		const historyObj: HistoryOpt = {
-			data,
-			user: opt.user,
-			kind: 'Content',
-			id: contentKey.id,
-			action: 'update',
-			time: opt.time,
-		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	// User methods
@@ -160,36 +190,49 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		const historyObj: HistoryOpt = {
-			data,
+			dataObject: data,
 			user: opt.user,
 			kind: 'User',
 			id: userKey.name,
 			action: 'create',
 			time: opt.time,
 		}
-		const history = this.formulateHistory(historyObj);
-		console.log('history on createUserEntity', history)
+
 		console.log('entity on createUserEntity', entity)
-		return {entity, history}
+		return {entity, history: this.formulateHistory(historyObj)}
 	}
 
-	updateUserEntity(data: UpdateUserDto, opt: UserOpt){
+	async updateUserEntity(data: UpdateUserDto, opt: UserOpt){
 		const userKey = this.key(['User', opt.user]);
 		data.lastUpdated = opt.time;
-		const entity = {
-			key: userKey,
-			data: data
+		try {
+			const [entity] = await this.get(userKey);
+			if(!entity) {
+				throw new BadRequestException("Action not allowed")
+			}			
+
+			// Modify existing data
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'User',
+				id: userKey.name,
+				action: 'update',
+				time: opt.time
+			}
+			console.log('entity on updateUserEntity', entity)
+			return {entity, history: this.formulateHistory(historyObj)}
+		} catch(err: any) {
+			throw new BadRequestException()
 		}
-		const historyObj: HistoryOpt = {
-			data,
-			user: opt.user,
-			kind: 'User',
-			id: userKey.name,
-			action: 'update',
-			time: opt.time
-		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	createVotesEntity(data: CreateVotesDto, opt: VoteOpt){
@@ -201,7 +244,7 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		const historyObj: HistoryOpt = {
-			data,
+			dataObject: data,
 			user: opt.user,
 			kind: 'Vote',
 			id: voteKey.id,
@@ -212,23 +255,37 @@ export class DatabaseService extends Datastore{
 		return {entity, history}
 	}
 
-	updateVotesEntity(data: UpdateVotesDto, opt: VoteOpt){
+	async updateVotesEntity(data: UpdateVotesDto, opt: VoteOpt){
 		const voteKey = this.key(['Vote', +opt.votesId]);
 		data.lastUpdated = opt.time;
-		const entity = {
-			key: voteKey,
-			data: data
+		try {
+			const [entity] = await this.get(voteKey)
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'Vote',
+				id: voteKey.id,
+				action: 'update',
+				time: opt.time
+			}
+			const history = this.formulateHistory(historyObj);
+			return {entity, history}
+		} catch(err: any){
+			throw new BadRequestException(err.message);
 		}
-		const historyObj: HistoryOpt = {
-			data,
-			user: opt.user,
-			kind: 'Vote',
-			id: voteKey.id,
-			action: 'update',
-			time: opt.time
-		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	createRequestEntity(data: CreateRequestDto, opt:RequestOpt){
@@ -240,7 +297,7 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		const historyObj: HistoryOpt = {
-			data,
+			dataObject: data,
 			user: opt.user,
 			kind: 'Request',
 			id: requestKey.id,
@@ -251,23 +308,38 @@ export class DatabaseService extends Datastore{
 		return {entity, history}
 	}
 
-	updateRequestEntity(data: UpdateRequestDto, opt:RequestOpt){
+	async updateRequestEntity(data: UpdateRequestDto, opt:RequestOpt){
 		const requestKey = this.key(['Request', +opt.requestId]);
 		data.lastUpdated = opt.time;
-		const entity = {
-			key: requestKey,
-			data: data
+
+		try {
+			const [entity] = await this.get(requestKey)
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'Request',
+				id: requestKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = this.formulateHistory(historyObj);
+			return {entity, history}
+		} catch(err: any){
+			throw new BadRequestException(err.message);
 		}
-		const historyObj: HistoryOpt = {
-			data,
-			user: opt.user,
-			kind: 'Request',
-			id: requestKey.id,
-			action: 'update',
-			time: opt.time,
-		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	createJournalistInfoEntity(data: CreateJournalistInfoDto, opt: UserOpt){
@@ -279,7 +351,7 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		const historyObj: HistoryOpt = {
-			data,
+			dataObject: data,
 			user: opt.user,
 			kind: 'JournalistInfo',
 			id: infoKey.id,
@@ -290,23 +362,37 @@ export class DatabaseService extends Datastore{
 		return {entity, history}
 	}
 
-	updateJournalistInfoEntity(data: UpdateJournalistInfoDto, opt: UserOpt){
+	async updateJournalistInfoEntity(data: UpdateJournalistInfoDto, opt: UserOpt){
 		const infoKey = this.key(['User', opt.user, 'JournalistInfo']);
 		data.lastUpdated = opt.time;
-		const entity = {
-			key: infoKey,
-			data: data
+		try {
+			const [entity] = await this.get(infoKey)
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'JournalistInfo',
+				id: infoKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = this.formulateHistory(historyObj);
+			return {entity, history}
+		} catch(err: any){
+			throw new BadRequestException(err.message)
 		}
-		const historyObj: HistoryOpt = {
-			data,
-			user: opt.user,
-			kind: 'JournalistInfo',
-			id: infoKey.id,
-			action: 'update',
-			time: opt.time,
-		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	// Still methods
@@ -319,7 +405,7 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		const historyObj: HistoryOpt = {
-			data,
+			dataObject: data,
 			user: opt.user,
 			kind: 'Still',
 			id: stillKey.id,
@@ -330,23 +416,38 @@ export class DatabaseService extends Datastore{
 		return {entity, history}
 	}
 
-	updateStillEntity(data: UpdateStillDto, opt: ImageOpt){
+	async updateStillEntity(data: UpdateStillDto, opt: ImageOpt){
 		const stillKey = this.key([opt.parentKind, +opt.parentId, 'Still', +opt.imageId]);
 		data.lastUpdated = opt.time;
-		const entity = {
-			key: stillKey,
-			data: data
+
+		try {
+			const [entity] = await this.get(stillKey)
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'Still',
+				id: stillKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = this.formulateHistory(historyObj);
+			return {entity, history};
+		} catch(err: any){
+			throw new BadRequestException(err.message)
 		}
-		const historyObj: HistoryOpt = {
-			data,
-			user: opt.user,
-			kind: 'Still',
-			id: stillKey.id,
-			action: 'update',
-			time: opt.time,
-		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history};
 	}
 
 	// Poster methods
@@ -359,7 +460,7 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		const historyObj: HistoryOpt = {
-			data,
+			dataObject: data,
 			user: opt.user,
 			kind: 'Poster',
 			id: posterKey.id,
@@ -370,23 +471,38 @@ export class DatabaseService extends Datastore{
 		return {entity, history};
 	}
 
-	updatePosterEntity(data: UpdatePosterDto, opt: ImageOpt){
+	async updatePosterEntity(data: UpdatePosterDto, opt: ImageOpt){
 		const posterKey = this.key([opt.parentKind, +opt.parentId, 'Poster', +opt.imageId]);
 		data.lastUpdated = opt.time;
-		const entity = {
-			key: posterKey,
-			data: data
+
+		try {
+			const [entity] = await this.get(posterKey)
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'Poster',
+				id: posterKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = this.formulateHistory(historyObj);
+			return {entity, history};
+		} catch (err: any){
+			throw new BadRequestException(err.message);
 		}
-		const historyObj: HistoryOpt = {
-			data,
-			user: opt.user,
-			kind: 'Poster',
-			id: posterKey.id,
-			action: 'update',
-			time: opt.time,
-		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history};
 	}
 
 	// Person methods
@@ -399,7 +515,7 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		const historyObj: HistoryOpt = {
-			data,
+			dataObject: data,
 			user: opt.user,
 			kind: 'Person',
 			id: personKey.id,
@@ -410,21 +526,38 @@ export class DatabaseService extends Datastore{
 		return { entity, history }
 	}
 
-	updatePersonEntity(data: UpdatePersonDto, opt: PersonOpt){
+	async updatePersonEntity(data: UpdatePersonDto, opt: PersonOpt){
 		data.lastUpdated = opt.time;
 		const personKey = this.key(['Person', +opt.personId]);
 
-		const entity ={key: personKey, data};
-		const historyObj: HistoryOpt = {
-			data,
-			user: opt.user,
-			kind: 'Person',
-			id: personKey.id,
-			action: 'update',
-			time: opt.time,
+		try {
+			const [entity] = await this.get(personKey)
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'Person',
+				id: personKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = this.formulateHistory(historyObj);
+			return {entity, history}
+		} catch(err: any){
+			throw new BadRequestException(err.message);
 		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	// PersonRole methods
@@ -442,7 +575,7 @@ export class DatabaseService extends Datastore{
 		}
 		// Create history
 		const historyObj: HistoryOpt = {
-			data,
+			dataObject: data,
 			user: opt.user,
 			kind: 'PersonRole',
 			id: roleKey.id,
@@ -453,28 +586,42 @@ export class DatabaseService extends Datastore{
 		return {entity, history}
 	}
 
-	updatePersonRoleEntity(data: UpdatePersonRoleDto, opt: PersonRoleOpt){
+	async updatePersonRoleEntity(data: UpdatePersonRoleDto, opt: PersonRoleOpt){
 		
 		const personKey = this.datastore.key(['Person', +opt.personId]);
 			
 		const roleKey = this.key(['Person', +personKey.id, opt.parentKind, +opt.parentId,'PersonRole', +opt.roleId]);				
 		data.lastUpdated = opt.time;
-		const entity = {
-			key: roleKey,
-			data: data
-		}
 
-		const historyObj: HistoryOpt = {
-			data,
-			user: opt.user,
-			kind: 'PersonRole',
-			id: roleKey.id,
-			action: 'update',
-			time: opt.time,
-		}
-		const history = this.formulateHistory(historyObj);
+		try {
+			const [entity] = await this.get(roleKey)
 
-		return { entity, history }
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'PersonRole',
+				id: roleKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = this.formulateHistory(historyObj);
+
+			return { entity, history }
+		} catch(err: any){
+			throw new BadRequestException(err.message);
+		}
 	}
 
 	// Company methods
@@ -487,7 +634,7 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		const historyObj: HistoryOpt = {
-			data,
+			dataObject: data,
 			user: opt.user,
 			kind: 'Company',
 			id: companyKey.id,
@@ -498,22 +645,39 @@ export class DatabaseService extends Datastore{
 		return {entity, history}
 	}
 
-	updateCompanyEntity(data: UpdateCompanyDto, opt: CompanyOpt){
+	async updateCompanyEntity(data: UpdateCompanyDto, opt: CompanyOpt){
 		data.lastUpdated = opt.time;
 		const companyKey = this.key(['Company', +opt.companyId]);
 
-		const entity = {key: companyKey, data};
-		const historyObj: HistoryOpt = {
-			data,
-			user: opt.user,
-			kind: 'Company',
-			id: companyKey.id,
-			action: 'update',
-			time: opt.time,
+		try {
+			const [entity] = await this.get(companyKey)
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'Company',
+				id: companyKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = this.formulateHistory(historyObj);
+			
+			return {entity, history}
+		} catch(err: any){
+			throw new BadRequestException(err.message)
 		}
-		const history = this.formulateHistory(historyObj);
-		
-		return {entity, history}
 	}
 
 	// CompanyRole methods
@@ -532,7 +696,7 @@ export class DatabaseService extends Datastore{
 		}
 		// Create history
 		const historyObj: HistoryOpt = {
-			data,
+			dataObject: data,
 			user: opt.user,
 			kind: 'CompanyRole',
 			id: roleKey.id,
@@ -543,27 +707,42 @@ export class DatabaseService extends Datastore{
 		return {entity, history}
 	}
 
-	updateCompanyRoleEntity(data: UpdateCompanyRoleDto, opt: CompanyRoleOpt){
+	async updateCompanyRoleEntity(data: UpdateCompanyRoleDto, opt: CompanyRoleOpt){
 		const companyKey = this.datastore.key(['Company', +opt.companyId]);
 		
 		const roleKey = this.datastore.key(['Company', +companyKey.id, opt.parentKind, +opt.parentId,'CompanyRole', +opt.roleId]);
 		data.lastUpdated = opt.time;
-		const entity = {
-			key: roleKey,
-			data: data
-		}
-		// Creates history
-		const historyObj: HistoryOpt = {
-			data,
-			user: opt.user,
-			kind: 'CompanyRole',
-			id: roleKey.id,
-			action: 'update',
-			time: opt.time,
-		}
-		const history = this.formulateHistory(historyObj);
 
-		return {entity, history}
+		try {
+			const [entity] = await this.get(roleKey)
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			// Creates history
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'CompanyRole',
+				id: roleKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = this.formulateHistory(historyObj);
+
+			return {entity, history}
+		} catch(err: any){
+			throw new BadRequestException(err.message);
+		}
 	}
 
 	// Platform methods
@@ -576,7 +755,7 @@ export class DatabaseService extends Datastore{
 			data: data
 		}
 		const historyObj: HistoryOpt = {
-			data,
+			dataObject: data,
 			user: opt.user,
 			kind: 'Platform',
 			id: platformKey.id,
@@ -587,20 +766,38 @@ export class DatabaseService extends Datastore{
 		return { entity, history }
 	}
 
-	updatePlatformEntity(data: UpdatePlatformDto, opt: PlatformOpt){
+	async updatePlatformEntity(data: UpdatePlatformDto, opt: PlatformOpt){
 		data.lastUpdated = opt.time;
 		const platformKey = this.key(['Platform', +opt.platformId]);
-		const entity = {key: platformKey, data};
-		const historyObj: HistoryOpt = {
-			data,
-			user: opt.user,
-			kind: 'Platform',
-			id: platformKey.id,
-			action: 'update',
-			time: opt.time,
+
+		try {
+			const [entity] = await this.get(platformKey)
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'Platform',
+				id: platformKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = this.formulateHistory(historyObj);
+			return {entity, history}
+		} catch(err: any){
+			throw new BadRequestException(err.message);
 		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	// Link methods
@@ -619,7 +816,7 @@ export class DatabaseService extends Datastore{
 		}
 		// Creates history
 		const historyObj: HistoryOpt = {
-			data,
+			dataObject: data,
 			user: opt.user,
 			kind: 'Link',
 			id: linkKey.id,
@@ -630,25 +827,40 @@ export class DatabaseService extends Datastore{
 		return { entity, history }
 	}
 
-	updateLinkEntity(data: UpdateLinkDto, opt: LinkOpt){
+	async updateLinkEntity(data: UpdateLinkDto, opt: LinkOpt){
 		const platformKey = this.key(['Platform', +opt.platformId]);
 			
 		const linkKey = this.key(['Platform', +platformKey.id, opt.parentKind, +opt.parentId,'Link', +opt.linkId]);
 		data.lastUpdated = opt.time;
-		const entity = {
-			key: linkKey,
-			data: data
+
+		try {
+			const [entity] = await this.get(linkKey)
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			// Creates history
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'Link',
+				id: platformKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = this.formulateHistory(historyObj);
+			return { entity, history }
+		} catch(err: any){
+			throw new BadRequestException(err.message);
 		}
-		// Creates history
-		const historyObj: HistoryOpt = {
-			data,
-			user: opt.user,
-			kind: 'Link',
-			id: platformKey.id,
-			action: 'update',
-			time: opt.time,
-		}
-		const history = this.formulateHistory(historyObj);
-		return { entity, history }
 	}
 }
