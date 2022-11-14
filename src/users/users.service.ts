@@ -68,7 +68,7 @@ export class UsersService {
 		try{
 			const {entity, history} = await this.db.updateRequestEntity(data, opt);
 			const journalist = await this.db.updateUserEntity(journalistData, userOptions);
-			await this.db.update(entity);
+			await this.db.upsert(entity);
 			await this.db.insert([history, journalist.entity, journalist.history]);
 			return {'status': 'created'};
 		} catch{
@@ -96,8 +96,8 @@ export class UsersService {
 				user: uid,
 				time: opt.time
 			}
-			const {entity, history} = this.db.updateUserEntity(updateUser, updateUserOptions)
-			await this.db.update(entity)
+			const {entity, history} = await this.db.updateUserEntity(updateUser, updateUserOptions)
+			await this.db.upsert(entity)
 			await this.db.insert(history)
 		} catch {
 			throw new BadRequestException()
@@ -210,7 +210,7 @@ export class UsersService {
 	async updateJournalistInfo(data: UpdateJournalistInfoDto, opt: UserOpt){
 		try {
 			const {entity, history} = await this.db.updateJournalistInfoEntity(data, opt);
-			await this.db.update(entity);
+			await this.db.upsert(entity);
 			await this.db.insert(history);
 			return {'status': 'updated'}
 		} catch {
@@ -219,7 +219,6 @@ export class UsersService {
 	}
 
 	async checkUserName(userName: string){
-		console.log('checkUserName invoked')
 		const query = this.db.createQuery('User').filter('userName', '=', userName);
 		try {
 			const [result] = await this.db.runQuery(query)
@@ -243,7 +242,7 @@ export class UsersService {
 			const {entity, history} = this.db.createUserEntity(data, opt);
 			const l = await this.db.insert([entity, history]);
 			console.log(l)
-			return { 'status': 'created', 'username': entity.data.userName };
+			return { 'status': 'created', 'username': entity.data.userName, 'role': entity.data.role };
 		} catch(err: any) {
 			console.log(err.message)
 			throw new BadRequestException(err.message)
@@ -260,12 +259,25 @@ export class UsersService {
 				}
 			}
 
-			const {entity, history} = this.db.updateUserEntity(data, opt);
-			await this.db.update(entity);
-			await this.db.insert(history);
-			return { 'status': 'updated' };
-		} catch {
-			throw new BadRequestException()
+			const {entity, history} = await this.db.updateUserEntity(data, opt);
+			console.log("logging from the updateUser method")
+			console.log(entity);
+			console.log(history);
+			await this.db.upsert([entity, history]);
+			return { 'status': 'updated', 'username': entity.userName, 'role': entity.role };
+		} catch(err: any) {
+			console.log(err)
+			throw new BadRequestException(err.message)
+		}
+	}
+
+	async deleteUser(uid: string){
+		const key = this.db.key(['User', uid])
+		try{
+			await this.db.delete(key)
+			return { 'status': 'deleted' }
+		} catch (err: any){
+			throw new BadRequestException(err.message)
 		}
 	}
 
@@ -296,7 +308,7 @@ export class UsersService {
 			const [info] = await this.db.get(userKey);
 			console.log(info)
 			const user: User = info;
-			return { 'username': user.userName };
+			return { 'username': user.userName, 'role': user.role };
 		} catch(err: any) {
 			console.log(err.message)
 			throw new NotFoundException(err.message);
@@ -386,7 +398,7 @@ export class UsersService {
 			}
 			
 			const {entity, history} = await this.db.updateUserEntity(privilegedRole, opt);
-			await this.db.insert([entity, history]);
+			await this.db.upsert([entity, history]);
 			return {'status': 'success'};
 		} catch {
 			throw new BadRequestException();
@@ -499,10 +511,10 @@ export class UsersService {
 					user: opt.user,
 					id: opt.votesId,
 					kind: 'Vote',
-					data: votes,
+					dataObject: votes,
 					time: opt.time
 				}
-				await this.db.update(votes);
+				await this.db.upsert(votes);
 				return {'status': 'voted'}
 			}
 		} catch{

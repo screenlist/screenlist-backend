@@ -116,21 +116,16 @@ export class UsersController {
 
 
 	@Post('auth')
-	@Roles('member')
 	async authenticateOne(
 		@Headers('AuthorizationToken') idToken: string
 	){
 		console.log('authenticateOne')
-		console.log('idToken on /users/auth route')
-		console.log(idToken.slice(0,11)+'...')
 		const user = await this.authService.getUserUid(idToken);
-		console.log("user uid on /users/auth route")
-		console.log(user)
 		return await this.usersService.getUserName(user);
 	}
 
 	// Routes for updating user information
-	@Post(':userName')
+	@Patch(':userName')
 	@Roles('member')
 	async updateUser(
 		@Param('userName') userName: string,
@@ -144,6 +139,13 @@ export class UsersController {
 			userName: userName
 		}
 		return await this.usersService.updateUser(updateUserDto, userOptions);
+	}
+
+	@Delete('delete')
+	@Roles('member')
+	async deleteAcount(@Headers('AuthorizationToken') idToken: string){
+		const uid = await this.authService.getUserUid(idToken);
+		return await this.usersService.deleteUser(uid);
 	}
 
 	@Post(':userName/photo')

@@ -47,6 +47,7 @@ export class UpdateUserDto {
 	@MaxLength(200)
 	bio?: string;
 
+	@IsOptional()
 	@IsEmpty()
 	@IsString()
 	role?: string;

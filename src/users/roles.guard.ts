@@ -27,12 +27,13 @@ export class RolesGuard implements CanActivate {
 		
 		const token: string = request.headers['authorizationtoken'];		
 		console.log('token of the roles guard')
-		console.log(token)
+		console.log(token.substring(0, 10))
 		const uid = await this.authService.getUserUid(token)
+
 		const user = await this.usersService.findUser(uid)
 
 		if(!user){
-			return false
+			return false;
 		}
 
 		const userRole = user.role as string
