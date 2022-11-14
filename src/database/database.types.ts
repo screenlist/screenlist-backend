@@ -1,5 +1,5 @@
 export interface HistoryOpt {
-	data: any,
+	dataObject: any,
 	kind: string,
 	id: string,
 	user: string,

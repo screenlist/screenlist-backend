@@ -130,7 +130,7 @@ export class SeriesService {
 		})
 		// Write series action into history
 		const historyObj: HistoryOpt = {
-			data: series,
+			dataObject: series,
 			user: user,
 			time: time,
 			action: 'create',
@@ -140,7 +140,7 @@ export class SeriesService {
 		entities.push(this.db.formulateHistory(historyObj));
 
 		try {
-			await this.db.transaction().insert(entities);
+			await this.db.insert(entities);
 			return {"status": "successfully created"}
 		} catch(err: any){
 			throw new BadRequestException(err.message);
@@ -163,7 +163,7 @@ export class SeriesService {
 
 		// Create history
 		const historyObj: HistoryOpt = {
-			data: series,
+			dataObject: series,
 			user: user,
 			time: time,
 			action: 'update',
@@ -173,8 +173,7 @@ export class SeriesService {
 		const history = this.db.formulateHistory(historyObj);
 		
 		try{
-			await this.db.transaction().update(entity);
-			await this.db.transaction().insert(history);
+			await this.db.upsert([entity, history]);
 			return { 'status': 'successfully updated' };
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -201,7 +200,7 @@ export class SeriesService {
 				if(removal){
 					deletion.push(poster);
 					const historyObj: HistoryOpt = {
-						data: poster,
+						dataObject: poster,
 						user: user,
 						kind: 'Poster',
 						id: poster[this.db.KEY]['id'],
@@ -216,7 +215,7 @@ export class SeriesService {
 				if(removal){
 					deletion.push(still);
 					const historyObj: HistoryOpt = {
-						data: still,
+						dataObject: still,
 						user: user,
 						kind: 'Still',
 						id: still[this.db.KEY]['id'],
@@ -234,7 +233,7 @@ export class SeriesService {
 			links.forEach((link: Link) => {
 				deletion.push(link);
 				const historyObj: HistoryOpt = {
-					data: link,
+					dataObject: link,
 					user: user,
 					kind: 'Link',
 					id: link[this.db.KEY]['id'],
@@ -246,7 +245,7 @@ export class SeriesService {
 			companiesRoles.forEach((role: CompanyRole) => {
 				deletion.push(role);
 				const historyObj: HistoryOpt = {
-					data: role,
+					dataObject: role,
 					user: user,
 					kind: 'CompanyRole',
 					id: role[this.db.KEY]['id'],
@@ -258,7 +257,7 @@ export class SeriesService {
 			peopleRoles.forEach((role: PersonRole) => {
 				deletion.push(role);
 				const historyObj: HistoryOpt = {
-					data: role,
+					dataObject: role,
 					user: user,
 					kind: 'PersonRole',
 					id: role[this.db.KEY]['id'],
@@ -271,7 +270,7 @@ export class SeriesService {
 			deletion.push(series);
 			// Write action into history
 			const historyObj: HistoryOpt = {
-				data: series,
+				dataObject: series,
 				user: user,
 				kind: 'Series',
 				id: seriesKey.id,
