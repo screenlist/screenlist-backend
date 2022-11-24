@@ -26,7 +26,7 @@ export class PeopleService {
 		const query =  this.db.createQuery('Person').order('name').limit(100);
 		try {
 			const [people] = await this.db.runQuery(query)
-			return people
+			return people.map((person) => ({id: person[this.db.KEY]['id'], ...person}))
 		} catch {
 			throw new NotFoundException('Could not find people')
 		}
@@ -43,9 +43,8 @@ export class PeopleService {
 	}
 
 	async createOne(data: CreatePersonDto, opt: PersonOpt){
-		const {entity, history} = this.db.createPersonEntity(data, opt);
 		try {
-			await this.db.insert([entity, history]);
+			const {entity, history} = await this.db.createPersonEntity(data, opt);
 			return { 'status': 'successfully created', 'person_id': entity.key.id };
 		} catch(err: any){
 			throw new BadRequestException(err.message);
@@ -53,10 +52,8 @@ export class PeopleService {
 	}
 
 	async updateOne(data: UpdatePersonDto, opt: PersonOpt){
-		const {entity, history} = await this.db.updatePersonEntity(data, opt);
-		try{
-			await this.db.update(entity);
-			await this.db.insert(history);
+		try {
+			const {entity, history} = await this.db.updatePersonEntity(data, opt);
 			return { 'status': 'successfully updated', 'person_id': entity.key.id };
 		} catch(err: any){
 			throw new BadRequestException(err.message);
@@ -66,7 +63,6 @@ export class PeopleService {
 	async deleteOne(opt: PersonOpt){
 		const personKey = this.db.key(['{Person', +opt.personId]);
 		const entities = [{key: personKey}]; // entites to be deleted
-		const history = []; // actions to write into history
 		const rolesQuery = this.db.createQuery('{PersonRole').hasAncestor(personKey);
 		try {
 			const [roles] = await this.db.runQuery(rolesQuery);
@@ -79,8 +75,8 @@ export class PeopleService {
 				action: 'delete',
 				user: opt.user
 			}
-			history.push(this.db.formulateHistory(historyObj));
-			roles.forEach((role) => {
+			await this.db.createHistory(historyObj);
+			roles.forEach(async (role) => {
 				const roleKey = role[this.db.KEY];
 				entities.push({key: roleKey});
 				const roleHistoryObj: HistoryOpt = {
@@ -91,10 +87,9 @@ export class PeopleService {
 					action: 'delete',
 					user: opt.user
 				}
-				history.push(this.db.formulateHistory(roleHistoryObj));
+				await this.db.createHistory(roleHistoryObj);
 			})
 			await this.db.transaction().delete(entities);
-			await this.db.transaction().insert(history);
 			return { 'status': 'successfully deleted' };
 		} catch(err:any) {
 			throw new BadRequestException(err.message)
@@ -109,9 +104,7 @@ export class PeopleService {
 				profilePhotoOriginalName: file.originalName
 			}
 			const {entity, history} = await this.db.updatePersonEntity(dto, opt);
-			await this.db.update(entity);
-			await this.db.insert(history);
-			return { 'status': 'created', 'image_url': entity.data.profilePhotoUrl }
+			return { 'status': 'created', 'image_url': entity.profilePhotoUrl }
 		} catch {
 			throw new BadRequestException()
 		}
@@ -137,12 +130,11 @@ export class PeopleService {
 	}
 
 	async createOneRole(data: CreatePersonRoleDto, opt: PersonRoleOpt){
-		const {entity, history} = this.db.createPersonRoleEntity(data, opt);
 		if(!data.category){
 			throw new BadRequestException('role category not specified')
 		}
 		try {
-			await this.db.insert([entity, history]);
+			const {entity, history} = await this.db.createPersonRoleEntity(data, opt);
 			return { 'status': 'successfully created', 'role_id': entity.key.id }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -150,10 +142,9 @@ export class PeopleService {
 	}
 
 	async updateOneRole(data: UpdatePersonRoleDto, opt: PersonRoleOpt){
-		const {entity, history} = await this.db.updatePersonRoleEntity(data, opt);
 		try {
-			await this.db.upsert([entity, history]);
-			return { 'status': 'successfully updated', 'role_id': entity.key.id }
+			const {entity, history} = await this.db.updatePersonRoleEntity(data, opt);
+			return { 'status': 'successfully updated', 'role_id': entity[this.db.KEY]['id'] }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -171,10 +162,9 @@ export class PeopleService {
 				action: 'delete',
 				user: opt.user
 			}
-			const history = this.db.formulateHistory(historyObj);
+			await this.db.createHistory(historyObj);
 			const entity = {key: roleKey};
 			await this.db.delete(entity);
-			await this.db.insert(history);
 			return { 'status': 'successfully deleted' };
 		} catch (err: any){
 			throw new BadRequestException(err.message)

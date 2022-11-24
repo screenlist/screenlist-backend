@@ -73,20 +73,18 @@ export class CompaniesService {
 	}
 
 	async createOne(data: CreateCompanyDto, opt: CompanyOpt){
-		const {entity, history} = this.db.createCompanyEntity(data, opt);
 		try {
-			await this.db.insert([entity, history]);
-			return { 'status': 'created', 'company_id': entity.key.id };
+			const {entity, history} = await this.db.createCompanyEntity(data, opt);
+			return { id: entity.key.id, ...entity.data };
 		} catch(err: any) {
 			throw new BadRequestException(err.message)
 		}
 	}
 
 	async updateOne(data: UpdateCompanyDto, opt: CompanyOpt){
-		const {entity, history} = await this.db.updateCompanyEntity(data, opt);
-		try{
-			await this.db.upsert([entity, history]);
-			return { 'status': 'updated', 'company_id': entity.key.id }
+		try {
+			const {entity, history} = await this.db.updateCompanyEntity(data, opt);
+			return { id: entity[this.db.KEY]['id'], ...entity }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -95,7 +93,6 @@ export class CompaniesService {
 	async deleteOne(opt: CompanyOpt){
 		const companyKey = this.db.key(['Company', +opt.companyId]);
 		const entities = [{key: companyKey}]; // entites to be deleted
-		const history = []; // actions to write into history
 		const rolesQuery = this.db.createQuery('CompanyRole').hasAncestor(companyKey);
 		try {
 			const [roles] = await this.db.runQuery(rolesQuery);
@@ -108,8 +105,8 @@ export class CompaniesService {
 				action: 'delete',
 				user: opt.user
 			}
-			history.push(this.db.formulateHistory(historyObj));
-			roles.forEach((role) => {
+			await this.db.createHistory(historyObj);
+			roles.forEach(async (role) => {
 				const roleKey = role[this.db.KEY];
 				entities.push({key: roleKey});
 				const roleHistoryObj: HistoryOpt = {
@@ -120,10 +117,9 @@ export class CompaniesService {
 					action: 'delete',
 					user: opt.user
 				}
-				history.push(this.db.formulateHistory(roleHistoryObj));
+				await this.db.createHistory(roleHistoryObj);
 			})
 			await this.db.delete(entities);
-			await this.db.insert(history);
 			return { 'status': 'deleted' };
 		} catch(err:any) {
 			throw new BadRequestException(err.message)
@@ -138,8 +134,7 @@ export class CompaniesService {
 				profilePhotoOriginalName: file.originalName
 			}
 			const {entity, history} = await this.db.updateCompanyEntity(dto, opt);
-			await this.db.upsert([entity, history]);
-			return { 'status': 'created', 'image_url': entity.data.profilePhotoUrl }
+			return { id: entity[this.db.KEY]['id'], ...entity }
 		} catch {
 			throw new BadRequestException()
 		}
@@ -156,7 +151,6 @@ export class CompaniesService {
 			}
 			const {entity, history} = await this.db.updateCompanyEntity(dto, opt);
 			await this.storage.deletePoster(company.profilePhotoOriginalName);
-			await this.db.upsert([entity, history]);
 			return {'status': 'deleted'}
 		} catch {
 			throw new BadRequestException()
@@ -164,23 +158,21 @@ export class CompaniesService {
 	}
 
 	async createOneRole(data: CreateCompanyRoleDto, opt: CompanyRoleOpt){
-		const {entity, history} = this.db.createCompanyRoleEntity(data, opt);
 		if(!data.type){
 			throw new BadRequestException('role type not specified')
 		}
 		try {
-			await this.db.insert([entity, history]);
-			return { 'status': 'created', 'role_id': entity[this.db.KEY]['id'] }
+			const {entity, history} = await this.db.createCompanyRoleEntity(data, opt);
+			return { id: entity.key.id, ...entity.data }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
 	}
 
 	async updateOneRole(data: UpdateCompanyRoleDto, opt: CompanyRoleOpt){
-		const entityData = await this.db.updateCompanyRoleEntity(data, opt);
 		try {
-			await this.db.upsert([entityData.entity, entityData.history]);
-			return { 'status': 'updated', 'role_id': entityData.entity[this.db.KEY]['id'] }
+			const entityData = await this.db.updateCompanyRoleEntity(data, opt);
+			return { id: entityData.entity[this.db.KEY]['id'], ...entityData.entity }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -205,10 +197,10 @@ export class CompaniesService {
 				action: 'delete',
 				user: opt.user
 			}
-			const history = this.db.formulateHistory(historyObj);
+			
 			const entity = {key: roleKey};
 			await this.db.delete(entity);
-			await this.db.insert(history);
+			await this.db.createHistory(historyObj);
 			return { 'status': 'deleted' };
 		} catch (err: any){
 			throw new BadRequestException(err.message)

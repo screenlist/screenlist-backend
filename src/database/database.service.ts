@@ -92,27 +92,32 @@ export class DatabaseService extends Datastore{
 	}
 
 	formatTitle(title: string){
-		const finalSentence = title.split(" ")
-		return finalSentence.map((word, index) => {
+		const workingSentence = title.split(" ")
+		const final = workingSentence.map((word, index) => {
 			const specialWords = ["a", "A", "an", "An", "the", "The", "of", "Of"]
 			// If these words are in the middle of a sentence
-			if(index !== 0 && specialWords.indexOf(word) < 0){
+			if(index !== 0 && specialWords.indexOf(word) != -1){
+				console.log("gate 1", "index no "+index, word)
 				return word.toLowerCase()
 			} else {
-				
+				console.log("gate 2", "index no "+index, word)
 				if(word.length == 1){
 					return word.toUpperCase()
 				}
 
 				return word[0].toUpperCase() + word.substring(1)
 			}
-		}).join(" ")
+		})
+		console.log(title)
+		console.log(workingSentence)
+		console.log(final)
+		return final.join(" ")
 	}
 
 	// History methods
-	formulateHistory(opt: HistoryOpt){
+	async createHistory(opt: HistoryOpt){
 		const key = this.key('History');
-		return {
+		const write =  {
 			key: key,
 			data: {
 				...opt.dataObject,
@@ -123,10 +128,17 @@ export class DatabaseService extends Datastore{
 				timestamp: opt.time,
 			}
 		}
+
+		try {
+			await this.insert(write)
+			return write
+		} catch (err: any) {
+			throw new BadRequestException(err.message);
+		}
 	}
 
 	// Content methods
-	createContentEntity(data: CreateContentDto, opt: ContentOpt){
+	async createContentEntity(data: CreateContentDto, opt: ContentOpt){
 		const contentKey = this.key('Content');
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
@@ -134,16 +146,21 @@ export class DatabaseService extends Datastore{
 			key: contentKey,
 			data: data
 		}
-		const historyObj: HistoryOpt = {
-			dataObject: data,
-			user: opt.user,
-			kind: 'Content',
-			id: contentKey.id,
-			action: 'create',
-			time: opt.time,
+		try {
+			await this.insert(entity)
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'Content',
+				id: contentKey.id,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history}
+		} catch(err: any) {
+			throw new NotFoundException(err.message);
 		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	async updateContentEntity(data: UpdateContentDto, opt: ContentOpt){
@@ -163,6 +180,8 @@ export class DatabaseService extends Datastore{
 					entity[key] = data[key]
 				}
 			}
+
+			await this.update(entity);
 			
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
@@ -172,7 +191,7 @@ export class DatabaseService extends Datastore{
 				action: 'update',
 				time: opt.time,
 			}
-			const history = this.formulateHistory(historyObj);
+			const history = await this.createHistory(historyObj);
 			return {entity, history}
 		} catch (err){
 			throw new BadRequestException(err.message);
@@ -180,7 +199,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// User methods
-	createUserEntity(data: CreateUserDto, opt: UserOpt){
+	async createUserEntity(data: CreateUserDto, opt: UserOpt){
 		const userKey = this.key(['User', opt.user]);
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
@@ -189,17 +208,22 @@ export class DatabaseService extends Datastore{
 			key: userKey,
 			data: data
 		}
-		const historyObj: HistoryOpt = {
-			dataObject: data,
-			user: opt.user,
-			kind: 'User',
-			id: userKey.name,
-			action: 'create',
-			time: opt.time,
-		}
+		try {
+			await this.insert(entity)
 
-		console.log('entity on createUserEntity', entity)
-		return {entity, history: this.formulateHistory(historyObj)}
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'User',
+				id: userKey.name,
+				action: 'create',
+				time: opt.time,
+			}
+
+			return {entity, history: await this.createHistory(historyObj)}
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
+		}
 	}
 
 	async updateUserEntity(data: UpdateUserDto, opt: UserOpt){
@@ -220,6 +244,8 @@ export class DatabaseService extends Datastore{
 				}
 			}
 
+			await this.update(entity);
+
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
 				user: opt.user,
@@ -228,14 +254,14 @@ export class DatabaseService extends Datastore{
 				action: 'update',
 				time: opt.time
 			}
-			console.log('entity on updateUserEntity', entity)
-			return {entity, history: this.formulateHistory(historyObj)}
+
+			return {entity, history: await this.createHistory(historyObj)}
 		} catch(err: any) {
-			throw new BadRequestException()
+			throw new BadRequestException();
 		}
 	}
 
-	createVotesEntity(data: CreateVotesDto, opt: VoteOpt){
+	async createVotesEntity(data: CreateVotesDto, opt: VoteOpt){
 		const voteKey = this.key('Vote');
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
@@ -243,16 +269,21 @@ export class DatabaseService extends Datastore{
 			key: voteKey,
 			data: data
 		}
-		const historyObj: HistoryOpt = {
-			dataObject: data,
-			user: opt.user,
-			kind: 'Vote',
-			id: voteKey.id,
-			action: 'create',
-			time: opt.time,
+		try {
+			await this.insert(entity)
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'Vote',
+				id: voteKey.id,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history}
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
 		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	async updateVotesEntity(data: UpdateVotesDto, opt: VoteOpt){
@@ -273,6 +304,8 @@ export class DatabaseService extends Datastore{
 				}
 			}
 
+			await this.update(entity);
+
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
 				user: opt.user,
@@ -281,14 +314,14 @@ export class DatabaseService extends Datastore{
 				action: 'update',
 				time: opt.time
 			}
-			const history = this.formulateHistory(historyObj);
+			const history = await this.createHistory(historyObj);
 			return {entity, history}
 		} catch(err: any){
 			throw new BadRequestException(err.message);
 		}
 	}
 
-	createRequestEntity(data: CreateRequestDto, opt:RequestOpt){
+	async createRequestEntity(data: CreateRequestDto, opt:RequestOpt){
 		const requestKey = this.key('Request');
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
@@ -296,16 +329,23 @@ export class DatabaseService extends Datastore{
 			key: requestKey,
 			data: data
 		}
-		const historyObj: HistoryOpt = {
-			dataObject: data,
-			user: opt.user,
-			kind: 'Request',
-			id: requestKey.id,
-			action: 'create',
-			time: opt.time,
+
+		try {
+			await this.insert(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'Request',
+				id: requestKey.id,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history}
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
 		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	async updateRequestEntity(data: UpdateRequestDto, opt:RequestOpt){
@@ -327,6 +367,8 @@ export class DatabaseService extends Datastore{
 				}
 			}
 
+			await this.update(entity)
+
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
 				user: opt.user,
@@ -335,14 +377,14 @@ export class DatabaseService extends Datastore{
 				action: 'update',
 				time: opt.time,
 			}
-			const history = this.formulateHistory(historyObj);
+			const history = await this.createHistory(historyObj);
 			return {entity, history}
 		} catch(err: any){
 			throw new BadRequestException(err.message);
 		}
 	}
 
-	createJournalistInfoEntity(data: CreateJournalistInfoDto, opt: UserOpt){
+	async createJournalistInfoEntity(data: CreateJournalistInfoDto, opt: UserOpt){
 		const infoKey = this.key(['User', opt.user, 'JournalistInfo']);
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
@@ -350,16 +392,22 @@ export class DatabaseService extends Datastore{
 			key: infoKey,
 			data: data
 		}
-		const historyObj: HistoryOpt = {
-			dataObject: data,
-			user: opt.user,
-			kind: 'JournalistInfo',
-			id: infoKey.id,
-			action: 'create',
-			time: opt.time,
+		try {
+			await this.insert(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'JournalistInfo',
+				id: infoKey.id,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history}
+		} catch(err: any) {
+			throw new NotFoundException(err.message);
 		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	async updateJournalistInfoEntity(data: UpdateJournalistInfoDto, opt: UserOpt){
@@ -380,6 +428,8 @@ export class DatabaseService extends Datastore{
 				}
 			}
 
+			await this.update(entity);
+
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
 				user: opt.user,
@@ -388,7 +438,7 @@ export class DatabaseService extends Datastore{
 				action: 'update',
 				time: opt.time,
 			}
-			const history = this.formulateHistory(historyObj);
+			const history = await this.createteHistory(historyObj);
 			return {entity, history}
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -396,7 +446,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Still methods
-	createStillEntity(data: CreateStillDto, opt: ImageOpt){
+	async createStillEntity(data: CreateStillDto, opt: ImageOpt){
 		const stillKey = this.key([opt.parentKind, +opt.parentId, 'Still']);
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
@@ -404,16 +454,22 @@ export class DatabaseService extends Datastore{
 			key: stillKey,
 			data: data
 		}
-		const historyObj: HistoryOpt = {
-			dataObject: data,
-			user: opt.user,
-			kind: 'Still',
-			id: stillKey.id,
-			action: 'create',
-			time: opt.time,
+		try {
+			await this.insert(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'Still',
+				id: stillKey.id,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history}
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
 		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	async updateStillEntity(data: UpdateStillDto, opt: ImageOpt){
@@ -435,6 +491,8 @@ export class DatabaseService extends Datastore{
 				}
 			}
 
+			await this.update(entity);
+
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
 				user: opt.user,
@@ -443,7 +501,7 @@ export class DatabaseService extends Datastore{
 				action: 'update',
 				time: opt.time,
 			}
-			const history = this.formulateHistory(historyObj);
+			const history = await this.createHistory(historyObj);
 			return {entity, history};
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -451,7 +509,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Poster methods
-	createPosterEntity(data: CreatePosterDto, opt: ImageOpt){
+	async createPosterEntity(data: CreatePosterDto, opt: ImageOpt){
 		const posterKey = this.key([opt.parentKind, +opt.parentId, 'Poster']);
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
@@ -459,16 +517,21 @@ export class DatabaseService extends Datastore{
 			key: posterKey,
 			data: data
 		}
-		const historyObj: HistoryOpt = {
-			dataObject: data,
-			user: opt.user,
-			kind: 'Poster',
-			id: posterKey.id,
-			action: 'create',
-			time: opt.time,
+		try {
+			await this.insert(entity);
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'Poster',
+				id: posterKey.id,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history};
+		} catch (err: any) {
+			throw new BadRequestException(err.message)
 		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history};
 	}
 
 	async updatePosterEntity(data: UpdatePosterDto, opt: ImageOpt){
@@ -490,6 +553,8 @@ export class DatabaseService extends Datastore{
 				}
 			}
 
+			await this.update(entity);
+
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
 				user: opt.user,
@@ -498,7 +563,7 @@ export class DatabaseService extends Datastore{
 				action: 'update',
 				time: opt.time,
 			}
-			const history = this.formulateHistory(historyObj);
+			const history = await this.createHistory(historyObj);
 			return {entity, history};
 		} catch (err: any){
 			throw new BadRequestException(err.message);
@@ -506,7 +571,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Person methods
-	createPersonEntity(data: CreatePersonDto, opt: PersonOpt){
+	async createPersonEntity(data: CreatePersonDto, opt: PersonOpt){
 		const personKey = this.key('Person');
 		data.created = opt.time;
 		data.lastUpdated = opt.time;
@@ -514,16 +579,22 @@ export class DatabaseService extends Datastore{
 			key: personKey,
 			data: data
 		}
-		const historyObj: HistoryOpt = {
-			dataObject: data,
-			user: opt.user,
-			kind: 'Person',
-			id: personKey.id,
-			action: 'create',
-			time: opt.time,
+		try {
+			await this.insert(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'Person',
+				id: personKey.id,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return { entity, history }
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
 		}
-		const history = this.formulateHistory(historyObj);
-		return { entity, history }
 	}
 
 	async updatePersonEntity(data: UpdatePersonDto, opt: PersonOpt){
@@ -545,6 +616,8 @@ export class DatabaseService extends Datastore{
 				}
 			}
 
+			await this.update(entity);
+
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
 				user: opt.user,
@@ -553,7 +626,7 @@ export class DatabaseService extends Datastore{
 				action: 'update',
 				time: opt.time,
 			}
-			const history = this.formulateHistory(historyObj);
+			const history = await this.createHistory(historyObj);
 			return {entity, history}
 		} catch(err: any){
 			throw new BadRequestException(err.message);
@@ -561,7 +634,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// PersonRole methods
-	createPersonRoleEntity(data: CreatePersonRoleDto, opt: PersonRoleOpt){
+	async createPersonRoleEntity(data: CreatePersonRoleDto, opt: PersonRoleOpt){
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
 		data.ownerKind = opt.parentKind;
@@ -573,17 +646,24 @@ export class DatabaseService extends Datastore{
 			key: roleKey,
 			data: data
 		}
-		// Create history
-		const historyObj: HistoryOpt = {
-			dataObject: data,
-			user: opt.user,
-			kind: 'PersonRole',
-			id: roleKey.id,
-			action: 'create',
-			time: opt.time,
+
+		try {
+			await this.insert(entity);
+
+			// Create history
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'PersonRole',
+				id: roleKey.id,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history}
+		} catch(err: any) {
+			throw new NotFoundException(err.message);
 		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	async updatePersonRoleEntity(data: UpdatePersonRoleDto, opt: PersonRoleOpt){
@@ -608,6 +688,8 @@ export class DatabaseService extends Datastore{
 				}
 			}
 
+			await this.update(entity);
+
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
 				user: opt.user,
@@ -616,7 +698,7 @@ export class DatabaseService extends Datastore{
 				action: 'update',
 				time: opt.time,
 			}
-			const history = this.formulateHistory(historyObj);
+			const history = await this.createHistory(historyObj);
 
 			return { entity, history }
 		} catch(err: any){
@@ -625,7 +707,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Company methods
-	createCompanyEntity(data: CreateCompanyDto, opt: CompanyOpt){
+	async createCompanyEntity(data: CreateCompanyDto, opt: CompanyOpt){
 		const companyKey = this.key('Company');
 		data.created = opt.time;
 		data.lastUpdated = opt.time;
@@ -633,16 +715,22 @@ export class DatabaseService extends Datastore{
 			key: companyKey,
 			data: data
 		}
-		const historyObj: HistoryOpt = {
-			dataObject: data,
-			user: opt.user,
-			kind: 'Company',
-			id: companyKey.id,
-			action: 'create',
-			time: opt.time,
+		try {
+			await this.insert(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'Company',
+				id: companyKey.id,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history}
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
 		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	async updateCompanyEntity(data: UpdateCompanyDto, opt: CompanyOpt){
@@ -664,6 +752,8 @@ export class DatabaseService extends Datastore{
 				}
 			}
 
+			await this.update(entity);
+
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
 				user: opt.user,
@@ -672,16 +762,16 @@ export class DatabaseService extends Datastore{
 				action: 'update',
 				time: opt.time,
 			}
-			const history = this.formulateHistory(historyObj);
+			const history = await this.createHistory(historyObj);
 			
 			return {entity, history}
 		} catch(err: any){
-			throw new BadRequestException(err.message)
+			throw new BadRequestException(err.message);
 		}
 	}
 
 	// CompanyRole methods
-	createCompanyRoleEntity(data: CreateCompanyRoleDto, opt: CompanyRoleOpt){
+	async createCompanyRoleEntity(data: CreateCompanyRoleDto, opt: CompanyRoleOpt){
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
 		data.ownerKind = opt.parentKind;
@@ -694,17 +784,24 @@ export class DatabaseService extends Datastore{
 			key: roleKey,
 			data: data
 		}
-		// Create history
-		const historyObj: HistoryOpt = {
-			dataObject: data,
-			user: opt.user,
-			kind: 'CompanyRole',
-			id: roleKey.id,
-			action: 'update',
-			time: opt.time,
+
+		try {
+			await this.insert(entity);
+
+			// Create history
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'CompanyRole',
+				id: roleKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history}
+		} catch (err: any){
+			throw new NotFoundException(err.message);
 		}
-		const history = this.formulateHistory(historyObj);
-		return {entity, history}
 	}
 
 	async updateCompanyRoleEntity(data: UpdateCompanyRoleDto, opt: CompanyRoleOpt){
@@ -728,6 +825,8 @@ export class DatabaseService extends Datastore{
 				}
 			}
 
+			await this.update(entity);
+
 			// Creates history
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
@@ -737,7 +836,7 @@ export class DatabaseService extends Datastore{
 				action: 'update',
 				time: opt.time,
 			}
-			const history = this.formulateHistory(historyObj);
+			const history = await this.createHistory(historyObj);
 
 			return {entity, history}
 		} catch(err: any){
@@ -746,7 +845,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Platform methods
-	createPlatformEntity(data: CreatePlatformDto, opt: PlatformOpt){
+	async createPlatformEntity(data: CreatePlatformDto, opt: PlatformOpt){
 		const platformKey = this.key('Platform');
 		data.created = opt.time;
 		data.lastUpdated = opt.time;
@@ -754,16 +853,23 @@ export class DatabaseService extends Datastore{
 			key: platformKey,
 			data: data
 		}
-		const historyObj: HistoryOpt = {
-			dataObject: data,
-			user: opt.user,
-			kind: 'Platform',
-			id: platformKey.id,
-			action: 'create',
-			time: opt.time,
+
+		try {
+			await this.insert(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'Platform',
+				id: platformKey.id,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return { entity, history }
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
 		}
-		const history = this.formulateHistory(historyObj);
-		return { entity, history }
 	}
 
 	async updatePlatformEntity(data: UpdatePlatformDto, opt: PlatformOpt){
@@ -785,6 +891,8 @@ export class DatabaseService extends Datastore{
 				}
 			}
 
+			await this.update(entity);
+
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
 				user: opt.user,
@@ -793,7 +901,7 @@ export class DatabaseService extends Datastore{
 				action: 'update',
 				time: opt.time,
 			}
-			const history = this.formulateHistory(historyObj);
+			const history = await this.createHistory(historyObj);
 			return {entity, history}
 		} catch(err: any){
 			throw new BadRequestException(err.message);
@@ -801,7 +909,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	// Link methods
-	createLinkEntity(data: CreateLinkDto, opt: LinkOpt){
+	async createLinkEntity(data: CreateLinkDto, opt: LinkOpt){
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
 		data.ownerKind = opt.parentKind;
@@ -814,17 +922,22 @@ export class DatabaseService extends Datastore{
 			key: linkKey,
 			data: data
 		}
-		// Creates history
-		const historyObj: HistoryOpt = {
-			dataObject: data,
-			user: opt.user,
-			kind: 'Link',
-			id: linkKey.id,
-			action: 'create',
-			time: opt.time,
+		try {
+			await this.insert(entity);
+			// Creates history
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'Link',
+				id: linkKey.id,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return { entity, history }
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
 		}
-		const history = this.formulateHistory(historyObj);
-		return { entity, history }
 	}
 
 	async updateLinkEntity(data: UpdateLinkDto, opt: LinkOpt){
@@ -848,6 +961,8 @@ export class DatabaseService extends Datastore{
 				}
 			}
 
+			await this.update(entity);
+
 			// Creates history
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
@@ -857,7 +972,7 @@ export class DatabaseService extends Datastore{
 				action: 'update',
 				time: opt.time,
 			}
-			const history = this.formulateHistory(historyObj);
+			const history = await this.createHistory(historyObj);
 			return { entity, history }
 		} catch(err: any){
 			throw new BadRequestException(err.message);

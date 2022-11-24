@@ -49,8 +49,7 @@ export class UsersService {
 		data.createdBy = opt.user
 		try{
 			const {entity, history} = await this.db.createRequestEntity(data, opt);
-			await this.db.transaction().insert([entity, history]);
-			return {'status': 'created'};
+			return entity.data
 		} catch{
 			throw new BadRequestException('action failed');
 		}
@@ -68,9 +67,7 @@ export class UsersService {
 		try{
 			const {entity, history} = await this.db.updateRequestEntity(data, opt);
 			const journalist = await this.db.updateUserEntity(journalistData, userOptions);
-			await this.db.upsert(entity);
-			await this.db.insert([history, journalist.entity, journalist.history]);
-			return {'status': 'created'};
+			return {request: entity, journalist: journalist.entity};
 		} catch{
 			throw new BadRequestException('action failed');
 		}
@@ -97,8 +94,7 @@ export class UsersService {
 				time: opt.time
 			}
 			const {entity, history} = await this.db.updateUserEntity(updateUser, updateUserOptions)
-			await this.db.upsert(entity)
-			await this.db.insert(history)
+			return entity
 		} catch {
 			throw new BadRequestException()
 		}
@@ -239,9 +235,7 @@ export class UsersService {
 				throw new BadRequestException('Username already taken');
 			}
 
-			const {entity, history} = this.db.createUserEntity(data, opt);
-			const l = await this.db.insert([entity, history]);
-			console.log(l)
+			const {entity, history} = await this.db.createUserEntity(data, opt);
 			return { 'status': 'created', 'username': entity.data.userName, 'role': entity.data.role };
 		} catch(err: any) {
 			console.log(err.message)
@@ -260,10 +254,6 @@ export class UsersService {
 			}
 
 			const {entity, history} = await this.db.updateUserEntity(data, opt);
-			console.log("logging from the updateUser method")
-			console.log(entity);
-			console.log(history);
-			await this.db.upsert([entity, history]);
 			return { 'status': 'updated', 'username': entity.userName, 'role': entity.role };
 		} catch(err: any) {
 			console.log(err)
@@ -398,7 +388,6 @@ export class UsersService {
 			}
 			
 			const {entity, history} = await this.db.updateUserEntity(privilegedRole, opt);
-			await this.db.upsert([entity, history]);
 			return {'status': 'success'};
 		} catch {
 			throw new BadRequestException();
@@ -502,8 +491,7 @@ export class UsersService {
 				votes.success = true;
 				// Update the role of the user being voted for and the votes				
 				const {entity, history} = await this.db.updateUserEntity(privilegedRole, privilegedRoleOptions);
-				await this.db.update([votes, entity]);
-				await this.db.insert(history);
+				await this.db.update(votes);
 				return {'status': 'success'};
 			} else {
 				const historyOptions: HistoryOpt = {
@@ -514,7 +502,7 @@ export class UsersService {
 					dataObject: votes,
 					time: opt.time
 				}
-				await this.db.upsert(votes);
+				await this.db.update(votes);
 				return {'status': 'voted'}
 			}
 		} catch{
@@ -552,7 +540,6 @@ export class UsersService {
 					lastUpdated: opt.time
 				}
 				const {entity, history} = await this.db.createVotesEntity(voteEntity, opt);
-				await this.db.insert([entity, history]);
 				return {'status': 'created'}
 			} else if(role == 'moderator'){
 				// Only 60% of approval points needed for this motion to succeed
@@ -569,7 +556,6 @@ export class UsersService {
 					lastUpdated: opt.time
 				}
 				const {entity, history} = await this.db.createVotesEntity(voteEntity, opt);
-				await this.db.insert([entity, history]);
 				return {'status': 'created'}
 			} else {
 				return {'status': 'unsuccessful'}

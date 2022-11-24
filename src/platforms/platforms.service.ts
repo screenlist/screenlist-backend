@@ -43,9 +43,8 @@ export class PlatformsService {
 	}
 
 	async createOne(data: CreatePlatformDto, opt: PlatformOpt){
-		const {entity, history} = this.db.createPlatformEntity(data, opt);
-		try {
-			await this.db.insert([entity, history]);
+		try{
+			const {entity, history} = await this.db.createPlatformEntity(data, opt);
 			return { 'status': 'created', 'platform_id': entity.key.id };
 		} catch(err: any){
 			throw new BadRequestException(err.message);
@@ -56,7 +55,7 @@ export class PlatformsService {
 		const {entity, history} = await this.db.updatePlatformEntity(data, opt);
 		try{
 			await this.db.upsert([entity, history]);
-			return { 'status': 'updated', 'platform_id': entity.key.id };
+			return { 'status': 'updated', 'platform_id': entity[this.db.KEY]['id'] };
 		} catch(err: any){
 			throw new BadRequestException(err.message);
 		}
@@ -65,7 +64,6 @@ export class PlatformsService {
 	async deleteOne(opt: PlatformOpt){
 		const platformKey = this.db.key(['{Platform', +opt.platformId]);
 		const entities = [{key: platformKey}]; // entites to be deleted
-		const history = []; // actions to write into history
 		const linksQuery = this.db.createQuery('{PlatformRole').hasAncestor(platformKey);
 		try {
 			const [links] = await this.db.runQuery(linksQuery);
@@ -78,8 +76,8 @@ export class PlatformsService {
 				action: 'delete',
 				user: opt.user
 			}
-			history.push(this.db.formulateHistory(platformHistoryObj));
-			links.forEach((link) => {
+			await this.db.creaateHistory(platformHistoryObj);
+			links.forEach(async (link) => {
 				const linkKey = link[this.db.KEY];
 				entities.push({key: linkKey});
 				const linkHistoryObj: HistoryOpt = {
@@ -90,10 +88,9 @@ export class PlatformsService {
 					action: 'delete',
 					user: opt.user
 				}
-				history.push(this.db.formulateHistory(linkHistoryObj));
+				await this.db.createHistory(linkHistoryObj);
 			})
 			await this.db.transaction().delete(entities);
-			await this.db.transaction().insert(history);
 			return { 'status': 'deleted' };
 		} catch(err:any) {
 			throw new BadRequestException(err.message)
@@ -108,8 +105,7 @@ export class PlatformsService {
 				profilePhotoOriginalName: file.originalName
 			}
 			const {entity, history} = await this.db.updatePlatformEntity(dto, opt);
-			await this.db.upsert([entity, history]);
-			return { 'status': 'created', 'image_url': entity.data.profilePhotoUrl }
+			return { 'status': 'created', 'image_url': entity.profilePhotoUrl }
 		} catch {
 			throw new BadRequestException()
 		}
@@ -126,7 +122,6 @@ export class PlatformsService {
 			}
 			const {entity, history} = await this.db.updatePlatformEntity(dto, opt);
 			await this.storage.deletePoster(platform.profilePhotoOriginalName);
-			await this.db.upsert([entity, history]);
 			return {'status': 'deleted'}
 		} catch {
 			throw new BadRequestException()
@@ -134,9 +129,8 @@ export class PlatformsService {
 	}
 
 	async createOneLink(data: CreateLinkDto, opt: LinkOpt){
-		const {entity, history} = this.db.createLinkEntity(data, opt);
 		try {
-			await this.db.insert([entity, history]);
+			const {entity, history} = await this.db.createLinkEntity(data, opt);
 			return { 'status': 'created', 'link_id': entity[this.db.KEY]['id'] }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -144,9 +138,8 @@ export class PlatformsService {
 	}
 
 	async updateOneLink(data: UpdateLinkDto, opt: LinkOpt){
-		const {entity, history} = await this.db.updateLinkEntity(data, opt);
 		try {
-			await this.db.upsert([entity, history]);
+			const {entity, history} = await this.db.updateLinkEntity(data, opt);
 			return { 'status': 'updated', 'link_id': entity[this.db.KEY]['id'] }
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -165,10 +158,9 @@ export class PlatformsService {
 				action: 'delete',
 				user: opt.user
 			}
-			const history = this.db.formulateHistory(historyObj);
+			await this.db.createHistory(historyObj);
 			const entity = {key: linkKey};
 			await this.db.delete(entity);
-			await this.db.insert(history);
 			return { 'status': 'deleted' };
 		} catch (err: any){
 			throw new BadRequestException(err.message)

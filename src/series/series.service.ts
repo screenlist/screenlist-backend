@@ -30,27 +30,34 @@ export class SeriesService {
 		this.storage = new StorageService(configService);
 	}
 
-	async findAll(): Promise<SeriesType[]>{
+	async findAll() {
 		const query = this.db.createQuery('Series').filter('status', '=', 'public').limit(20)
-		const results = []
 		try {
-			const series = await this.db.runQueryFull(query)
+			const [series] = await this.db.runQuery(query)
 			// Loop through each series to retrieve its poster
-			series[0].forEach(async (series: Series) => {
+			if(!series.length){
+				return []
+			}
+
+			series[0].map(async (series: Series) => {
 				const seriesKey = this.db.key(['Series', series.id])
 				const posterQuery = this.db.createQuery('Poster')
 					.hasAncestor(seriesKey)
 					.filter('quality', '=', 'SD')
 					.limit(1);
-				const posters: Poster[] = await this.db.runQueryFull(posterQuery);
-				const wholeFilm: SeriesType = {
-					details: series,
-					posters: posters
+				const [poster] = await this.db.runQuery(posterQuery);
+				if(!poster.length){
+					return series
 				}
-				results.push(wholeFilm);
+				const wholeSeries = {
+					...series,
+					posterUrl: poster[0]['url']
+				}
+				return wholeSeries
 			})
-			return results
-		} catch {
+			return series[0]
+		} catch (err: any) {
+			console.log(err)
 			throw new NotFoundException('Encountered trouble while trying to retrieve');
 		}
 	}
@@ -115,8 +122,6 @@ export class SeriesService {
 	}
 
 	async createOne(series: CreateSeriesDto, user: string){
-		// A variable to house all entities created
-		let entities = []
 		// Creates the series details entity
 		const seriesKey = this.db.key('Series');
 		const filmName = series.name;
@@ -124,24 +129,23 @@ export class SeriesService {
 		series.slug = filmName.concat("-"+seriesKey.id.toString());
 		series.lastUpdated = time;
 		series.created = time;
-		entities.push({
+		const entity = {
 			key: seriesKey,
 			data: series
-		})
-		// Write series action into history
-		const historyObj: HistoryOpt = {
-			dataObject: series,
-			user: user,
-			time: time,
-			action: 'create',
-			kind: 'Series',
-			id: seriesKey.id
 		}
-		entities.push(this.db.formulateHistory(historyObj));
-
 		try {
-			await this.db.insert(entities);
-			return {"status": "successfully created"}
+			await this.db.insert(entity);
+			// Write series action into history
+			const historyObj: HistoryOpt = {
+				dataObject: series,
+				user: user,
+				time: time,
+				action: 'create',
+				kind: 'Series',
+				id: seriesKey.id
+			}
+			await this.db.createHistory(historyObj)
+			return entity.data;
 		} catch(err: any){
 			throw new BadRequestException(err.message);
 		}
@@ -160,21 +164,19 @@ export class SeriesService {
 			key: seriesKey,
 			data: series
 		}
-
-		// Create history
-		const historyObj: HistoryOpt = {
-			dataObject: series,
-			user: user,
-			time: time,
-			action: 'update',
-			kind: 'Series',
-			id: seriesKey.id
-		}
-		const history = this.db.formulateHistory(historyObj);
-		
 		try{
-			await this.db.upsert([entity, history]);
-			return { 'status': 'successfully updated' };
+		 	await this.db.update(entity);
+			// Create history
+			const historyObj: HistoryOpt = {
+				dataObject: series,
+				user: user,
+				time: time,
+				action: 'update',
+				kind: 'Series',
+				id: seriesKey.id
+			}
+			const history = await this.db.createHistory(historyObj);
+			return entity.data;
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -207,7 +209,7 @@ export class SeriesService {
 						action: 'delete',
 						time: time,
 					}
-					history.push(this.db.formulateHistory(historyObj));
+					await this.db.createHistory(historyObj);
 				}
 			})
 			stills.forEach(async (still: Still) => {
@@ -222,7 +224,7 @@ export class SeriesService {
 						action: 'delete',
 						time: time,
 					}
-					history.push(this.db.formulateHistory(historyObj));
+					await this.db.createHistory(historyObj);
 				}
 			})
 
@@ -230,7 +232,7 @@ export class SeriesService {
 			const [companiesRoles] = await this.db.runQuery(companiesRolesQuery);
 			const [peopleRoles] = await this.db.runQuery(peopleRolesQuery);
 
-			links.forEach((link: Link) => {
+			links.forEach( async (link: Link) => {
 				deletion.push(link);
 				const historyObj: HistoryOpt = {
 					dataObject: link,
@@ -240,9 +242,9 @@ export class SeriesService {
 					action: 'delete',
 					time: time,
 				}
-				history.push(this.db.formulateHistory(historyObj));
+				await this.db.createHistory(historyObj);
 			})
-			companiesRoles.forEach((role: CompanyRole) => {
+			companiesRoles.forEach( async (role: CompanyRole) => {
 				deletion.push(role);
 				const historyObj: HistoryOpt = {
 					dataObject: role,
@@ -252,9 +254,9 @@ export class SeriesService {
 					action: 'delete',
 					time: time,
 				}
-				history.push(this.db.formulateHistory(historyObj));
+				await this.db.createHistory(historyObj);
 			})
-			peopleRoles.forEach((role: PersonRole) => {
+			peopleRoles.forEach( async (role: PersonRole) => {
 				deletion.push(role);
 				const historyObj: HistoryOpt = {
 					dataObject: role,
@@ -264,7 +266,7 @@ export class SeriesService {
 					action: 'delete',
 					time: time
 				}
-				history.push(this.db.formulateHistory(historyObj));
+				await this.db.createHistory(historyObj);
 			})
 			const [series] = await this.db.get(seriesKey);
 			deletion.push(series);
@@ -277,9 +279,8 @@ export class SeriesService {
 				action: 'delete',
 				time: time,
 			}
-			history.push(this.db.formulateHistory(historyObj));
+			await this.db.createHistory(historyObj);
 			await this.db.transaction().delete(deletion);
-			await this.db.transaction().insert(history);
 			return {'status': 'deleted'}
 		} catch(err: any){
 			throw new BadRequestException(err.message)

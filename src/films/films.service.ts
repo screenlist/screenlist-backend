@@ -45,26 +45,33 @@ export class FilmsService {
 	){}
 
 	async findAll(): Promise<FilmType[]>{
-		const query = this.db.createQuery('Film').filter('status', '=', 'public').limit(20)
-		const results: FilmType[] = []
+		const query = this.db.createQuery('Film').limit(20)
+		
 		try {
 			const films = await this.db.runQuery(query)
+			console.log(films)
 			// Loop through each film to retrieve its poster
-			films[0].forEach(async (film: Film) => {
+			films[0].map(async (film: Film) => {
 				film.id = film[this.db.KEY]['id']
 				const posterQuery = this.db.createQuery('Poster')
 					.filter('film', '=', film.name)
 					.filter('quality', '=', 'SD')
 					.limit(1);
-				const posters = await this.db.runQueryFull(posterQuery);
-				const wholeFilm: FilmType = {
-					details: film,
-					posters: posters[0] as Poster[]
+				const [poster] = await this.db.runQuery(posterQuery);
+				console.log(poster)
+				if(!poster.length){
+					return film
 				}
-				results.push(wholeFilm);
+				const wholeFilm = {
+					...film,
+					posterUrl: poster[0]['url']
+				}
+				return wholeFilm
 			})
-			return results
-		} catch {
+			console.log(films[0])
+			return films[0]
+		} catch (err: any) {
+			console.log(err)
 			throw new NotFoundException('Encountered trouble while trying to retrieve');
 		}
 	}
@@ -106,9 +113,6 @@ export class FilmsService {
 			// Run queries
 			const [details] = await this.db.get(filmKey);
 			// Check whether the film is public or deleted before continuing
-			if(details[0].status != "public"){
-				throw new NotFoundException("Not available");
-			}
 			const [platformLinks] =  await this.db.runQuery(linksQuery);
 			const [poster] = await this.db.runQuery(postersQuery);
 			const [stills] = await this.db.runQuery(stillsQuery);
@@ -169,6 +173,7 @@ export class FilmsService {
 
 			return film
 		} catch(err: any){
+			console.log(err)
 			throw new NotFoundException("Could not retrieve film");
 		}
 	}
@@ -178,29 +183,31 @@ export class FilmsService {
 		let entities = [];
 		// Creates the film details entity
 		const filmKey = this.db.key('Film');
-		const filmName = film.name;
 		const time = new Date();
-		film.name = this.db.formatTitle(filmName)
-		film.slug = encodeURIComponent(filmName.toLowerCase().concat("-"+filmKey.id.toString()));
+		// film.slug = encodeURIComponent(filmName.toLowerCase().concat("-"+filmKey.id.toString()));
 		film.lastUpdated = time;
 		film.created = time;
-		entities.push({
+		const entity = {
 			key: filmKey,
 			data: film
-		})
-		// Write film action into history
-		const historyObj: HistoryOpt = {
-			dataObject: film,
-			user: user,
-			time: time,
-			action: 'create',
-			kind: 'Film',
-			id: filmKey.id
 		}
-		entities.push(this.db.formulateHistory(historyObj));
-
+		console.log(filmKey.id)
 		try {
-			await this.db.insert(entities);
+			await this.db.insert(entity);
+
+			// Write film action into history
+			const historyObj: HistoryOpt = {
+				dataObject: film,
+				user: user,
+				time: time,
+				action: 'create',
+				kind: 'Film',
+				id: filmKey.id
+			}
+			// save history last to await the entity id
+			const history = await this.db.createHistory(historyObj);
+			console.log(entity)
+			console.log(history)
 			return { 'status': 'created', 'film_id': filmKey.id }
 		} catch(err: any){
 			throw new BadRequestException(err.message);
@@ -209,17 +216,8 @@ export class FilmsService {
 
 	async updateOne(film: UpdateFilmDto, user: string, id: string){
 		const time = new Date()
-		const filmKey = this.db.key(['Film', +id]);
-		
-		if(film.name || film.slug){
-			film.slug = film.name.concat("-"+filmKey.id);
-		}
-		
-		film.lastUpdated = time
-		const entity = {
-			key: filmKey,
-			data: film
-		}
+		const filmKey = this.db.key(['Film', +id]);		
+		film.lastUpdated = time;
 		// Create history
 		const historyObj: HistoryOpt = {
 			dataObject: film,
@@ -229,10 +227,24 @@ export class FilmsService {
 			kind: 'Film',
 			id: filmKey.id
 		}
-		const history = this.db.formulateHistory(historyObj);
+		
 		try{
-			await this.db.upsert([entity, history]);
-			return { 'status': 'updated', 'film_id': entity.key.id };
+			const [entity] = await this.db.get(filmKey);
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in film) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = film[key]
+				} else {
+					entity[key] = film[key]
+				}
+			}
+			await this.db.update(entity);
+			await this.db.createHistory(historyObj);
+			return { id: filmKey.id, ...entity };
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -240,7 +252,6 @@ export class FilmsService {
 
 	async deleteOne(id: string, user: string){
 		const deletion = []
-		const history = []
 		const time = new Date();
 		const filmKey = this.db.key(['Film', +id]);
 		const postersQuery = this.db.createQuery('Poster').hasAncestor(filmKey);
@@ -265,7 +276,7 @@ export class FilmsService {
 						action: 'delete',
 						time: time,
 					}
-					history.push(this.db.formulateHistory(historyObj));
+					await this.db.createHistory(historyObj);
 				}
 			})
 			stills.forEach(async (still: Still) => {
@@ -280,7 +291,7 @@ export class FilmsService {
 						action: 'delete',
 						time: time,
 					}
-					history.push(this.db.formulateHistory(historyObj));
+					await this.db.createHistory(historyObj);
 				}
 			})
 
@@ -288,7 +299,7 @@ export class FilmsService {
 			const [companiesRoles] = await this.db.runQuery(companiesRolesQuery);
 			const [peopleRoles] = await this.db.runQuery(peopleRolesQuery);
 
-			links.forEach((link: Link) => {
+			links.forEach(async (link: Link) => {
 				deletion.push(link);
 				const historyObj: HistoryOpt = {
 					dataObject: link,
@@ -298,9 +309,9 @@ export class FilmsService {
 					action: 'delete',
 					time: time,
 				}
-				history.push(this.db.formulateHistory(historyObj));
+				await this.db.createHistory(historyObj);
 			})
-			companiesRoles.forEach((role: CompanyRole) => {
+			companiesRoles.forEach(async (role: CompanyRole) => {
 				deletion.push(role);
 				const historyObj: HistoryOpt = {
 					dataObject: role,
@@ -310,9 +321,9 @@ export class FilmsService {
 					action: 'delete',
 					time: time,
 				}
-				history.push(this.db.formulateHistory(historyObj));
+				await this.db.createHistory(historyObj);
 			})
-			peopleRoles.forEach((role: PersonRole) => {
+			peopleRoles.forEach(async (role: PersonRole) => {
 				deletion.push(role);
 				const historyObj: HistoryOpt = {
 					dataObject: role,
@@ -322,7 +333,7 @@ export class FilmsService {
 					action: 'delete',
 					time: time
 				}
-				history.push(this.db.formulateHistory(historyObj));
+				await this.db.createHistory(historyObj);
 			})
 			const [film] = await this.db.get(filmKey);
 			deletion.push(film);
@@ -335,9 +346,8 @@ export class FilmsService {
 				action: 'delete',
 				time: time,
 			}
-			history.push(this.db.formulateHistory(historyObj));
+			await this.db.createHistory(historyObj);
 			await this.db.transaction().delete(deletion);
-			await this.db.transaction().insert(history);
 			return {'status': 'deleted'}
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -345,35 +355,37 @@ export class FilmsService {
 	}
 
 	async uploadPoster(opt: ImageOpt, image: Express.Multer.File){
-		const insertion = []
-		let hdPoster: {id: string, url: string}
+		const results = [];
 		try {
 			const data = await this.storage.uploadPoster(image)
-			data.forEach((file) => {
+			data.forEach(async (file) => {
 				const creation: CreatePosterDto = {
 					url: file.url,
 					originalName: file.originalName,
 					quality: file.quality
 				}
-				const {entity, history} = this.db.createPosterEntity(creation, opt);
+				const {entity, history} = await this.db.createPosterEntity(creation, opt);
+
 				if(file.quality == 'HD'){
-					hdPoster.id = entity.key.id;
-					hdPoster.url = entity.data.url
+					results.push({
+						id: entity.key.id,
+						...entity.data
+					})
 				}
-				insertion.push(entity, history);
+
+				return results[0]
 			})
-			await this.db.transaction().insert(insertion);
-			return { 'status': 'uploaded', 'image_id': hdPoster.id, 'image_url': hdPoster.url }
-		} catch{
-			throw new BadRequestException()
+			return {}
+		} catch (err: any) {
+			console.log(err)
+			throw new BadRequestException(err.message)
 		}
 	}
 
 	async updatePoster(data: UpdatePosterDto, opt: ImageOpt){
-		const {entity, history} = await this.db.updatePosterEntity(data, opt);
 		try {
-			await this.db.upsert([entity, history]);
-			return { 'status': 'updated', 'image_id': entity.key.id}
+			const {entity, history} = await this.db.updatePosterEntity(data, opt);
+			return {id: entity[this.db.KEY]['id'], ...entity}
 		} catch {
 			throw new BadRequestException();
 		}
@@ -391,9 +403,8 @@ export class FilmsService {
 				action: 'delete',
 				time: opt.time,
 			}
-			const history = this.db.formulateHistory(historyObj)
 			await this.storage.deletePoster(poster.originalName);
-			await this.db.insert(history);
+			await this.db.createHistory(historyObj);
 			return {'status': 'deleted'}
 		} catch {
 			throw new BadRequestException()
@@ -401,7 +412,6 @@ export class FilmsService {
 	}
 
 	async uploadStill(opt: ImageOpt, image: Express.Multer.File){
-		const insertion = []
 		try {
 			const file = await this.storage.uploadStill(image);
 			
@@ -411,20 +421,17 @@ export class FilmsService {
 				quality: file.quality,
 			}
 
-			const {entity, history} = this.db.createStillEntity(creation, opt);
-			insertion.push(entity, history);
-			await this.db.transaction().insert(insertion);
-			return { 'status': 'uploaded', 'image_id': entity.key.id, 'image_url': entity.data.url }
+			const {entity, history} = await this.db.createStillEntity(creation, opt);
+			return { id: entity.key.id, ...entity.data }
 		} catch{
 			throw new BadRequestException()
 		}
 	}
 
 	async updateStill(data: UpdateStillDto, opt: ImageOpt){
-		const {entity, history} = await this.db.updateStillEntity(data, opt);
 		try {
-			await this.db.upsert([entity, history]);
-			return { 'status': 'updated', 'image_id': entity.key.id }
+			const {entity, history} = await this.db.updateStillEntity(data, opt);
+			return { id: entity[this.db.KEY]['id'], ...entity }
 		} catch {
 			throw new BadRequestException();
 		}
@@ -442,9 +449,9 @@ export class FilmsService {
 				action: 'delete',
 				time: opt.time,
 			}
-			const history = this.db.formulateHistory(historyObj);
+	
 			await this.storage.deletePoster(still.originalName);
-			await this.db.insert(history);
+			await this.db.createHistory(historyObj);
 			return {'status': 'deleted'}
 		} catch {
 			throw new BadRequestException()
