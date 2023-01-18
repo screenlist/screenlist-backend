@@ -32,6 +32,7 @@ import {
 import { HistoryOpt } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
 import { ImageOpt } from '../films/films.types';
+import { CreateDisplayPhotoDto, UpdateDisplayPhotoDto } from '../films/films.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('companies')
@@ -99,28 +100,52 @@ export class CompaniesController {
 	@UseInterceptors(FileInterceptor('profile'))
 	async uploadPhoto(
 		@Param('id') id: string,
+		@Query('index') index: string,
 		@Headers('AuthorizationToken') idToken: string,
 		@UploadedFile() profile: Express.Multer.File
 	){
-		const companyOptions: CompanyOpt = {
+		const imageOptions: ImageOpt = {
 			user: await this.authService.getUserUid(idToken),
 			time: new Date(),
-			companyId: id
+			parentId: id,
+			parentKind: 'Company',
+			imageId: index
 		}
-		return await this.companiesService.uploadPhoto(companyOptions, profile);
+		return await this.companiesService.uploadPhoto(imageOptions, profile);
+	}
+
+	@Patch(':id/photo')
+	@Roles('member')
+	async updatePhoto(
+		@Param('id') id: string,
+		@Query('index') index: string,
+		@Body() updatePhoto : UpdateDisplayPhotoDto,
+		@Headers('AuthorizationToken') idToken: string,
+	){
+		const imageOptions: ImageOpt = {
+			user: await this.authService.getUserUid(idToken),
+			time: new Date(),
+			parentId: id,
+			parentKind: 'Company',
+			imageId: index
+		}
+		return await this.companiesService.updatePhoto(updatePhoto, imageOptions);
 	}
 
 	@Delete(':id/photo')
 	@Roles('member')
 	async removePhoto(
 		@Param('id') id: string,
+		@Query('index') index: string,
 		@Headers('AuthorizationToken') idToken: string
 	){
-		const companyOptions: CompanyOpt = {
+		const imageOptions: ImageOpt = {
 			user: await this.authService.getUserUid(idToken),
 			time: new Date(),
-			companyId: id
+			parentId: id,
+			parentKind: 'Company',
+			imageId: index
 		}
-		return await this.companiesService.removePhoto(companyOptions)
+		return await this.companiesService.removePhoto(imageOptions)
 	}
 }

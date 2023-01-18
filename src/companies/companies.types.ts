@@ -14,9 +14,6 @@ export interface CompanyRole {
 	companyName: string;
 	companyId?: string;
 	ownerName: string;
-	year?: string;
-	type: string;
-	website?: string;
 	lastUpdated: Date;
 	created: Date;
 }

@@ -13,6 +13,8 @@ import {
 	CompanyOpt,
 	CompanyRoleOpt
 } from './companies.types';
+import { CreateDisplayPhotoDto, UpdateDisplayPhotoDto } from '../films/films.dto';
+import { ImageOpt } from  '../films/films.types';
 import { HistoryOpt } from '../database/database.types';
 import { StorageService } from '../storage/storage.service';
 
@@ -26,46 +28,91 @@ export class CompaniesService {
 	async findAll(): Promise<Company[]>{
 		const query = this.db.createQuery('Company').order('name').limit(100);
 		try{
-			const [companies] = await this.db.runQuery(query);
+			let [companies] = await this.db.runQuery(query);
+			companies = await Promise.all(
+				companies.map(async (item) => {
+					const photoKey = this.db.key(['Company', +item[this.db.KEY]['id'], 'CompanyPhoto', '0']);
+					const [photo] = await this.db.get(photoKey);
+					item.id = item[this.db.KEY]['id'];
+					item.photo = photo ? {
+						url: photo?.sdUrl,
+						id: photo[this.db.KEY]['name'],
+						credit: photo?.attribution,
+						altText: photo?.description
+					} : null
+
+					return item
+				})
+			);
 			return companies
 		} catch {
 			throw new NotFoundException('Could not retrieve companies');
 		}
 	}
 
-	async findOne(id: string): Promise<CompanyType>{
+	async findOne(id: string): Promise<any>{
 		const companyKey = this.db.key(['Company', +id]);
-		const filmProductionQuery = this.db.createQuery('CompanyRole')
-			.hasAncestor(companyKey)
-			.filter('type', '=', 'production')
-			.filter('ownerKind', '=', 'Film')
-		const filmDistributionQuery = this.db.createQuery('CompanyRole')
-			.hasAncestor(companyKey)
-			.filter('type', '=', 'distribution')
-			.filter('ownerKind', '=', 'Film')
-		const seriesProductionQuery = this.db.createQuery('CompanyRole')
-			.hasAncestor(companyKey)
-			.filter('type', '=', 'production')
-			.filter('ownerKind', '=', 'Series')
+		const photoKey = this.db.key(['Company', +id, 'CompanyPhoto', '0']);
+		const rolesQuery = this.db.createQuery('CompanyRole').filter('companyId', '=', id)
+
 		try {
 			const [details] = await this.db.get(companyKey);
-			const [filmProduction] = await this.db.runQuery(filmProductionQuery);
-			const [seriesProduction] = await this.db.runQuery(seriesProductionQuery);
-			const [filmDistribution] = await this.db.runQuery(filmDistributionQuery);
-			filmDistribution.map(async (role) => {
-				const key = this.db.key(['Film', +role.ownerId])
-				const [film] = await this.db.get(key)
-				return {
-					filmName: film.name,
-					year: role.year,
-					slug: film.slug
+			const [photo] = await this.db.get(photoKey);
+			details.id = details[this.db.KEY]['id'];
+			details.photo = photo ? {
+				url: photo?.sdUrl,
+				id: photo[this.db.KEY]['name'],
+				credit: photo?.attribution,
+				altText: photo?.description
+			} : null;
+
+			let [roles] = await this.db.runQuery(rolesQuery);
+
+			roles = await Promise.all(
+				roles.map(async (item) => {
+					const parentKey = this.db.key([item.ownerKind, +item.ownerId]);
+					const posterKey = this.db.key([item.ownerKind, +item.ownerId, 'Poster', '0']);
+
+					try {
+
+						const [parent] = await this.db.get(parentKey);
+						const [poster] = await this.db.get(posterKey);
+
+						const path = `/${item.ownerKind == 'Film' ? 'films' : 'series'}/${item.ownerId}/companies/${item.companyId}/roles/${item[this.db.KEY]['id']}`;
+						return {
+							id: item[this.db.KEY]['id'],
+							...item,
+							ownerName: parent.name,
+							posterUrl: poster?.lqUrl,
+							year: parent.year,
+							urlPath: path
+						}
+					} catch(err: any) {
+						throw new BadRequestException(err.message)
+					}
+				})
+			)
+
+			const productions = roles.filter((value) => value.type == 'production').sort((a, b) => {
+				if(a.year > b.year) {
+					return -1
+				} else {
+					return 0
 				}
-			})
+			});
+
+			const distributions = roles.filter((value) => value.type == 'distribution').sort((a, b) => {
+				if(a.year > b.year) {
+					return -1
+				} else {
+					return 0
+				}
+			});
+
 			return {
 				details,
-				filmProduction,
-				seriesProduction,
-				filmDistribution
+				productions,
+				distributions
 			}
 		} catch{
 			throw new NotFoundException('Company not found')
@@ -119,6 +166,7 @@ export class CompaniesService {
 				}
 				await this.db.createHistory(roleHistoryObj);
 			})
+			await this.db.algolia.initIndex('companies').deleteObject(companyKey.id);
 			await this.db.delete(entities);
 			return { 'status': 'deleted' };
 		} catch(err:any) {
@@ -126,31 +174,44 @@ export class CompaniesService {
 		}
 	}
 
-	async uploadPhoto(opt: CompanyOpt, image: Express.Multer.File){
+	async uploadPhoto(opt: ImageOpt, image: Express.Multer.File){
 		try {
-			const file = await this.storage.uploadProfilePhoto(image)
-			const dto: UpdateCompanyDto = {
-				profilePhotoUrl: file.url,
-				profilePhotoOriginalName: file.originalName
-			}
-			const {entity, history} = await this.db.updateCompanyEntity(dto, opt);
+			const data = await this.storage.uploadProfilePhoto(image)
+			const dto: CreateDisplayPhotoDto = { ...data }
+
+			const {entity, history} = await this.db.createCompanyPhotoEntity(dto, opt);
+			return { id: entity.key.name, ...entity.data }
+		} catch {
+			throw new BadRequestException()
+		}
+	}
+
+	async updatePhoto(data: UpdateDisplayPhotoDto , opt: ImageOpt){
+		try {
+			const {entity, history} = await this.db.updateCompanyPhotoEntity(data, opt);
 			return { id: entity[this.db.KEY]['id'], ...entity }
 		} catch {
 			throw new BadRequestException()
 		}
 	}
 
-	async removePhoto(opt: CompanyOpt){
+	async removePhoto(opt: ImageOpt){
 		try{
-			const companyKey = this.db.key(['Company', +opt.companyId]);
-			const [result] = await this.db.get(companyKey);
-			const company: Company = result 
-			const dto: UpdateCompanyDto = {
-				profilePhotoUrl: null,
-				profilePhotoOriginalName: null
+			const photoKey = this.db.key([opt.parentKind, +opt.parentId, 'CompanyPhoto', opt.imageId]);
+			const [photo] = await this.db.get(photoKey);
+			const historyObj: HistoryOpt = {
+				dataObject: photo,
+				user: opt.user,
+				kind: 'CompanyPhoto',
+				id: photoKey.id,
+				action: 'delete',
+				time: opt.time,
 			}
-			const {entity, history} = await this.db.updateCompanyEntity(dto, opt);
-			await this.storage.deletePoster(company.profilePhotoOriginalName);
+			await this.storage.deleteProfilePhoto(photo.originalName);
+			await this.storage.deleteProfilePhoto(photo.hdName);
+			await this.storage.deleteProfilePhoto(photo.sdName);
+			await this.db.createHistory(historyObj);
+			await this.db.delete(photoKey)
 			return {'status': 'deleted'}
 		} catch {
 			throw new BadRequestException()

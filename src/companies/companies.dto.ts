@@ -14,15 +14,18 @@ export class CreateCompanyDto {
 	@MaxLength(60)
 	name: string;
 
+	@IsOptional()
 	@IsEmpty()
 	profilePhotoUrl: string;
 
+	@IsOptional()
 	@IsEmpty()
 	profilePhotoOriginalName: string;
 
 	@MaxLength(500)
 	description: string;
 
+	@IsOptional()
 	@IsFQDN()
 	website: string;
 
@@ -41,9 +44,11 @@ export class UpdateCompanyDto {
 	@MaxLength(60)
 	name?: string;
 
+	@IsOptional()
 	@IsEmpty()
 	profilePhotoUrl?: string;
 
+	@IsOptional()
 	@IsEmpty()
 	profilePhotoOriginalName?: string;
 
@@ -84,7 +89,7 @@ export class CreateCompanyRoleDto {
 	@IsString()
 	ownerId: string;
 
-	@IsOptional()
+	@IsNotEmpty()
 	@IsString()
 	type: string;
 
@@ -105,8 +110,4 @@ export class UpdateCompanyRoleDto {
 	@IsOptional()
 	@IsDate()
 	lastUpdated?: Date;
-
-	@IsOptional()
-	@IsDate()
-	created?: Date;
 }
