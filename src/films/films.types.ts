@@ -11,21 +11,49 @@ import {
 } from '../platforms/platforms.types'
 
 export interface Still {
-	id
-	originalName: string;
-	description: string;
-	url: string;
-	quality: string;
+	id: string;
+	stillIndex: number;
+	originalUrl?: string;
+	originalName?: string;
+	originalDimensions?: string;
+	originalSize?: string;
+	hdUrl?: string;
+	hdName?: string;
+	hdDimensions?: string;
+	hdSize?: number;
+	sdUrl?: string;
+	sdName?: string;
+	sdDinemsions?: string;
+	sdSize?: number
+	lqUrl?: string;
+	lqName?: string;
+	lqDinemsions?: string;
+	lqSize?: number;
+	attribution: string;
 	lastUpdated: Date;
 	created: Date;
 }
 
 export interface Poster {
-	id
-	originalName: string;
-	description: string;
-	url: string;
-	quality: string;
+	id: string;
+	posterIndex: number;
+	originalUrl?: string;
+	originalName?: string;
+	originalDimensions?: string;
+	originalSize?: string;
+	hdUrl?: string;
+	hdName?: string;
+	hdDimensions?: string;
+	hdSize?: number;
+	sdUrl?: string;
+	sdName?: string;
+	sdDinemsions?: string;
+	sdSize?: number
+	lqUrl?: string;
+	lqName?: string;
+	lqDinemsions?: string;
+	lqSize?: number;
+	attribution: string;
 	lastUpdated: Date;
 	created: Date;
 }
@@ -61,6 +89,14 @@ export interface FilmType {
 
 // Utility
 export interface ImageOpt {
+	imageId: string,
+	time: Date,
+	parentId: string,
+	parentKind: string,
+	user: string
+}
+
+export interface RatingOpt {
 	imageId?: string,
 	time: Date,
 	parentId: string,

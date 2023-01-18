@@ -6,7 +6,8 @@ import {
 	Poster, 
 	Still,
 	FilmType,
-	ImageOpt
+	ImageOpt,
+	RatingOpt
 } from './films.types';
 import {
 	CreatePosterDto,
@@ -14,7 +15,9 @@ import {
 	CreateStillDto,
 	UpdateStillDto,
 	CreateFilmDto, 
-	UpdateFilmDto 
+	UpdateFilmDto,
+	CreateListRatingDto,
+	UpdateListRatingDto
 } from './films.dto';
 import {
 	Company,
@@ -44,131 +47,161 @@ export class FilmsService {
 		private authService: AuthService
 	){}
 
-	async findAll(): Promise<FilmType[]>{
-		const query = this.db.createQuery('Film').limit(20)
+	async findAll(cursor?: string) {
+		let query = this.db.createQuery('Film').order('lastUpdated', {descending: true}).limit(60)
 		
+		// This will implement pagination [NOT FINISHED YET]
+		if(cursor){
+			query = query.start(cursor);
+		}
+
 		try {
 			const films = await this.db.runQuery(query)
-			console.log(films)
 			// Loop through each film to retrieve its poster
-			films[0].map(async (film: Film) => {
+			const results = await Promise.all(films[0].map(async (film) => {
 				film.id = film[this.db.KEY]['id']
-				const posterQuery = this.db.createQuery('Poster')
-					.filter('film', '=', film.name)
-					.filter('quality', '=', 'SD')
-					.limit(1);
-				const [poster] = await this.db.runQuery(posterQuery);
-				console.log(poster)
-				if(!poster.length){
-					return film
+				const posterKey = this.db.key(['Film', +film.id, 'Poster', '0']);
+
+				try {
+					const [poster] = await this.db.get(posterKey);
+					if(!poster){
+						return film
+					} else {
+						film.posterUrl = poster.lqUrl ? poster.lqUrl : poster.sdUrl;
+						return film
+					}
+				} catch {
+					throw new BadRequestException()
 				}
-				const wholeFilm = {
-					...film,
-					posterUrl: poster[0]['url']
-				}
-				return wholeFilm
-			})
-			console.log(films[0])
-			return films[0]
+			}))
+			return results
 		} catch (err: any) {
 			console.log(err)
 			throw new NotFoundException('Encountered trouble while trying to retrieve');
 		}
 	}
 
-	async findOne(id: string): Promise<FilmType>{
+	async findOne(id: string) {
 		const filmKey = this.db.key(['Film', +id]);
+		const posterKey = this.db.key(['Film', +id, 'Poster', '0'])
 		// Create queries
-		const postersQuery = this.db.createQuery('Poster')
-			.hasAncestor(filmKey)
-			.filter('quality', '=', 'HD')
-			.order('created', {descending: true})
-			.limit(1);
 		const linksQuery =this.db.createQuery('Link')
 			.hasAncestor(filmKey)
 			.order('created', {descending: true});
 		const stillsQuery = this.db.createQuery('Still')
 			.hasAncestor(filmKey)
-			.filter('quality','=', 'HD')
-			.order('created', {descending: true})
-			.limit(3);
+			.order('stillIndex')
+			.limit(3); 
 		const distributorsQuery = this.db.createQuery('CompanyRole')
-			.hasAncestor(filmKey)
-			.filter('type', '=', 'distribution')
+			.filter('ownerId', '=', `${filmKey.id}`)
+			.filter('type', '=', 'distribution') 
 			.order('companyName');
 		const producersQuery = this.db.createQuery('CompanyRole')
-			.hasAncestor(filmKey)
+			.filter('ownerId', '=', `${filmKey.id}`)
 			.filter('type', '=', 'production')
 			.order('companyName');
-		const actorsQuery = this.db.createQuery('PersonRole')
-			.hasAncestor(filmKey)
-			.filter('category', '=', 'talent')
-			.order('personName');
+		const castQuery = this.db.createQuery('PersonRole')
+			.filter('ownerId', '=', `${filmKey.id}`)
+			.filter('category', '=', 'cast')
+			.limit(50);
 		const crewQuery = this.db.createQuery('PersonRole')
-			.hasAncestor(filmKey)
+			.filter('ownerId', '=', `${filmKey.id}`)
 			.filter('category', '=', 'crew')
-			.order('title');
+			.limit(50);
 
 		try {
 			// Run queries
 			const [details] = await this.db.get(filmKey);
+			const [poster] = await this.db.get(posterKey);
 			// Check whether the film is public or deleted before continuing
 			const [platformLinks] =  await this.db.runQuery(linksQuery);
-			const [poster] = await this.db.runQuery(postersQuery);
-			const [stills] = await this.db.runQuery(stillsQuery);
-			const [distributors] = await this.db.runQuery(distributorsQuery);
-			const [producers] = await this.db.runQuery(producersQuery);
-			const [actors] = await this.db.runQuery(actorsQuery);
-			const [crew] = await this.db.runQuery(crewQuery);
+			let [stills] = await this.db.runQuery(stillsQuery);
+			let [distributors] = await this.db.runQuery(distributorsQuery);
+			let [producers] = await this.db.runQuery(producersQuery);
+			let [cast] = await this.db.runQuery(castQuery);
+			let [crew] = await this.db.runQuery(crewQuery);
+			let people = cast.concat(crew);
+			const reviews = await this.findRatings(id);
 
 			// Extact the entity id/name from query to expose to the client
 			details.id = details[this.db.KEY]["id"]
-			details.poster = poster[0]
-
-			distributors.map(async (item: CompanyRole) => {
-				const key = this.db.key(['Company', +item.companyId])
-				const [company] = await this.db.get(key)
+			details.poster = poster ? {
+				url: poster?.sdUrl,
+				id: poster[this.db.KEY]['name'],
+				credit: poster?.attribution,
+				altText: poster?.description
+			} : null;
+			console.log(stills)
+			stills = stills.map((item) => {
 				return {
-					...item,
-					photoUrl: company.profilePhotoUrl
+					id: item[this.db.KEY]['name'],
+					url: item.hdUrl ? item.hdUrl : item.sdUrl,
+					credit: item.attribution,
+					altText: item.description
 				}
 			})
+
+			people = await Promise.all(
+				people.map(async (item) => {
+					const key = this.db.key(['Person', +item.personId]);
+					const [person] = await this.db.get(key);
+					const path = `/films/${item.ownerId}/people/${item.personId}/roles/${item[this.db.KEY]['id']}`;
+
+					return {
+						...item,
+						photoUrl: person.profilePhotoUrl,
+						id: item[this.db.KEY]['id'],
+						urlPath: path
+					}
+				})
+			)
+
+			distributors = await Promise.all(
+				distributors.map(async (item) => {
+					const key = this.db.key(['Company', +item.companyId])
+					const [company] = await this.db.get(key)
+					const path = `/films/${item.ownerId}/companies/${item.companyId}/roles/${item[this.db.KEY]['id']}`;
+					return {
+						...item,
+						id: item[this.db.KEY]['id'],
+						photoUrl: company.profilePhotoUrl,
+						urlPath: path
+					}
+				})
+			)
 			
-			producers.map(async (item: CompanyRole) => {
-				const key = this.db.key(['Company', +item.companyId])
-				const [company] = await this.db.get(key)
-				return {
-					...item,
-					photoUrl: company.profilePhotoUrl
-				}
+			producers = await Promise.all(
+				producers.map(async (item) => {
+					const key = this.db.key(['Company', +item.companyId])
+					const [company] = await this.db.get(key)
+					const path = `/films/${item.ownerId}/companies/${item.companyId}/roles/${item[this.db.KEY]['id']}`;
+					return {
+						...item,
+						id: item[this.db.KEY]['id'],
+						photoUrl: company.profilePhotoUrl,
+						urlPath: path
+					}
+				})
+			)
+
+			// Filter people into designated categories
+			const mainCast = people.filter((value) => value.department == 'main cast');
+			const additionalCast = people.filter((value) => value.department == 'additional cast');
+			const mainCrew = people.filter((value) => value.department == 'above line');
+			const productionCrew = people.filter((value) => value.department == 'production');
+			const everyoneElse = people.filter((value) => {
+				const aboveElse = value.department == 'main cast' || value.department == 'additional cast' || value.department == 'above line' || value.department == 'production';
+				return !aboveElse;
 			})
 
-			actors.map(async (item: PersonRole) => {
-				const key = this.db.key(['Company', +item.personId])
-				const [person] = await this.db.get(key)
-				return {
-					...item,
-					photoUrl: person.profilePhotoUrl
-				}
-			})
-
-			crew.map(async (item: PersonRole) => {
-				const key = this.db.key(['Company', +item.personId])
-				const [person] = await this.db.get(key)
-				return {
-					...item,
-					photoUrl: person.profilePhotoUrl
-				}
-			})
-
-			const film: FilmType = {
+			const film = {
 				details: details,
 				stills: stills as Still[],
 				producers: producers,
 				distributors: distributors,
-				platforms: platformLinks,
-				actors: actors,
-				crew: crew
+				cast: [...mainCast, ...additionalCast],
+				crew: [...mainCrew, ...productionCrew, ...everyoneElse],
+				reviews: reviews
 			}
 
 			return film
@@ -206,8 +239,22 @@ export class FilmsService {
 			}
 			// save history last to await the entity id
 			const history = await this.db.createHistory(historyObj);
-			console.log(entity)
-			console.log(history)
+
+			const searchRecord = {
+				objectID: entity.key.id,
+				name: film.name,
+				year: film.year,
+				genres: film.genres,
+				type: film.type,
+				format: film.format,
+				productionStage: film.productionStage,
+				releaseDate: film.releaseDate,
+				initialPlatform: film.initialPlatform,
+				created: film.created,
+				lastUpdated: film.lastUpdated
+			}
+			await this.db.algolia.initIndex('films').saveObject(searchRecord).wait();
+
 			return { 'status': 'created', 'film_id': filmKey.id }
 		} catch(err: any){
 			throw new BadRequestException(err.message);
@@ -244,8 +291,24 @@ export class FilmsService {
 			}
 			await this.db.update(entity);
 			await this.db.createHistory(historyObj);
+
+			const searchRecord = {
+				objectID: entity[this.db.KEY]['id'],
+				name: film.name,
+				year: film.year,
+				genres: film.genres,
+				type: film.type,
+				format: film.format,
+				productionStage: film.productionStage,
+				releaseDate: film.releaseDate,
+				initialPlatform: film.initialPlatform,
+				lastUpdated: film.lastUpdated
+			}
+			await this.db.algolia.initIndex('films').partialUpdateObject(searchRecord, {}).wait();
+
 			return { id: filmKey.id, ...entity };
 		} catch(err: any){
+			console.log(err)
 			throw new BadRequestException(err.message)
 		}
 	}
@@ -346,6 +409,7 @@ export class FilmsService {
 				action: 'delete',
 				time: time,
 			}
+			await this.db.algolia.initIndex('films').deleteObject(filmKey.id)
 			await this.db.createHistory(historyObj);
 			await this.db.transaction().delete(deletion);
 			return {'status': 'deleted'}
@@ -354,28 +418,61 @@ export class FilmsService {
 		}
 	}
 
+	async findRatings(filmId){
+		const filmKey = this.db.key(['Film', +filmId])
+		const query = this.db.createQuery('Rating').hasAncestor(filmKey).order('created');
+		try {
+			let [results] = await this.db.runQuery(query);
+
+			results = results.map((item) => {return {id: item[this.db.KEY]['id'], ...item}})
+		
+			return results
+		} catch (err: any) {
+			throw new NotFoundException()
+		}
+	}
+
+	async createOneRating(data: CreateListRatingDto, opt: RatingOpt){
+		try {
+			const {entity, info} = await this.db.createListRatingEntity(data, opt);
+
+			const updateRatings: UpdateFilmDto = {
+				listScore: info.listScore,
+				listRatings: info.totalRatings
+			} 
+			await this.updateOne(updateRatings, opt.user, opt.parentId);
+
+			return {id: entity.key.id, ...entity.data}
+		} catch (err: any) {
+			throw new BadRequestException(err.message)
+		}
+	}
+
+	async updateOneRating(data: UpdateListRatingDto, opt: RatingOpt){
+		try {
+			const {entity, info} = await this.db.updateListRatingEntity(data, opt);
+
+			const updateRatings: UpdateFilmDto = {
+				listScore: info.listScore,
+				listRatings: info.totalRatings
+			} 
+			await this.updateOne(updateRatings, opt.user, opt.parentId);
+
+			return {id: entity[this.db.KEY]['id'], ...entity}
+		} catch (err: any) {
+			throw new BadRequestException(err.message)
+		}
+	}
+
 	async uploadPoster(opt: ImageOpt, image: Express.Multer.File){
 		const results = [];
 		try {
-			const data = await this.storage.uploadPoster(image)
-			data.forEach(async (file) => {
-				const creation: CreatePosterDto = {
-					url: file.url,
-					originalName: file.originalName,
-					quality: file.quality
-				}
-				const {entity, history} = await this.db.createPosterEntity(creation, opt);
-
-				if(file.quality == 'HD'){
-					results.push({
-						id: entity.key.id,
-						...entity.data
-					})
-				}
-
-				return results[0]
-			})
-			return {}
+			const data = await this.storage.uploadPoster(image);
+			const createPoster: CreatePosterDto = {
+				...data
+			}
+			const {entity} = await this.db.createPosterEntity(createPoster, opt);
+			return {id: entity.key.name, ...entity.data}
 		} catch (err: any) {
 			console.log(err)
 			throw new BadRequestException(err.message)
@@ -385,7 +482,7 @@ export class FilmsService {
 	async updatePoster(data: UpdatePosterDto, opt: ImageOpt){
 		try {
 			const {entity, history} = await this.db.updatePosterEntity(data, opt);
-			return {id: entity[this.db.KEY]['id'], ...entity}
+			return {id: entity[this.db.KEY]['name'], ...entity}
 		} catch {
 			throw new BadRequestException();
 		}
@@ -393,7 +490,7 @@ export class FilmsService {
 
 	async deletePoster(opt: ImageOpt){
 		try{
-			const posterKey = this.db.key([opt.parentKind, +opt.parentId, 'Poster', +opt.imageId]);
+			const posterKey = this.db.key([opt.parentKind, +opt.parentId, 'Poster', opt.imageId]);
 			const [poster] = await this.db.get(posterKey);
 			const historyObj: HistoryOpt = {
 				dataObject: poster,
@@ -404,7 +501,11 @@ export class FilmsService {
 				time: opt.time,
 			}
 			await this.storage.deletePoster(poster.originalName);
+			await this.storage.deletePoster(poster.hdName);
+			await this.storage.deletePoster(poster.sdName);
+			await this.storage.deletePoster(poster.lqName);
 			await this.db.createHistory(historyObj);
+			await this.db.delete(posterKey)
 			return {'status': 'deleted'}
 		} catch {
 			throw new BadRequestException()
@@ -416,22 +517,21 @@ export class FilmsService {
 			const file = await this.storage.uploadStill(image);
 			
 			const creation: CreatePosterDto = {
-				url: file.url,
-				originalName: file.originalName,
-				quality: file.quality,
+				...file
 			}
 
 			const {entity, history} = await this.db.createStillEntity(creation, opt);
-			return { id: entity.key.id, ...entity.data }
-		} catch{
-			throw new BadRequestException()
+			return { id: entity.key.name, ...entity.data }
+		} catch (err: any ) {
+			console.log(err)
+			throw new BadRequestException(err.message)
 		}
 	}
 
 	async updateStill(data: UpdateStillDto, opt: ImageOpt){
 		try {
 			const {entity, history} = await this.db.updateStillEntity(data, opt);
-			return { id: entity[this.db.KEY]['id'], ...entity }
+			return { id: entity[this.db.KEY]['name'], ...entity }
 		} catch {
 			throw new BadRequestException();
 		}
@@ -439,7 +539,7 @@ export class FilmsService {
 
 	async deleteStill(opt: ImageOpt){
 		try{
-			const stillKey = this.db.key([opt.parentKind, +opt.parentId, 'Still', +opt.imageId]);
+			const stillKey = this.db.key([opt.parentKind, +opt.parentId, 'Still', opt.imageId]);
 			const [still] = await this.db.get(stillKey);
 			const historyObj: HistoryOpt = {
 				dataObject: still,
@@ -450,11 +550,61 @@ export class FilmsService {
 				time: opt.time,
 			}
 	
-			await this.storage.deletePoster(still.originalName);
+			await this.storage.deleteStill(still.originalName);
+			await this.storage.deleteStill(still.hdName);
+			await this.storage.deleteStill(still.sdName);
+			await this.storage.deleteStill(still.lqName);
 			await this.db.createHistory(historyObj);
+			await this.db.delete(stillKey);
 			return {'status': 'deleted'}
-		} catch {
+		} catch(err: any) {
+			console.log(err)
 			throw new BadRequestException()
+		}
+	}
+
+	async findHistory(filmId: string, cursor?: string){
+		let query = this.db.createQuery('History')
+													.filter('entityKind', '=', 'Film')
+													.filter('entityIdentifier', '=', +filmId)
+													.order('timestamp', {descending: true})
+													.limit(15);
+		if(cursor){
+			query = query.start(cursor);
+		}
+
+		try {
+			const results = await this.db.runQuery(query);
+			const users = {}
+			let entities = results[0];
+			console.log(entities)
+			entities = await Promise.all(
+				entities.map(async (item) => {
+					if(users[item.triggeredByUser]){
+						return {
+							...item,
+							xUsername: users[item.triggeredByUser],
+							id: item[this.db.KEY]['id']
+						}
+					}
+					const userKey = this.db.key(['User', item.triggeredByUser]);
+					const [user] = await this.db.get(userKey);
+					users[item.triggeredByUser] = user.userName;
+
+					return {
+						...item,
+						xUsername: user.userName,
+						id: item[this.db.KEY]['id']
+					}
+				})
+			)
+  		const info = results[1];
+  		return {
+  			data: entities,
+  			moreResults: info.moreResults != this.db.NO_MORE_RESULTS ? info.endCursor : null
+  		}
+		} catch (err: any) {
+			throw new NotFoundException(err.message)
 		}
 	}
 }
