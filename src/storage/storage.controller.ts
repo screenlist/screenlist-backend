@@ -10,7 +10,8 @@ import {
 	Query,
 	HttpException,
 	UploadedFiles,
-	UseInterceptors
+	UseInterceptors, 
+	BadRequestException
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { StorageService } from './storage.service'
@@ -30,6 +31,7 @@ export class StorageController {
 		still?: Express.Multer.File[] ,
 		profile?: Express.Multer.File[]
 	}) {
+		throw new BadRequestException('Not allowed')
 		if(image.poster){
 			return await this.storageService.uploadPoster(image.poster[0])
 		} else if(image.still){
