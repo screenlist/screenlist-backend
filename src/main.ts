@@ -7,10 +7,13 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({
     transform: true,
     forbidUnknownValues: true,
-    stopAtFirstError: true
+    stopAtFirstError: true,
+    forbidNonWhitelisted: true
   })).enableCors({
-    origin: 'http://localhost:3000'
+    origin: process.env.CLIENT_URL
   })
-  await app.listen(3001);
+
+  const PORT = Number(process.env.PORT) || 8080;
+  await app.listen(PORT);
 }
 bootstrap();
