@@ -41,3 +41,4 @@ app.yaml
 set_vars.cmd
 index.yaml
 /config
+dispatch.yaml
