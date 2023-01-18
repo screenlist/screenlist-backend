@@ -2,18 +2,26 @@ import { Injectable, BadRequestException, NotFoundException, UnauthorizedExcepti
 import { Datastore, Query } from '@google-cloud/datastore';
 import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
+import algoliasearch from 'algoliasearch';
 import { HistoryOpt } from './database.types';
 import { 
 	Film, 
 	Poster, 
 	Still,
-	ImageOpt
+	ImageOpt,
+	RatingOpt
 } from '../films/films.types';
 import {
 	CreateStillDto,
 	UpdateStillDto,
 	CreatePosterDto,
 	UpdatePosterDto,
+	CreateListRatingDto,
+	UpdateListRatingDto,
+	CreateDisplayPhotoDto,
+	UpdateDisplayPhotoDto,
+	CreateContentPhotoDto,
+	UpdateContentPhotoDto
 } from '../films/films.dto';
 import {
 	CreateCompanyRoleDto,
@@ -77,6 +85,9 @@ export class DatabaseService extends Datastore{
 		})
 	}
 
+	// Initialise AlgoliaSearch
+	public algolia = algoliasearch(this.configService.get('ALGOLIA_ID'), this.configService.get('ALGOLIA_API'))
+
 	// Runs the runQuery method but explicity exposes entity id in return
 	async runQueryFull(query: Query){
 		const [objects, info] = await this.runQuery(query)
@@ -121,11 +132,11 @@ export class DatabaseService extends Datastore{
 			key: key,
 			data: {
 				...opt.dataObject,
-				entityIdentifier: opt.id,
-				entityKind: opt.kind,
-				resultingAction: opt.action,
-				triggeredByUser: opt.user,
-				timestamp: opt.time,
+				xIdentifier: opt.id,
+				xKind: opt.kind,
+				xAction: opt.action,
+				xUser: opt.user,
+				xTimestamp: opt.time,
 			}
 		}
 
@@ -142,11 +153,20 @@ export class DatabaseService extends Datastore{
 		const contentKey = this.key('Content');
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
+		data.slug = data.type == 'blog' ? data.headline.toLowerCase().concat(`-${new Date(opt.time).toISOString()}`).replace(/[^0-9a-z]/gi, '-') : data.type;
 		const entity = {
 			key: contentKey,
 			data: data
 		}
 		try {
+			if(data.type == 'blog'){
+				const blogQuery = this.createQuery('Content').filter('type', '=', 'blog').filter('slug', '=', data.slug);
+				const [results] = await this.runQuery(blogQuery);
+				if(results.length > 0){
+					throw new BadRequestException('Slug already exists')
+				}
+			}
+
 			await this.insert(entity)
 			const historyObj: HistoryOpt = {
 				dataObject: data,
@@ -157,20 +177,42 @@ export class DatabaseService extends Datastore{
 				time: opt.time,
 			}
 			const history = await this.createHistory(historyObj);
+
+			const searchRecord = {
+				objectID: entity.key.id,
+				author: data.author,
+				headline: data.headline,
+				tags: data.tags,
+				created: data.created,
+				lastUpdated: data.lastUpdated
+			}
+			await this.algolia.initIndex('content').saveObject(searchRecord).wait();
+
 			return {entity, history}
 		} catch(err: any) {
 			throw new NotFoundException(err.message);
 		}
 	}
 
-	async updateContentEntity(data: UpdateContentDto, opt: ContentOpt){
+	async updateContentEntity(data: UpdateContentDto, opt: ContentOpt, entity: any){
 		const contentKey = this.key(['Content', +opt.contentId]);
 		data.lastUpdated = opt.time;
-		try{
-			const [entity] = await this.get(contentKey)
 
+		try{
 			if(!entity){
 				throw new BadRequestException("Action not allowed");
+			}
+
+			if(data.headline) {
+				data.slug = entity.type == 'blog' ? data.headline.toLowerCase().concat(`-${new Date(opt.time).toISOString()}`).replace(/[^0-9a-z]/gi, '-') : entity.type;
+			}
+
+			if(entity.type == 'blog'){
+				const blogQuery = this.createQuery('Content').filter('type', '=', 'blog').filter('slug', '=', data.slug);
+				const [results] = await this.runQuery(blogQuery);
+				if(results.length > 0){
+					throw new BadRequestException('Slug already exists')
+				}
 			}
 
 			for (const key in data) {
@@ -192,9 +234,91 @@ export class DatabaseService extends Datastore{
 				time: opt.time,
 			}
 			const history = await this.createHistory(historyObj);
+
+			const searchRecord = {
+				objectID: entity.key.id,
+				author: data.author,
+				headline: data.headline,
+				tags: data.tags,
+				lastUpdated: data.lastUpdated
+			}
+			await this.algolia.initIndex('content').partialUpdateObject(searchRecord).wait();
+
 			return {entity, history}
 		} catch (err){
 			throw new BadRequestException(err.message);
+		}
+	}
+
+	// ContentPhoto methods
+	async createContentPhotoEntity(data: CreateContentPhotoDto, opt: ImageOpt){
+		const photoKey = this.key([opt.parentKind, +opt.parentId, 'ContentPhoto', opt.imageId]);
+		data.photoIndex = opt.imageId;
+		data.lastUpdated = opt.time;
+		data.created = opt.time;
+		const entity = {
+			key: photoKey,
+			data: data
+		}
+
+		const query = this.createQuery('ContentPhoto').hasAncestor(this.key([opt.parentKind, +opt.parentId]));
+		try {
+			const [existing] = await this.runQuery(query);
+
+			if(existing.length > 0) {
+				throw new BadRequestException("Too many photos for a single resource");
+			}
+			
+			await this.insert(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'ContentPhoto',
+				id: photoKey.name,
+				action: 'create',
+				time: opt.time,
+			}
+
+			const history = await this.createHistory(historyObj);
+			return {entity, history}
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
+		}
+	}
+
+	async updateContentPhotoEntity(data: UpdateContentPhotoDto, opt: ImageOpt){
+		const photoKey = this.key([opt.parentKind, +opt.parentId, 'ContentPhoto', opt.imageId]);
+		data.lastUpdated = opt.time;
+		try {
+			const [entity] = await this.get(photoKey);
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			await this.update(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'ContentPhoto',
+				id: photoKey.name,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history};
+		} catch(err: any){
+			throw new BadRequestException(err.message)
 		}
 	}
 
@@ -204,6 +328,7 @@ export class DatabaseService extends Datastore{
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
 		data.uid = opt.user;
+		data.userName = data.userName.toLowerCase();
 		const entity = {
 			key: userKey,
 			data: data
@@ -220,6 +345,14 @@ export class DatabaseService extends Datastore{
 				time: opt.time,
 			}
 
+			const searchRecord = {
+				objectID: entity.key.name,
+				username: data.userName,
+				created: data.created,
+				lastUpdated: data.lastUpdated
+			}
+			await this.algolia.initIndex('users').saveObject(searchRecord).wait();
+
 			return {entity, history: await this.createHistory(historyObj)}
 		} catch (err: any) {
 			throw new NotFoundException(err.message);
@@ -229,13 +362,99 @@ export class DatabaseService extends Datastore{
 	async updateUserEntity(data: UpdateUserDto, opt: UserOpt){
 		const userKey = this.key(['User', opt.user]);
 		data.lastUpdated = opt.time;
+		if(data.userName){
+			data.userName = data.userName.toLowerCase();
+		}
+
 		try {
 			const [entity] = await this.get(userKey);
+
+			if(entity.role != 'member' && data.userName){
+				throw new BadRequestException("Verified users cannot change usernames")
+			}
+
 			if(!entity) {
 				throw new BadRequestException("Action not allowed")
 			}			
 
 			// Modify existing data
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+			await this.update(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'User',
+				id: userKey.name,
+				action: 'update',
+				time: opt.time
+			}
+
+			const searchRecord = {
+				objectID: entity[this.KEY]['name'],
+				username: data.userName,
+				lastUpdated: data.lastUpdated
+			}
+			await this.algolia.initIndex('users').partialUpdateObject(searchRecord).wait();
+
+			return {entity, history: await this.createHistory(historyObj)}
+		} catch(err: any) {
+			throw new BadRequestException(err.message);
+		}
+	}
+
+	// UserPhoto methods
+	async createUserPhotoEntity(data: CreateDisplayPhotoDto, opt: ImageOpt){
+		const photoKey = this.key([opt.parentKind, opt.parentId, 'UserPhoto', opt.imageId]);
+		data.photoIndex = opt.imageId;
+		data.lastUpdated = opt.time;
+		data.created = opt.time;
+		const entity = {
+			key: photoKey,
+			data: data
+		}
+
+		const query = this.createQuery('UserPhoto').hasAncestor(this.key([opt.parentKind, opt.parentId]));
+		try {
+			const [existing] = await this.runQuery(query);
+
+			if(existing.length > 0) {
+				throw new BadRequestException("Too many photos for a single resource");
+			}
+			
+			await this.insert(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'UserPhoto',
+				id: photoKey.name,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history}
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
+		}
+	}
+
+	async updateUserPhotoEntity(data: UpdateDisplayPhotoDto, opt: ImageOpt){
+		const photoKey = this.key([opt.parentKind, opt.parentId, 'UserPhoto', opt.imageId]);
+		data.lastUpdated = opt.time;
+		try {
+			const [entity] = await this.get(photoKey);
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
 			for (const key in data) {
 				if(entity.hasOwnProperty(key)){
 					entity[key] = data[key]
@@ -249,15 +468,15 @@ export class DatabaseService extends Datastore{
 			const historyObj: HistoryOpt = {
 				dataObject: entity,
 				user: opt.user,
-				kind: 'User',
-				id: userKey.name,
+				kind: 'UserPhoto',
+				id: photoKey.name,
 				action: 'update',
-				time: opt.time
+				time: opt.time,
 			}
-
-			return {entity, history: await this.createHistory(historyObj)}
-		} catch(err: any) {
-			throw new BadRequestException();
+			const history = await this.createHistory(historyObj);
+			return {entity, history};
+		} catch(err: any){
+			throw new BadRequestException(err.message)
 		}
 	}
 
@@ -325,6 +544,7 @@ export class DatabaseService extends Datastore{
 		const requestKey = this.key('Request');
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
+		data.approved = false
 		const entity = {
 			key: requestKey,
 			data: data
@@ -384,41 +604,96 @@ export class DatabaseService extends Datastore{
 		}
 	}
 
-	async createJournalistInfoEntity(data: CreateJournalistInfoDto, opt: UserOpt){
-		const infoKey = this.key(['User', opt.user, 'JournalistInfo']);
+	// List Rating Methods
+	async calculateRatingScore(results: any[]){
+		const criticsQuery = this.createQuery('User').filter('role', '=', 'journalist');
+		try{
+			const [critics] = await this.runQuery(criticsQuery);
+			const sampleCap = critics.length;
+			const totalRatings = results.length;
+
+			const upLists = results.filter((val) => val.listRating == 'u').length;
+			const neutralLists = results.filter((val) => val.listRating == 'n').length;
+			const downLists = results.filter((val) => val.listRating == 'd').length;
+			
+			const upPoints = upLists*1;
+			const neutralPoints = neutralLists*0.5;
+			const downPoints = downLists*0.1;
+
+			const averageRatingsPercentage = ((upPoints+neutralPoints+downPoints)/totalRatings)*100;
+			const raterSamplePercentage = (totalRatings/sampleCap)*100;
+			
+			const listScore = ((averageRatingsPercentage+raterSamplePercentage)/200)*100;
+
+			const info = {
+				up: upLists,
+				neutral: neutralLists,
+				down: downLists,
+				totalRatings: totalRatings,
+				listScore: listScore
+			}
+
+			return info
+		} catch(err: any){
+			throw new BadRequestException(err.message);
+		}
+	}
+	async createListRatingEntity(data: CreateListRatingDto, opt: RatingOpt){
+		const ratingKey = this.key([opt.parentKind, +opt.parentId, 'Rating']);
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
-		const entity = {
-			key: infoKey,
-			data: data
-		}
+		data.authorUid = opt.user
+
+		if(data.reviewLink.slice(0,8) !== 'https://'){throw new BadRequestException(`The review link must begin with the secure protocol, "https://"`)}
+
+		const parentKey = this.key([opt.parentKind, +opt.parentId]);
+		const query = this.createQuery('Rating').hasAncestor(parentKey);
+
+		const validationQuery = this.createQuery('Rating').hasAncestor(parentKey).filter('authorUid', '=', opt.user);
+
+		const userKey = this.key(['User', opt.user]);
 		try {
+			const [existingReviews] = await this.runQuery(validationQuery);
+			if(existingReviews.length > 0) {throw new BadRequestException("You can only review once")};
+
+			const [user] = await this.get(userKey);
+			data.author = user.userName;
+
+
+			const entity = {
+				key: ratingKey,
+				data: data
+			}
+
 			await this.insert(entity);
+
+			// Calculate the rating score
+			const [results] = await this.runQuery(query);
+			const info = await this.calculateRatingScore(results);
 
 			const historyObj: HistoryOpt = {
 				dataObject: data,
 				user: opt.user,
-				kind: 'JournalistInfo',
-				id: infoKey.id,
+				kind: 'Rating',
+				id: ratingKey.id,
 				action: 'create',
 				time: opt.time,
 			}
 			const history = await this.createHistory(historyObj);
-			return {entity, history}
-		} catch(err: any) {
-			throw new NotFoundException(err.message);
+			return {entity, history, info}
+		} catch (err: any) {
+			throw new BadRequestException(err.message)
 		}
 	}
 
-	async updateJournalistInfoEntity(data: UpdateJournalistInfoDto, opt: UserOpt){
-		const infoKey = this.key(['User', opt.user, 'JournalistInfo']);
+	async updateListRatingEntity(data: UpdateListRatingDto, opt: RatingOpt){
+		const ratingKey = this.key([opt.parentKind, +opt.parentId, 'Rating', +opt.imageId]);
 		data.lastUpdated = opt.time;
-		try {
-			const [entity] = await this.get(infoKey)
 
-			if(!entity){
-				throw new BadRequestException("Action not allowed");
-			}
+		const parentKey = this.key([opt.parentKind, +opt.parentId]);
+		const query = this.createQuery('Rating').hasAncestor(parentKey);
+		try {
+			const [entity] = await this.get(ratingKey);
 
 			for (const key in data) {
 				if(entity.hasOwnProperty(key)){
@@ -430,31 +705,45 @@ export class DatabaseService extends Datastore{
 
 			await this.update(entity);
 
+			// Calculate the rating score
+			const [results] = await this.runQuery(query);
+			const info = await this.calculateRatingScore(results);
+
 			const historyObj: HistoryOpt = {
-				dataObject: entity,
+				dataObject: data,
 				user: opt.user,
-				kind: 'JournalistInfo',
-				id: infoKey.id,
+				kind: 'Rating',
+				id: ratingKey.id,
 				action: 'update',
 				time: opt.time,
 			}
-			const history = await this.createteHistory(historyObj);
-			return {entity, history}
-		} catch(err: any){
+
+			const history = await this.createHistory(historyObj);
+			return {entity, history, info}
+		} catch (err: any) {
 			throw new BadRequestException(err.message)
 		}
 	}
 
 	// Still methods
 	async createStillEntity(data: CreateStillDto, opt: ImageOpt){
-		const stillKey = this.key([opt.parentKind, +opt.parentId, 'Still']);
+		const stillKey = this.key([opt.parentKind, +opt.parentId, 'Still', opt.imageId]);
+		data.stillIndex = opt.imageId;
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
 		const entity = {
 			key: stillKey,
 			data: data
 		}
+
+		const query = this.createQuery('Still').hasAncestor(this.key([opt.parentKind, +opt.parentId]));
 		try {
+			const [existing] = await this.runQuery(query);
+
+			if(existing.length >= 3) {
+				throw new BadRequestException("Too many stills for a single resource");
+			}
+			
 			await this.insert(entity);
 
 			const historyObj: HistoryOpt = {
@@ -473,11 +762,10 @@ export class DatabaseService extends Datastore{
 	}
 
 	async updateStillEntity(data: UpdateStillDto, opt: ImageOpt){
-		const stillKey = this.key([opt.parentKind, +opt.parentId, 'Still', +opt.imageId]);
+		const stillKey = this.key([opt.parentKind, +opt.parentId, 'Still', opt.imageId]);
 		data.lastUpdated = opt.time;
-
 		try {
-			const [entity] = await this.get(stillKey)
+			const [entity] = await this.get(stillKey);
 
 			if(!entity){
 				throw new BadRequestException("Action not allowed");
@@ -510,15 +798,24 @@ export class DatabaseService extends Datastore{
 
 	// Poster methods
 	async createPosterEntity(data: CreatePosterDto, opt: ImageOpt){
-		const posterKey = this.key([opt.parentKind, +opt.parentId, 'Poster']);
+		const posterKey = this.key([opt.parentKind, +opt.parentId, 'Poster', opt.imageId]);
+		data.posterIndex = opt.imageId;
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
 		const entity = {
 			key: posterKey,
 			data: data
 		}
+		const query = this.createQuery('Poster').hasAncestor(this.key([opt.parentKind, +opt.parentId]));
 		try {
+			const [existing] = await this.runQuery(query);
+
+			if(existing.length >= 1) {
+				throw new BadRequestException("Too many posters for a single resource");
+			}
+
 			await this.insert(entity);
+
 			const historyObj: HistoryOpt = {
 				dataObject: data,
 				user: opt.user,
@@ -535,7 +832,7 @@ export class DatabaseService extends Datastore{
 	}
 
 	async updatePosterEntity(data: UpdatePosterDto, opt: ImageOpt){
-		const posterKey = this.key([opt.parentKind, +opt.parentId, 'Poster', +opt.imageId]);
+		const posterKey = this.key([opt.parentKind, +opt.parentId, 'Poster', opt.imageId]);
 		data.lastUpdated = opt.time;
 
 		try {
@@ -591,6 +888,16 @@ export class DatabaseService extends Datastore{
 				time: opt.time,
 			}
 			const history = await this.createHistory(historyObj);
+
+			const searchRecord = {
+				objectID: entity.key.id,
+				name: data.name,
+				profilePhotoUrl: data.profilePhotoUrl,
+				created: data.created,
+				lastUpdated: data.lastUpdated
+			}
+			await this.algolia.initIndex('people').saveObject(searchRecord).wait();
+
 			return { entity, history }
 		} catch (err: any) {
 			throw new NotFoundException(err.message);
@@ -627,9 +934,89 @@ export class DatabaseService extends Datastore{
 				time: opt.time,
 			}
 			const history = await this.createHistory(historyObj);
+
+			const searchRecord = {
+				objectID: entity[this.KEY]['id'],
+				name: data.name,
+				profilePhotoUrl: data.profilePhotoUrl,
+				lastUpdated: data.lastUpdated
+			}
+			await this.algolia.initIndex('people').partialUpdateObject(searchRecord).wait();
+
 			return {entity, history}
 		} catch(err: any){
 			throw new BadRequestException(err.message);
+		}
+	}
+
+	// PersonPhoto methods
+	async createPersonPhotoEntity(data: CreateDisplayPhotoDto, opt: ImageOpt){
+		const photoKey = this.key([opt.parentKind, +opt.parentId, 'PersonPhoto', opt.imageId]);
+		data.photoIndex = opt.imageId;
+		data.lastUpdated = opt.time;
+		data.created = opt.time;
+		const entity = {
+			key: photoKey,
+			data: data
+		}
+
+		const query = this.createQuery('PersonPhoto').hasAncestor(this.key([opt.parentKind, +opt.parentId]));
+		try {
+			const [existing] = await this.runQuery(query);
+
+			if(existing.length > 0) {
+				throw new BadRequestException("Too many photos for a single resource");
+			}
+			
+			await this.insert(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'PersonPhoto',
+				id: photoKey.id,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history}
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
+		}
+	}
+
+	async updatePersonPhotoEntity(data: UpdateDisplayPhotoDto, opt: ImageOpt){
+		const photoKey = this.key([opt.parentKind, +opt.parentId, 'PersonPhoto', opt.imageId]);
+		data.lastUpdated = opt.time;
+		try {
+			const [entity] = await this.get(photoKey);
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			await this.update(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'PersonPhoto',
+				id: photoKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history};
+		} catch(err: any){
+			throw new BadRequestException(err.message)
 		}
 	}
 
@@ -641,7 +1028,7 @@ export class DatabaseService extends Datastore{
 		data.ownerId = opt.parentId;
 		data.personId = opt.personId;		
 		// Creates the role
-		const roleKey = this.key(['Person', +opt.personId, opt.parentKind, +opt.parentId, 'PersonRole']);
+		const roleKey = this.key(['Person', +opt.personId, 'PersonRole']);
 		const entity = {
 			key: roleKey,
 			data: data
@@ -670,7 +1057,7 @@ export class DatabaseService extends Datastore{
 		
 		const personKey = this.datastore.key(['Person', +opt.personId]);
 			
-		const roleKey = this.key(['Person', +personKey.id, opt.parentKind, +opt.parentId,'PersonRole', +opt.roleId]);				
+		const roleKey = this.key(['Person', +personKey.id, 'PersonRole', +opt.roleId]);				
 		data.lastUpdated = opt.time;
 
 		try {
@@ -727,6 +1114,16 @@ export class DatabaseService extends Datastore{
 				time: opt.time,
 			}
 			const history = await this.createHistory(historyObj);
+
+			const searchRecord = {
+				objectID: entity.key.id,
+				name: data.name,
+				profilePhotoUrl: data.profilePhotoUrl,
+				created: data.created,
+				lastUpdated: data.lastUpdated
+			}
+			await this.algolia.initIndex('companies').saveObject(searchRecord).wait();
+
 			return {entity, history}
 		} catch (err: any) {
 			throw new NotFoundException(err.message);
@@ -763,10 +1160,90 @@ export class DatabaseService extends Datastore{
 				time: opt.time,
 			}
 			const history = await this.createHistory(historyObj);
-			
+
+			const searchRecord = {
+				objectID: entity[this.KEY]['id'],
+				name: data.name,
+				profilePhotoUrl: data.profilePhotoUrl,
+				created: data.created,
+				lastUpdated: data.lastUpdated
+			}
+			await this.algolia.initIndex('companies').partialUpdateObject(searchRecord).wait();
+
 			return {entity, history}
 		} catch(err: any){
 			throw new BadRequestException(err.message);
+		}
+	}
+
+	// CompanyPhoto methods
+	async createCompanyPhotoEntity(data: CreateDisplayPhotoDto, opt: ImageOpt){
+		const photoKey = this.key([opt.parentKind, +opt.parentId, 'CompanyPhoto', opt.imageId]);
+		data.photoIndex = opt.imageId;
+		data.lastUpdated = opt.time;
+		data.created = opt.time;
+		const entity = {
+			key: photoKey,
+			data: data
+		}
+
+		const query = this.createQuery('CompanyPhoto').hasAncestor(this.key([opt.parentKind, +opt.parentId]));
+		try {
+			const [existing] = await this.runQuery(query);
+
+			if(existing.length > 0) {
+				throw new BadRequestException("Too many photos for a single resource");
+			}
+			
+			await this.insert(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'CompanyPhoto',
+				id: photoKey.id,
+				action: 'create',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history}
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
+		}
+	}
+
+	async updateCompanyPhotoEntity(data: UpdateDisplayPhotoDto, opt: ImageOpt){
+		const photoKey = this.key([opt.parentKind, +opt.parentId, 'CompanyPhoto', opt.imageId]);
+		data.lastUpdated = opt.time;
+		try {
+			const [entity] = await this.get(photoKey);
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				if(entity.hasOwnProperty(key)){
+					entity[key] = data[key]
+				} else {
+					entity[key] = data[key]
+				}
+			}
+
+			await this.update(entity);
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'CompanyPhoto',
+				id: photoKey.id,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = await this.createHistory(historyObj);
+			return {entity, history};
+		} catch(err: any){
+			throw new BadRequestException(err.message)
 		}
 	}
 
@@ -779,7 +1256,7 @@ export class DatabaseService extends Datastore{
 		data.companyId = opt.companyId	
 		// Create the role
 		const companyKey = this.key(['Company', +opt.companyId]);
-		const roleKey = this.key(['Company', +companyKey.id, opt.parentKind, +opt.parentId, 'CompanyRole']);
+		const roleKey = this.key(['Company', +companyKey.id, 'CompanyRole']);
 		const entity = {
 			key: roleKey,
 			data: data
@@ -807,7 +1284,7 @@ export class DatabaseService extends Datastore{
 	async updateCompanyRoleEntity(data: UpdateCompanyRoleDto, opt: CompanyRoleOpt){
 		const companyKey = this.datastore.key(['Company', +opt.companyId]);
 		
-		const roleKey = this.datastore.key(['Company', +companyKey.id, opt.parentKind, +opt.parentId,'CompanyRole', +opt.roleId]);
+		const roleKey = this.datastore.key(['Company', +companyKey.id, 'CompanyRole', +opt.roleId]);
 		data.lastUpdated = opt.time;
 
 		try {
