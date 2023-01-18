@@ -53,6 +53,16 @@ export class UpdateUserDto {
 	role?: string;
 
 	@IsOptional()
+	@IsEmpty()
+	@IsString()
+	photoUrl?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	@IsString()
+	photoOriginalName?: string;
+
+	@IsOptional()
 	@IsDate()
 	lastUpdated: Date;
 }
@@ -130,11 +140,13 @@ export class UpdateVotesDto {
 }
 
 export class CreateRequestDto {
-	@IsNotEmpty()
+	@IsOptional()
+	@IsEmpty()
 	@IsString()
 	request: string;
 
-	@IsNotEmpty()
+	@IsOptional()
+	@IsEmpty()
 	@IsString()
 	requestSubject: string;
 
@@ -142,11 +154,13 @@ export class CreateRequestDto {
 	@IsString()
 	notes: string;
 
-	@IsNotEmpty()
+	@IsOptional()
+	@IsEmpty()
 	@IsBoolean()
-	approved: false;
+	approved: boolean;
 
-	@IsNotEmpty()
+	@IsOptional()
+	@IsEmpty()
 	@IsString()
 	createdBy: string;
 
@@ -161,24 +175,28 @@ export class CreateRequestDto {
 
 export class UpdateRequestDto {
 	@IsOptional()
+	@IsEmpty()
 	@IsString()
-	request: string;
+	request?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	@IsString()
+	requestSubject?: string;
 
 	@IsOptional()
 	@IsString()
-	requestSubject: string;
+	notes?: string;
 
 	@IsOptional()
-	@IsString()
-	notes: string;
-
-	@IsOptional()
+	@IsEmpty()
 	@IsBoolean()
-	approved: boolean;
+	approved?: boolean;
 
 	@IsOptional()
+	@IsEmpty()
 	@IsDate()
-	lastUpdated: Date;
+	lastUpdated?: Date;
 }
 
 export class CreateJournalistInfoDto {

@@ -32,6 +32,7 @@ import {
 } from '../users/users.dto';
 import { UsersService } from './users.service';
 import { ImageOpt } from '../films/films.types';
+import { CreateDisplayPhotoDto, UpdateDisplayPhotoDto } from '../films/films.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('users')
@@ -51,6 +52,33 @@ export class UsersController {
 	async searchUsername(@Query('q') username: string){
 		console.log('searchUsername')
 		return await this.usersService.checkUserName(username)
+	}
+
+	// First users gets the chance to claim admin role
+	@Get('premiere')
+	@Roles('member')
+	async firstUser(@Headers('AuthorizationToken') idToken: string){
+		console.log('firstUser')
+		const userOptions: UserOpt = {
+			user: await this.authService.getUserUid(idToken),
+			time: new Date()
+		}
+		return await this.usersService.checkEmptyThrone(userOptions);
+	}
+
+	@Post('premiere')
+	@Roles('member')
+	async claimAdminRole(
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('id') id: string
+	){
+		console.log('claimAdminRole')
+		const userOptions: UserOpt = {
+			user: await this.authService.getUserUid(idToken),
+			time: new Date(),
+			objectId: id
+		}
+		return await this.usersService.setAdmin(userOptions);
 	}
 
 	// Check for existing userName
@@ -92,8 +120,7 @@ export class UsersController {
 	async findJournalists(){
 		console.log('findJournalists')
 		return await this.usersService.findAllJournalists();
-	}
-	
+	}	
 
 	// Every user uses this route to get register more profile infomation
 	@Post('register')
@@ -153,6 +180,7 @@ export class UsersController {
 	@UseInterceptors(FileInterceptor('profile'))
 	async updateUserPhoto(
 		@Param('userName') userName: string,
+		@Query('index') index: string,
 		@Headers('AuthorizationToken') idToken: string,
 		@UploadedFile() profile: Express.Multer.File
 	){
@@ -161,20 +189,46 @@ export class UsersController {
 			user: await this.authService.getUserUid(idToken),
 			time: new Date(),
 			parentId: await this.authService.getUserUid(idToken),
-			parentKind: 'User'
+			parentKind: 'User',
+			imageId: index
 		}
 		return await this.usersService.uploadProfilePhoto(imageOptions, profile);
+	}
+
+	@Patch(':userName/photo')
+	@Roles('member')
+	async updatePhoto(
+		@Param('userName') userName: string,
+		@Query('index') index: string,
+		@Body() updatePhoto : UpdateDisplayPhotoDto,
+		@Headers('AuthorizationToken') idToken: string,
+	){
+		const imageOptions: ImageOpt = {
+			user: await this.authService.getUserUid(idToken),
+			time: new Date(),
+			parentId: await this.authService.getUserUid(idToken),
+			parentKind: 'User',
+			imageId: index
+		}
+		return await this.usersService.updateProfilePhoto(updatePhoto, imageOptions);
 	}
 
 	@Delete(':userName/photo')
 	@Roles('member')
 	async deleteUserPhoto(
 		@Headers('AuthorizationToken') idToken: string,
+		@Query('index') index: string,
 		@Query('image_name') imageName: string
 	){
 		console.log('deleteUserPhoto')
-		const user = await this.authService.getUserUid(idToken);
-		return await this.usersService.removeProfilePhoto(imageName, user);
+		const imageOptions: ImageOpt = {
+			user: await this.authService.getUserUid(idToken),
+			time: new Date(),
+			parentId: await this.authService.getUserUid(idToken),
+			parentKind: 'User',
+			imageId: index
+		}
+		return await this.usersService.removeProfilePhoto(imageOptions);
 	}
 
 	// Admins use this route to view all requests for the journalism role
@@ -191,7 +245,6 @@ export class UsersController {
 	async approveJournalist(
 		@Param('username') userName: string,
 		@Param('requestId') requestId: string,
-		@Body() updateRequestDto: UpdateRequestDto,
 		@Headers('AuthorizationToken') idToken: string
 	){
 		console.log('approveJournalist')
@@ -201,12 +254,12 @@ export class UsersController {
 			time: new Date(),
 			requestId: requestId
 		}
-		return await this.usersService.approveToSetJournalist(updateRequestDto, requestOptions);
+		return await this.usersService.approveToSetJournalist(requestOptions);
 	}
 
 	// Users use this route to request the journalist role
 	@Post('journalists/requests')
-	@Roles('journalist')
+	@Roles('member')
 	async requestJournalistRole(
 		@Query('username') userName: string,
 		@Body() createRequestDto: CreateRequestDto,

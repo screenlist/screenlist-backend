@@ -17,17 +17,17 @@ export class RolesGuard implements CanActivate {
 		const roleAllowed = this.reflector.get<string>('roles', ctx.getHandler());
 		const request =  ctx.switchToHttp().getRequest();
 		const path = request.url
-		console.log("roles allowed")
-		console.log(roleAllowed)
-		console.log('current path')
-		console.log(path)
+		// console.log("roles allowed")
+		// console.log(roleAllowed)
+		// console.log('current path')
+		// console.log(path)
 		if(!roleAllowed){			
 			return true;
 		}
 		
 		const token: string = request.headers['authorizationtoken'];		
-		console.log('token of the roles guard')
-		console.log(token.substring(0, 10))
+		// console.log('token of the roles guard')
+		// console.log(token.substring(0, 10))
 		const uid = await this.authService.getUserUid(token)
 
 		const user = await this.usersService.findUser(uid)
@@ -37,9 +37,9 @@ export class RolesGuard implements CanActivate {
 		}
 
 		const userRole = user.role as string
-		console.log(userRole)
+		// console.log(userRole)
 		const emailVerified = await this.authService.emailVerified(token);
-		console.log(emailVerified)
+		// console.log(emailVerified)
 		const match = this.authService.matchRoles(userRole, roleAllowed, emailVerified, path);
 		console.log('The match returned', match)
 		return match

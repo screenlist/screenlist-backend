@@ -21,6 +21,7 @@ import {
 } from '../users/users.dto';
 import { HistoryOpt } from '../database/database.types';
 import { ImageOpt } from '../films/films.types';
+import { CreateDisplayPhotoDto, UpdateDisplayPhotoDto } from '../films/films.dto';
 import { StorageService } from '../storage/storage.service';
 
 @Injectable()
@@ -55,17 +56,22 @@ export class UsersService {
 		}
 	}
 
-	async approveToSetJournalist(data: UpdateRequestDto, opt: RequestOpt){
-		const journalistData: UpdateUserDto = {
-			role: 'journalist',
-			lastUpdated: opt.time
-		} 
-		const userOptions: UserOpt = {
-			user: data.requestSubject,
-			time: opt.time
+	async approveToSetJournalist(opt: RequestOpt){
+		const data = {
+			approved: true
 		}
+		
 		try{
 			const {entity, history} = await this.db.updateRequestEntity(data, opt);
+
+			const journalistData: UpdateUserDto = {
+				role: 'journalist',
+				lastUpdated: opt.time
+			} 
+			const userOptions: UserOpt = {
+				user: entity.requestSubject,
+				time: opt.time
+			}
 			const journalist = await this.db.updateUserEntity(journalistData, userOptions);
 			return {request: entity, journalist: journalist.entity};
 		} catch{
@@ -101,13 +107,20 @@ export class UsersService {
 	}
 
 	async findAllJournalistRequests(){
-		const query = this.db.createQuery('Request').filter('request', '=', 'makeJournalist');
+		const query = this.db.createQuery('Request')
+			.filter('request', '=', 'makeJournalist')
+			.filter('approved', '=', false);
 		try{
-			const [requests] = await this.db.runQuery(query);
-			requests.map((request: Request) => {
-				request.id = request[this.db.KEY]['id'];
-				return request
-			})
+			let [requests] = await this.db.runQuery(query);
+			requests = await Promise.all(
+				requests.map(async (request) => {
+					request.id = request[this.db.KEY]['id'];
+					const userKey = this.db.key(['User', request.requestSubject])
+					const [user] = await this.db.get(userKey)
+					request.username = user.userName
+					return request
+				})
+			)
 			return requests as Request[]
 		} catch{
 			throw new NotFoundException();
@@ -136,21 +149,24 @@ export class UsersService {
 																	.filter('request', '=', 'makeAdmin')
 																	.filter('createdBy', '=', opt.user)
 																	.filter('requestSubject', '=', opt.user)
-																	.filter('created', '<=', dayAgo);
+																	.filter('created', '>=', dayAgo);
 		try{
+			// First check if there are admins
+			const admins = await this.findAllAdmins();
+			const totalAdmins = admins.length;
+
+			if(totalAdmins > 0){throw new NotFoundException('Role already filled')}
+
 			// Only give one chance in a day at this, as per the setAdmin method, also give them
 			// 5 minutes to use the opportunity. This means a single user has a 5 minute window in
 			// a 24 hour cycle to become an admin.
 			const [requests] = await this.db.runQuery(requestsQuery);
-			if(requests.length > 0){
-				return {'status': 'unavailable'}
-			}
+			if(requests.length > 100){throw new NotFoundException('Daily chance already used')}
 
-			const admins = await this.findAllAdmins();
 			const curators = await this.findAllCurators();
 			const moderators = await this.findAllAdmins();
 
-			const totalAdmins = admins.length;
+			
 			const totalCurators = curators.length;
 			const totalModerators = moderators.length;
 
@@ -165,31 +181,29 @@ export class UsersService {
 				created: opt.time,
 				lastUpdated: opt.time,
 			}
-			const request = await this.db.createRequestEntity(requestDto, opt);
 
 			if(totalAdmins+totalCurators+totalModerators == 0){
 				// If all the upper level roles are empty
 				// make the throne available
-				await this.db.insert([request.entity, request.history]);
-				return {'status': 'available', 'request_id': request.entity.key.id};
+				const request = await this.db.createRequestEntity(requestDto, opt);				return {'status': 'available', 'id': request.entity.key.id};
 			} else if(totalAdmins == 0) {
 				const [result] = await this.db.get(currentUserKey);
 				const currentUser: User = result;
 
 				if(totalCurators > 0 && currentUser.role == 'curator'){
 
-					await this.db.insert([request.entity, request.history]);
-					return {'status': 'available', 'request_id': request.entity.key.id}
+					const request = await this.db.createRequestEntity(requestDto, opt);
+					return {'status': 'available', 'id': request.entity.key.id}
 				} else if(totalModerators > 0 && currentUser.role == 'moderator'){
 
-					await this.db.insert([request.entity, request.history]);
-					return {'status': 'available', 'request_id': request.entity.key.id}
+					const request = await this.db.createRequestEntity(requestDto, opt);
+					return {'status': 'available', 'id': request.entity.key.id}
 				}
 			} else {
-				return {'status': 'unavailable'}
+				throw new NotFoundException('Role already filled')
 			}
-		} catch {
-			throw new NotFoundException()
+		} catch(err: any) {
+			throw new NotFoundException(err.message)
 		}
 	}
 
@@ -264,6 +278,7 @@ export class UsersService {
 	async deleteUser(uid: string){
 		const key = this.db.key(['User', uid])
 		try{
+			await this.db.algolia.initIndex('users').deleteObject(uid)
 			await this.db.delete(key)
 			return { 'status': 'deleted' }
 		} catch (err: any){
@@ -309,7 +324,17 @@ export class UsersService {
 		const query = this.db.createQuery('User').filter('userName', '=', username).order('userName').limit(1);
 		try {
 			const [results] = await this.db.runQuery(query);
-			return results[0]
+			const user = results[0]
+			const photoKey = this.db.key(['User', user[this.db.KEY]['name'], 'UserPhoto', '0']);
+			const [photo] = await this.db.get(photoKey);
+			user.photo = photo ? {
+				url: photo?.sdUrl,
+				id: photo[this.db.KEY]['name'],
+				credit: photo?.attribution,
+				altText: photo?.description
+			} : null
+
+			return user
 		} catch (err: any){
 			throw new NotFoundException(err)
 		}
@@ -317,17 +342,44 @@ export class UsersService {
 
 	async uploadProfilePhoto(opt: ImageOpt, image: Express.Multer.File){
 		try {
-			const file = await this.storage.uploadProfilePhoto(image);
-			return { 'status': 'created', 'image_url': file.url }
-		} catch {
+			const data = await this.storage.uploadProfilePhoto(image);
+			const photoData: CreateDisplayPhotoDto = { ...data }
+			const {entity, history} = await this.db.createUserPhotoEntity(photoData, opt)
+			return { id: entity.key.id, ...entity.data }
+		} catch(err: any) {
+			console.log(err)
+			throw new BadRequestException(err.message)
+		}
+	}
+
+	async updateProfilePhoto(data: UpdateDisplayPhotoDto , opt: ImageOpt){
+		try {
+			const {entity, history} = await this.db.updateUserPhotoEntity(data, opt);
+			return { id: entity[this.db.KEY]['id'], ...entity }
+		} catch(err: any) {
+			console.log(err)
 			throw new BadRequestException()
 		}
 	}
 
-	async removeProfilePhoto(imageName: string, uid: string){
+	async removeProfilePhoto(opt: ImageOpt){
 		try {
-			await this.storage.deleteProfilePhoto(imageName);
-			return { 'status': 'deleted' }
+			const photoKey = this.db.key([opt.parentKind, +opt.parentId, 'CompanyPhoto', opt.imageId]);
+			const [photo] = await this.db.get(photoKey);
+			const historyObj: HistoryOpt = {
+				dataObject: photo,
+				user: opt.user,
+				kind: 'UserPhoto',
+				id: photoKey.id,
+				action: 'delete',
+				time: opt.time,
+			}
+			await this.storage.deleteProfilePhoto(photo.originalName);
+			await this.storage.deleteProfilePhoto(photo.hdName);
+			await this.storage.deleteProfilePhoto(photo.sdName);
+			await this.db.createHistory(historyObj);
+			await this.db.delete(photoKey);
+			return {'status': 'deleted'}
 		} catch {
 			throw new BadRequestException()
 		}
@@ -337,12 +389,12 @@ export class UsersService {
 
 	// Admin methods
 	async findAllAdmins(){
-		const query = this.db.createQuery('User').filter('role', '=', 'admin').order('name');
+		const query = this.db.createQuery('User').filter('role', '=', 'admin').order('userName');
 		try{
 			const [result] = await this.db.runQuery(query);
 			return result as User[];
-		} catch{
-			throw new NotFoundException();
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
 		}
 	}
 
@@ -377,9 +429,9 @@ export class UsersService {
 				request.createdBy != opt.user ||
 				request.approved == true ||
 				request.request != 'makeAdmin' ||
-				Number(request.created)+(1000*60*5) > Number(opt.time)
+				Number(new Date(request.created))+(1000*60*5) < Number(opt.time)
 			){
-				throw new ForbiddenException();
+				throw new ForbiddenException('Action not allowed');
 			}
 
 			const privilegedRole: UpdateUserDto = {
@@ -389,8 +441,9 @@ export class UsersService {
 			
 			const {entity, history} = await this.db.updateUserEntity(privilegedRole, opt);
 			return {'status': 'success'};
-		} catch {
-			throw new BadRequestException();
+		} catch(err: any) {
+			console.log(err)
+			throw new BadRequestException(err.message);
 		}
 	}
 
