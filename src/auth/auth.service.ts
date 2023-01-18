@@ -3,10 +3,10 @@ import * as admin from 'firebase-admin';
 import * as path from 'path';
 import { UserOpt, User } from '../users/users.types';
 import { HistoryOpt } from '../database/database.types';
-
+ 
 @Injectable()
 export class AuthService {
-
+ 
 	private app = admin.initializeApp({
 		credential: admin.credential.cert(path.join(__dirname,'../../config/id.json'))
 	})
@@ -51,7 +51,7 @@ export class AuthService {
 		}
 
 		// thresholdRoleIndex >= userRoleIndex ? true : false;
-		if(thresholdRoleIndex >= userRoleIndex){
+		if(userRoleIndex >= thresholdRoleIndex){
 			return true
 		}	else {
 			return false
