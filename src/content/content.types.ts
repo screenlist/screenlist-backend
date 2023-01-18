@@ -15,8 +15,7 @@ export interface Content {
 
 
 export interface ContentOpt {
-	userName: string,
 	user: string,
 	time,
-	contentId: string
+	contentId?: string
 }

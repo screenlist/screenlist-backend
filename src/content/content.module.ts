@@ -3,9 +3,11 @@ import { ContentService } from './content.service';
 import { ContentController } from './content.controller';
 import { DatabaseModule } from '../database/database.module';
 import { StorageModule } from '../storage/storage.module';
+import { AuthModule } from '../auth/auth.module';
+import { UsersModule } from '../users/users.module'
 
 @Module({
-  imports: [DatabaseModule, StorageModule],
+  imports: [DatabaseModule, StorageModule, AuthModule, UsersModule],
   providers: [ContentService],
   controllers: [ContentController]
 })
