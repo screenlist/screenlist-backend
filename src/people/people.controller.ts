@@ -31,6 +31,8 @@ import {
 } from './people.types';
 import { PeopleService } from './people.service';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { CreateDisplayPhotoDto, UpdateDisplayPhotoDto } from '../films/films.dto';
+import { ImageOpt } from  '../films/films.types';
 
 @Controller('people')
 @UseGuards(RolesGuard)
@@ -97,28 +99,52 @@ export class PeopleController {
 	@UseInterceptors(FileInterceptor('profile'))
 	async uploadPhoto(
 		@Param('id') id: string,
+		@Query('index') index: string,
 		@Headers('AuthorizationToken') idToken: string,
 		@UploadedFile() profile: Express.Multer.File
 	){
-		const personOptions: PersonOpt = {
+		const imageOptions: ImageOpt = {
 			user: await this.authService.getUserUid(idToken),
 			time: new Date(),
-			personId: id
+			parentId: id,
+			parentKind: 'Person',
+			imageId: index
 		}
-		return await this.peopleService.uploadPhoto(personOptions, profile);
+		return await this.peopleService.uploadPhoto(imageOptions, profile);
+	}
+
+	@Patch(':id/photo')
+	@Roles('member')
+	async updatePhoto(
+		@Param('id') id: string,
+		@Query('index') index: string,
+		@Body() updatePhoto : UpdateDisplayPhotoDto,
+		@Headers('AuthorizationToken') idToken: string,
+	){
+		const imageOptions: ImageOpt = {
+			user: await this.authService.getUserUid(idToken),
+			time: new Date(),
+			parentId: id,
+			parentKind: 'Person',
+			imageId: index
+		}
+		return await this.peopleService.updatePhoto(updatePhoto, imageOptions);
 	}
 
 	@Delete(':id/photo')
 	@Roles('member')
 	async removePhoto(
 		@Param('id') id: string,
+		@Query('index') index: string,
 		@Headers('AuthorizationToken') idToken: string
 	){
-		const personOptions: PersonOpt = {
+		const imageOptions: ImageOpt = {
 			user: await this.authService.getUserUid(idToken),
 			time: new Date(),
-			personId: id
+			parentId: id,
+			parentKind: 'Person',
+			imageId: index
 		}
-		return await this.peopleService.removePhoto(personOptions)
+		return await this.peopleService.removePhoto(imageOptions)
 	}
 }

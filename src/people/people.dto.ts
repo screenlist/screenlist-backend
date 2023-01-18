@@ -14,15 +14,38 @@ export class CreatePersonDto {
 	@MaxLength(60)
 	name: string;
 
+	@IsNotEmpty()
+	@IsString()
+	@MaxLength(60)
+	occupation: string;
+
+	@IsOptional()
 	@IsEmpty()
 	profilePhotoUrl: string;
 
+	@IsOptional()
 	@IsEmpty()
 	profilePhotoOriginalName: string;
 
+	@IsOptional()
+	@IsEmpty()
+	profilePhotoAttribution: string;
+
+	@IsOptional()
+	@IsString()
+	@MaxLength(15)
+	twitterUsername: string;
+
+	@IsOptional()
+	@IsString()
+	@MaxLength(30)
+	instagramUsername: string;
+
+	@IsOptional()
 	@MaxLength(500)
 	description: string;
 
+	@IsOptional()
 	@IsFQDN()
 	website: string;
 
@@ -41,6 +64,11 @@ export class UpdatePersonDto {
 	@MaxLength(60)
 	name?: string;
 
+	@IsOptional()
+	@IsString()
+	@MaxLength(60)
+	occupation?: string;
+
 	@IsEmpty()
 	profilePhotoUrl?: string;
 
@@ -54,6 +82,16 @@ export class UpdatePersonDto {
 	@IsOptional()
 	@IsFQDN()
 	website?: string;
+
+	@IsOptional()
+	@IsString()
+	@MaxLength(15)
+	twitterUsername?: string;
+
+	@IsOptional()
+	@IsString()
+	@MaxLength(30)
+	instagramUsername?: string;
 
 	@IsOptional()
 	@IsDate()
@@ -88,7 +126,7 @@ export class CreatePersonRoleDto {
 
 	@IsNotEmpty()
 	@MaxLength(20)
-	subtitle: string;
+	department: string;
 
 	@IsNotEmpty()
 	@MaxLength(20)
@@ -119,7 +157,7 @@ export class UpdatePersonRoleDto {
 
 	@IsOptional()
 	@MaxLength(20)
-	subtitle?: string;
+	department?: string;
 
 	@IsOptional()
 	@MaxLength(20)

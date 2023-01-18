@@ -14,6 +14,8 @@ import {
 } from './people.types';
 import { HistoryOpt } from '../database/database.types';
 import { StorageService } from '../storage/storage.service';
+import { CreateDisplayPhotoDto, UpdateDisplayPhotoDto } from '../films/films.dto';
+import { ImageOpt } from  '../films/films.types';
 
 @Injectable()
 export class PeopleService {
@@ -25,18 +27,100 @@ export class PeopleService {
 	async findAll(): Promise<Person[]>{
 		const query =  this.db.createQuery('Person').order('name').limit(100);
 		try {
-			const [people] = await this.db.runQuery(query)
-			return people.map((person) => ({id: person[this.db.KEY]['id'], ...person}))
+			let [people] = await this.db.runQuery(query);
+			people = await Promise.all(
+				people.map(async (item) => {
+					const photoKey = this.db.key(['Person', +item[this.db.KEY]['id'], 'PersonPhoto', '0']);
+					const [photo] = await this.db.get(photoKey);
+					item.id = item[this.db.KEY]['id'];
+					item.photo = photo ? {
+						url: photo?.sdUrl,
+						id: photo[this.db.KEY]['name'],
+						credit: photo?.attribution,
+						altText: photo?.description
+					} : null
+
+					return item
+				})
+			)
+			return people
 		} catch {
 			throw new NotFoundException('Could not find people')
 		}
 	}
 
-	async findOne(id: string): Promise<Person> {
+	async findOne(id: string) {
 		const personKey = this.db.key(['Person', +id]);
+		const photoKey = this.db.key(['Person', +id, 'PersonPhoto', '0'])
+		const rolesQuery = this.db.createQuery('PersonRole').filter('personId', '=', id)
 		try {
 			const [person] = await this.db.get(personKey);
-			return person
+			const [photo] = await this.db.get(photoKey);
+			let [roles] = await this.db.runQuery(rolesQuery);
+			const filmography = [];
+
+			person.photo = photo ? {
+				url: photo?.sdUrl,
+				id: photo[this.db.KEY]['name'],
+				credit: photo?.attribution,
+				altText: photo?.description
+			} : null;
+
+			roles = await Promise.all(
+				roles.map(async (item: CreatePersonRoleDto) => {
+					const parentKey = this.db.key([item.ownerKind, +item.ownerId])
+					const posterKey = this.db.key([item.ownerKind, +item.ownerId, 'Poster', '0'])
+					try {
+						const [parent] = await this.db.get(parentKey);
+						const [poster] = await this.db.get(posterKey);
+						const path = `/${item.ownerKind == 'Film' ? 'films' : 'series'}/${item.ownerId}/people/${item.personId}/roles/${item[this.db.KEY]['id']}`;
+
+						const role = {...item, id: item[this.db.KEY]['id'], urlPath: path}
+						
+						const work = filmography.find((element) => element.id == item.ownerId);
+
+						if(work){
+							work.roles.push(role)
+						} else {
+							const parentObject = {
+								name: parent.name,
+								id: item.ownerId,
+								type: item.ownerKind,
+								year: parent.year,
+								posterUrl: poster?.lqUrl,
+								roles: [role]
+							}
+							filmography.push(parentObject)
+						}
+
+						return {
+							id: item[this.db.KEY]['id'],
+							...item,
+							ownerName: parent.name,
+							posterUrl: poster?.lqUrl,
+							year: parent.year
+						}
+					} catch (err: any) {
+						throw new BadRequestException(err.message)
+					}
+				})
+			)
+
+			filmography.sort((a, b) => {
+				if(a.year > b.year) {
+					return -1
+				} else {
+					return 0
+				}
+			});
+
+			return {
+				details : {
+					...person, 
+					id: person[this.db.KEY]['id']
+				},
+				filmography
+			}
 		} catch {
 			throw new NotFoundException("Person not found")
 		}
@@ -45,7 +129,7 @@ export class PeopleService {
 	async createOne(data: CreatePersonDto, opt: PersonOpt){
 		try {
 			const {entity, history} = await this.db.createPersonEntity(data, opt);
-			return { 'status': 'successfully created', 'person_id': entity.key.id };
+			return { id: entity.key.id, ...entity.data };
 		} catch(err: any){
 			throw new BadRequestException(err.message);
 		}
@@ -54,7 +138,7 @@ export class PeopleService {
 	async updateOne(data: UpdatePersonDto, opt: PersonOpt){
 		try {
 			const {entity, history} = await this.db.updatePersonEntity(data, opt);
-			return { 'status': 'successfully updated', 'person_id': entity.key.id };
+			return { id: entity[this.db.KEY]['id'], ...entity };
 		} catch(err: any){
 			throw new BadRequestException(err.message);
 		}
@@ -89,6 +173,7 @@ export class PeopleService {
 				}
 				await this.db.createHistory(roleHistoryObj);
 			})
+			await this.db.algolia.initIndex('people').deleteObject(personKey.id)
 			await this.db.transaction().delete(entities);
 			return { 'status': 'successfully deleted' };
 		} catch(err:any) {
@@ -96,36 +181,46 @@ export class PeopleService {
 		}
 	}
 
-	async uploadPhoto(opt: PersonOpt, image: Express.Multer.File){
+	async uploadPhoto(opt: ImageOpt, image: Express.Multer.File){
 		try {
-			const file = await this.storage.uploadProfilePhoto(image)
-			const dto: UpdatePersonDto = {
-				profilePhotoUrl: file.url,
-				profilePhotoOriginalName: file.originalName
-			}
-			const {entity, history} = await this.db.updatePersonEntity(dto, opt);
-			return { 'status': 'created', 'image_url': entity.profilePhotoUrl }
+			const data = await this.storage.uploadProfilePhoto(image)
+			const dto: CreateDisplayPhotoDto = { ...data }
+			const {entity, history} = await this.db.createPersonPhotoEntity(dto, opt);
+			return { id: entity.key.name, ...entity.data }
 		} catch {
 			throw new BadRequestException()
 		}
 	}
 
-	async removePhoto(opt: PersonOpt){
-		try{
-			const personKey = this.db.key(['Company', +opt.personId]);
-			const [result] = await this.db.get(personKey);
-			const person: Person = result 
-			const dto: UpdatePersonDto = {
-				profilePhotoUrl: null,
-				profilePhotoOriginalName: null
-			}
-			const {entity, history} = await this.db.updatePersonEntity(dto, opt);
-			await this.storage.deletePoster(person.profilePhotoOriginalName);
-			await this.db.update(entity);
-			await this.db.insert(history);
-			return {'status': 'deleted'}
+	async updatePhoto(data: UpdateDisplayPhotoDto , opt: ImageOpt){
+		try {
+			const {entity, history} = await this.db.updatePersonPhotoEntity(data, opt);
+			return { id: entity[this.db.KEY]['id'], ...entity }
 		} catch {
 			throw new BadRequestException()
+		}
+	}
+
+	async removePhoto(opt: ImageOpt){
+		try{
+			const photoKey = this.db.key([opt.parentKind, +opt.parentId, 'PersonPhoto', opt.imageId]);
+			const [photo] = await this.db.get(photoKey);
+			const historyObj: HistoryOpt = {
+				dataObject: photo,
+				user: opt.user,
+				kind: 'PersonPhoto',
+				id: photoKey.id,
+				action: 'delete',
+				time: opt.time,
+			}
+			await this.storage.deleteProfilePhoto(photo.originalName);
+			await this.storage.deleteProfilePhoto(photo.hdName);
+			await this.storage.deleteProfilePhoto(photo.sdName);
+			await this.db.createHistory(historyObj);
+			await this.db.delete(photoKey)
+			return {'status': 'deleted'}
+		} catch(err: any) {
+			throw new BadRequestException(err.message)
 		}
 	}
 
