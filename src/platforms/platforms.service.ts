@@ -97,37 +97,6 @@ export class PlatformsService {
 		}
 	}
 
-	async uploadPhoto(opt: PlatformOpt, image: Express.Multer.File){
-		try {
-			const file = await this.storage.uploadProfilePhoto(image)
-			const dto: UpdatePlatformDto = {
-				profilePhotoUrl: file.url,
-				profilePhotoOriginalName: file.originalName
-			}
-			const {entity, history} = await this.db.updatePlatformEntity(dto, opt);
-			return { 'status': 'created', 'image_url': entity.profilePhotoUrl }
-		} catch {
-			throw new BadRequestException()
-		}
-	}
-
-	async removePhoto(opt: PlatformOpt){
-		try{
-			const platformKey = this.db.key(['Company', +opt.platformId]);
-			const [result] = await this.db.get(platformKey);
-			const platform: Platform = result 
-			const dto: UpdatePlatformDto = {
-				profilePhotoUrl: null,
-				profilePhotoOriginalName: null
-			}
-			const {entity, history} = await this.db.updatePlatformEntity(dto, opt);
-			await this.storage.deletePoster(platform.profilePhotoOriginalName);
-			return {'status': 'deleted'}
-		} catch {
-			throw new BadRequestException()
-		}
-	}
-
 	async createOneLink(data: CreateLinkDto, opt: LinkOpt){
 		try {
 			const {entity, history} = await this.db.createLinkEntity(data, opt);
