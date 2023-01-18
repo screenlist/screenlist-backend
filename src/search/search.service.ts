@@ -10,17 +10,6 @@ export class SearchService {
 		private db: DatabaseService
 	){}
 
-	// TODO: integrate typesense
-	private client = new Typesense.Client({
-		nodes: [{
-			host: this.configService.get('SEARCH_HOST'),
-			port: 443,
-			protocol: 'https'
-		}],
-		apiKey: this.configService.get('SEARCH_API'),
-		connectionTimeoutSeconds: 2
-	})
-
 
 	async quickSearch(queryName: 'film'|'series'|'person'|'company'|'platform', name: string){
 		if(queryName == 'film'){

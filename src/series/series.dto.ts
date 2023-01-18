@@ -15,6 +15,7 @@ export class CreateSeriesDto {
 	@MaxLength(60)
 	name: string;
 
+	@IsOptional()
 	@IsString()
 	trailerUrl?: string;
 
@@ -44,6 +45,7 @@ export class CreateSeriesDto {
 	@MaxLength(20)
 	productionStage: string;
 
+	@IsOptional()
 	@MaxLength(500)
 	plotSummary?: string;
 

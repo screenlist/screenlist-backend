@@ -145,6 +145,21 @@ export class SeriesService {
 				id: seriesKey.id
 			}
 			await this.db.createHistory(historyObj)
+
+			// Write series into search
+			const searchRecord = {
+				objectID: entity.key.id,
+				name: series.name,
+				genres: series.genres,
+				type: series.type,
+				productionStage: series.productionStage,
+				releaseDate: series.releaseDate,
+				originalPlatform: series.originalPlatform,
+				created: series.created,
+				lastUpdated: series.lastUpdated
+			}
+			await this.db.algolia.initIndex('series').saveObject(searchRecord).wait();
+
 			return entity.data;
 		} catch(err: any){
 			throw new BadRequestException(err.message);
@@ -176,6 +191,21 @@ export class SeriesService {
 				id: seriesKey.id
 			}
 			const history = await this.db.createHistory(historyObj);
+
+			// Update search
+			const searchRecord = {
+				objectID: entity.key.id,
+				name: series.name,
+				genres: series.genres,
+				type: series.type,
+				productionStage: series.productionStage,
+				releaseDate: series.releaseDate,
+				originalPlatform: series.originalPlatform,
+				created: series.created,
+				lastUpdated: series.lastUpdated
+			}
+			await this.db.algolia.initIndex('series').partialUpdateObject(searchRecord).wait();
+
 			return entity.data;
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -279,6 +309,7 @@ export class SeriesService {
 				action: 'delete',
 				time: time,
 			}
+			await this.db.algolia.initIndex('series').deleteObject(seriesKey.id)
 			await this.db.createHistory(historyObj);
 			await this.db.transaction().delete(deletion);
 			return {'status': 'deleted'}
