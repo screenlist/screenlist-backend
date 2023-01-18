@@ -91,34 +91,4 @@ export class PlatformsController {
 		}
 		return await this.platformsService.deleteOne(platformOptions);
 	}
-
-	@Post(':id/photo')
-	@Roles('member')
-	@UseInterceptors(FileInterceptor('profile'))
-	async uploadPhoto(
-		@Param('id') id: string,
-		@Headers('AuthorizationToken') idToken: string,
-		@UploadedFile() profile: Express.Multer.File
-	){
-		const platformOptions: PlatformOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date(),
-			platformId: id
-		}
-		return await this.platformsService.uploadPhoto(platformOptions, profile);
-	}
-
-	@Delete(':id/photo')
-	@Roles('member')
-	async removePhoto(
-		@Param('id') id: string,
-		@Headers('AuthorizationToken') idToken: string
-	){
-		const platformOptions: PlatformOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date(),
-			platformId: id
-		}
-		return await this.platformsService.removePhoto(platformOptions)
-	}
 }

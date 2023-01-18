@@ -110,48 +110,50 @@ export class SeriesController {
 	async uploadStill(
 		@Param('seriesId') seriesId: string,
 		@UploadedFile() still: Express.Multer.File,
-		@Headers('AuthorizationToken') idToken: string
-	){
-		const imageOptions: ImageOpt = {
-			time: new Date(),
-			user: await this.authService.getUserUid(idToken),
-			parentId: seriesId,
-			parentKind: 'Series'
-		}
-		return await this.filmsService.uploadStill(imageOptions, still);
-	}
-
-	@Patch(':seriesId/stills/stillId')
-	@Roles('member')
-	async updateStillDescription(
-		@Param('seriesId') seriesId: string,
-		@Param('stillId') stillId: string,
-		@Body() updateStillDto: UpdateStillDto,
-		@Headers('AuthorizationToken') idToken: string
-	){
-		const imageOptions: ImageOpt = {
-			time: new Date(),
-			user: await this.authService.getUserUid(idToken),
-			parentId: seriesId,
-			parentKind: 'Film',
-			imageId: stillId
-		}
-		return await this.filmsService.updateStill(updateStillDto, imageOptions);
-	}
-
-	@Delete(':seriesId/stills/stillId')
-	@Roles('member')
-	async deleteStill(
-		@Param('seriesId') seriesId: string,
-		@Param('stillId') stillId: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('index') index: '0'|'1'|'2'
 	){
 		const imageOptions: ImageOpt = {
 			time: new Date(),
 			user: await this.authService.getUserUid(idToken),
 			parentId: seriesId,
 			parentKind: 'Series',
-			imageId: stillId
+			imageId: index
+		}
+		return await this.filmsService.uploadStill(imageOptions, still);
+	}
+
+	@Patch(':seriesId/stills')
+	@Roles('member')
+	async updateStillDescription(
+		@Param('seriesId') seriesId: string,
+		@Body() updateStillDto: UpdateStillDto,
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('index') index: string
+	){
+		const imageOptions: ImageOpt = {
+			time: new Date(),
+			user: await this.authService.getUserUid(idToken),
+			parentId: seriesId,
+			parentKind: 'Film',
+			imageId: index
+		}
+		return await this.filmsService.updateStill(updateStillDto, imageOptions);
+	}
+
+	@Delete(':seriesId/stills')
+	@Roles('member')
+	async deleteStill(
+		@Param('seriesId') seriesId: string,
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('index') index: string
+	){
+		const imageOptions: ImageOpt = {
+			time: new Date(),
+			user: await this.authService.getUserUid(idToken),
+			parentId: seriesId,
+			parentKind: 'Series',
+			imageId: index
 		}
 		return await this.filmsService.deleteStill(imageOptions);
 	}
@@ -163,48 +165,50 @@ export class SeriesController {
 	async uploadPoster(
 		@Param('seriesId') seriesId: string,
 		@UploadedFile() poster: Express.Multer.File,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('index') index: '0'
 	){
 		const imageOptions: ImageOpt = {
 			time: new Date(),
 			user: await this.authService.getUserUid(idToken),
 			parentId: seriesId,
-			parentKind: 'Series'
+			parentKind: 'Series',
+			imageId: index
 		}
 		return await this.filmsService.uploadPoster(imageOptions, poster);
 	}
 
-	@Patch(':seriesId/posters/posterId')
+	@Patch(':seriesId/posters')
 	@Roles('member')
 	async updatePosterDescription(
 		@Param('seriesId') seriesId: string,
-		@Param('posterId') posterId: string,
 		@Body() updatePosterDto: UpdatePosterDto,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('index') index: string
 	){
 		const imageOptions: ImageOpt = {
 			time: new Date(),
 			user: await this.authService.getUserUid(idToken),
 			parentId: seriesId,
 			parentKind: 'Series',
-			imageId: posterId
+			imageId: index
 		}
 		return await this.filmsService.updatePoster(updatePosterDto, imageOptions);
 	}
 
-	@Delete(':seriesId/posters/posterId')
+	@Delete(':seriesId/posters')
 	@Roles('member')
 	async deletePoster(
 		@Param('seriesId') seriesId: string,
-		@Param('posterId') posterId: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('index') index: string
 	){
 		const imageOptions: ImageOpt = {
 			time: new Date(),
 			user: await this.authService.getUserUid(idToken),
 			parentId: seriesId,
 			parentKind: 'Series',
-			imageId: posterId
+			imageId: index
 		}
 		return await this.filmsService.deletePoster(imageOptions);
 	}
