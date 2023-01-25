@@ -50,6 +50,31 @@ export class CompaniesService {
 		}
 	}
 
+	async findAllUnverified() {
+		const query = this.db.createQuery('Company').filter('editVerified', '=', false).limit(100);
+		try{
+			let [companies] = await this.db.runQuery(query);
+			companies = await Promise.all(
+				companies.map(async (item) => {
+					const photoKey = this.db.key(['Company', +item[this.db.KEY]['id'], 'CompanyPhoto', '0']);
+					const [photo] = await this.db.get(photoKey);
+					item.id = item[this.db.KEY]['id'];
+					item.photo = photo ? {
+						url: photo?.sdUrl,
+						id: photo[this.db.KEY]['name'],
+						credit: photo?.attribution,
+						altText: photo?.description
+					} : null
+
+					return item
+				})
+			);
+			return companies
+		} catch {
+			throw new NotFoundException('Could not retrieve companies');
+		}
+	}
+
 	async findOne(id: string): Promise<any>{
 		const companyKey = this.db.key(['Company', +id]);
 		const photoKey = this.db.key(['Company', +id, 'CompanyPhoto', '0']);
@@ -120,6 +145,7 @@ export class CompaniesService {
 	}
 
 	async createOne(data: CreateCompanyDto, opt: CompanyOpt){
+		data.editVerified = false;
 		try {
 			const {entity, history} = await this.db.createCompanyEntity(data, opt);
 			return { id: entity.key.id, ...entity.data };
@@ -129,6 +155,7 @@ export class CompaniesService {
 	}
 
 	async updateOne(data: UpdateCompanyDto, opt: CompanyOpt){
+		data.editVerified = false;
 		try {
 			const {entity, history} = await this.db.updateCompanyEntity(data, opt);
 			return { id: entity[this.db.KEY]['id'], ...entity }
@@ -177,7 +204,7 @@ export class CompaniesService {
 	async uploadPhoto(opt: ImageOpt, image: Express.Multer.File){
 		try {
 			const data = await this.storage.uploadProfilePhoto(image)
-			const dto: CreateDisplayPhotoDto = { ...data }
+			const dto: CreateDisplayPhotoDto = { ...data, editVerified: false }
 
 			const {entity, history} = await this.db.createCompanyPhotoEntity(dto, opt);
 			return { id: entity.key.name, ...entity.data }
@@ -187,6 +214,7 @@ export class CompaniesService {
 	}
 
 	async updatePhoto(data: UpdateDisplayPhotoDto , opt: ImageOpt){
+		data.editVerified = false;
 		try {
 			const {entity, history} = await this.db.updateCompanyPhotoEntity(data, opt);
 			return { id: entity[this.db.KEY]['id'], ...entity }
@@ -222,6 +250,7 @@ export class CompaniesService {
 		if(!data.type){
 			throw new BadRequestException('role type not specified')
 		}
+		data.editVerified = false;
 		try {
 			const {entity, history} = await this.db.createCompanyRoleEntity(data, opt);
 			return { id: entity.key.id, ...entity.data }
@@ -231,6 +260,7 @@ export class CompaniesService {
 	}
 
 	async updateOneRole(data: UpdateCompanyRoleDto, opt: CompanyRoleOpt){
+		data.editVerified = false;
 		try {
 			const entityData = await this.db.updateCompanyRoleEntity(data, opt);
 			return { id: entityData.entity[this.db.KEY]['id'], ...entityData.entity }
@@ -240,16 +270,17 @@ export class CompaniesService {
 	}
 
 	async deleteOneRole(opt: CompanyRoleOpt){
+		console.log('it hits')
 		const roleKey = this.db.key([
 			'Company', 
-			+opt.companyId, 
-			opt.parentKind, 
-			+opt.parentId, 
+			+opt.companyId,
 			'CompanyRole', 
 			+opt.roleId
 		]);
 		try {
+			console.log(roleKey)
 			const [role] = await this.db.get(roleKey);
+			console.log(role)
 			const historyObj: HistoryOpt = {
 				dataObject: role,
 				kind: 'CompanyRole',
@@ -258,9 +289,8 @@ export class CompaniesService {
 				action: 'delete',
 				user: opt.user
 			}
-			
-			const entity = {key: roleKey};
-			await this.db.delete(entity);
+
+			await this.db.delete(roleKey);
 			await this.db.createHistory(historyObj);
 			return { 'status': 'deleted' };
 		} catch (err: any){

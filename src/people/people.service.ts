@@ -127,6 +127,7 @@ export class PeopleService {
 	}
 
 	async createOne(data: CreatePersonDto, opt: PersonOpt){
+		data.editVerified = false;
 		try {
 			const {entity, history} = await this.db.createPersonEntity(data, opt);
 			return { id: entity.key.id, ...entity.data };
@@ -136,6 +137,7 @@ export class PeopleService {
 	}
 
 	async updateOne(data: UpdatePersonDto, opt: PersonOpt){
+		data.editVerified = false;
 		try {
 			const {entity, history} = await this.db.updatePersonEntity(data, opt);
 			return { id: entity[this.db.KEY]['id'], ...entity };
@@ -184,7 +186,7 @@ export class PeopleService {
 	async uploadPhoto(opt: ImageOpt, image: Express.Multer.File){
 		try {
 			const data = await this.storage.uploadProfilePhoto(image)
-			const dto: CreateDisplayPhotoDto = { ...data }
+			const dto: CreateDisplayPhotoDto = { ...data, editVerified: false }
 			const {entity, history} = await this.db.createPersonPhotoEntity(dto, opt);
 			return { id: entity.key.name, ...entity.data }
 		} catch {
@@ -193,6 +195,7 @@ export class PeopleService {
 	}
 
 	async updatePhoto(data: UpdateDisplayPhotoDto , opt: ImageOpt){
+		data.editVerified = false;
 		try {
 			const {entity, history} = await this.db.updatePersonPhotoEntity(data, opt);
 			return { id: entity[this.db.KEY]['id'], ...entity }
@@ -228,6 +231,7 @@ export class PeopleService {
 		if(!data.category){
 			throw new BadRequestException('role category not specified')
 		}
+		data.editVerified = false;
 		try {
 			const {entity, history} = await this.db.createPersonRoleEntity(data, opt);
 			return { 'status': 'successfully created', 'role_id': entity.key.id }
@@ -237,6 +241,7 @@ export class PeopleService {
 	}
 
 	async updateOneRole(data: UpdatePersonRoleDto, opt: PersonRoleOpt){
+		data.editVerified = false;
 		try {
 			const {entity, history} = await this.db.updatePersonRoleEntity(data, opt);
 			return { 'status': 'successfully updated', 'role_id': entity[this.db.KEY]['id'] }
@@ -246,7 +251,7 @@ export class PeopleService {
 	}
 
 	async deleteOneRole(opt: PersonRoleOpt){
-		const roleKey = this.db.key(['Person', +opt.personId, opt.parentKind, +opt.parentId, 'CompanyRole', +opt.roleId]);
+		const roleKey = this.db.key(['Person', +opt.personId, 'PersonRole', +opt.roleId]);
 		try {
 			const [role] = await this.db.get(roleKey);
 			const historyObj: HistoryOpt = {
@@ -258,10 +263,10 @@ export class PeopleService {
 				user: opt.user
 			}
 			await this.db.createHistory(historyObj);
-			const entity = {key: roleKey};
-			await this.db.delete(entity);
+			await this.db.delete(roleKey);
 			return { 'status': 'successfully deleted' };
 		} catch (err: any){
+			console.log(err)
 			throw new BadRequestException(err.message)
 		}
 	}

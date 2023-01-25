@@ -30,6 +30,10 @@ export class CreateCompanyDto {
 	website: string;
 
 	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
+
+	@IsOptional()
 	@IsDate()
 	created: Date;
 
@@ -59,6 +63,10 @@ export class UpdateCompanyDto {
 	@IsOptional()
 	@IsFQDN()
 	website?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
 
 	@IsOptional()
 	@IsDate()
@@ -94,6 +102,10 @@ export class CreateCompanyRoleDto {
 	type: string;
 
 	@IsOptional()
+	@IsEmpty()
+	editVerified: boolean;
+
+	@IsOptional()
 	@IsDate()
 	lastUpdated?: Date;
 
@@ -106,6 +118,10 @@ export class UpdateCompanyRoleDto {
 	@IsOptional()
 	@IsString()
 	type?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
 
 	@IsOptional()
 	@IsDate()

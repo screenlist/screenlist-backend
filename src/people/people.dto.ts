@@ -50,6 +50,10 @@ export class CreatePersonDto {
 	website: string;
 
 	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
+
+	@IsOptional()
 	@IsDate()
 	created: Date;
 
@@ -92,6 +96,10 @@ export class UpdatePersonDto {
 	@IsString()
 	@MaxLength(30)
 	instagramUsername?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
 
 	@IsOptional()
 	@IsDate()
@@ -142,6 +150,10 @@ export class CreatePersonRoleDto {
 	characterDescription?: string;
 
 	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
+
+	@IsOptional()
 	@IsDate()
 	lastUpdated?: Date;
 
@@ -170,6 +182,10 @@ export class UpdatePersonRoleDto {
 	@IsOptional()
 	@MaxLength(150)
 	characterDescription?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
 
 	@IsOptional()
 	@IsDate()

@@ -76,7 +76,6 @@ export class FilmsService {
 			}))
 			return results
 		} catch (err: any) {
-			console.log(err)
 			throw new NotFoundException('Encountered trouble while trying to retrieve');
 		}
 	}
@@ -131,7 +130,7 @@ export class FilmsService {
 				credit: poster?.attribution,
 				altText: poster?.description
 			} : null;
-			console.log(stills)
+
 			stills = stills.map((item) => {
 				return {
 					id: item[this.db.KEY]['name'],
@@ -206,7 +205,6 @@ export class FilmsService {
 
 			return film
 		} catch(err: any){
-			console.log(err)
 			throw new NotFoundException("Could not retrieve film");
 		}
 	}
@@ -220,11 +218,12 @@ export class FilmsService {
 		// film.slug = encodeURIComponent(filmName.toLowerCase().concat("-"+filmKey.id.toString()));
 		film.lastUpdated = time;
 		film.created = time;
+		film.editVerified = false;
 		const entity = {
 			key: filmKey,
 			data: film
 		}
-		console.log(filmKey.id)
+		
 		try {
 			await this.db.insert(entity);
 
@@ -265,6 +264,7 @@ export class FilmsService {
 		const time = new Date()
 		const filmKey = this.db.key(['Film', +id]);		
 		film.lastUpdated = time;
+		film.editVerified = false;
 		// Create history
 		const historyObj: HistoryOpt = {
 			dataObject: film,
@@ -433,6 +433,7 @@ export class FilmsService {
 	}
 
 	async createOneRating(data: CreateListRatingDto, opt: RatingOpt){
+		data.editVerified = false;
 		try {
 			const {entity, info} = await this.db.createListRatingEntity(data, opt);
 
@@ -449,6 +450,7 @@ export class FilmsService {
 	}
 
 	async updateOneRating(data: UpdateListRatingDto, opt: RatingOpt){
+		data.editVerified = false;
 		try {
 			const {entity, info} = await this.db.updateListRatingEntity(data, opt);
 
@@ -469,7 +471,8 @@ export class FilmsService {
 		try {
 			const data = await this.storage.uploadPoster(image);
 			const createPoster: CreatePosterDto = {
-				...data
+				...data,
+				editVerified: false
 			}
 			const {entity} = await this.db.createPosterEntity(createPoster, opt);
 			return {id: entity.key.name, ...entity.data}
@@ -480,6 +483,7 @@ export class FilmsService {
 	}
 
 	async updatePoster(data: UpdatePosterDto, opt: ImageOpt){
+		data.editVerified = false;
 		try {
 			const {entity, history} = await this.db.updatePosterEntity(data, opt);
 			return {id: entity[this.db.KEY]['name'], ...entity}
@@ -516,8 +520,9 @@ export class FilmsService {
 		try {
 			const file = await this.storage.uploadStill(image);
 			
-			const creation: CreatePosterDto = {
-				...file
+			const creation: CreateStillDto = {
+				...file,
+				editVerified: false
 			}
 
 			const {entity, history} = await this.db.createStillEntity(creation, opt);
@@ -529,6 +534,7 @@ export class FilmsService {
 	}
 
 	async updateStill(data: UpdateStillDto, opt: ImageOpt){
+		data.editVerified = false;
 		try {
 			const {entity, history} = await this.db.updateStillEntity(data, opt);
 			return { id: entity[this.db.KEY]['name'], ...entity }

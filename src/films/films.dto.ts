@@ -65,6 +65,10 @@ export class CreateFilmDto {
 	genres?: [string];
 
 	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
+
+	@IsOptional()
 	@IsDate()
 	lastUpdated?: Date;
 
@@ -137,6 +141,10 @@ export class UpdateFilmDto {
 	@IsOptional()
 	@IsEmpty()
 	slug?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
 
 	@IsOptional()
 	@IsDate()
@@ -223,6 +231,10 @@ export class CreateStillDto {
 	lastUpdated?: Date;
 
 	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
+
+	@IsOptional()
 	@IsDate()
 	created?: Date;
 }
@@ -237,6 +249,10 @@ export class UpdateStillDto {
 	@IsNotEmpty()
 	@MaxLength(150)
 	description?: string;	
+
+	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
 
 	@IsOptional()
 	@IsDate()
@@ -314,6 +330,10 @@ export class CreatePosterDto {
 	lqSize?: number;
 
 	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
+
+	@IsOptional()
 	@IsDate()
 	lastUpdated?: Date;
 
@@ -334,6 +354,10 @@ export class UpdatePosterDto {
 	@IsString()
 	@MaxLength(150)
 	description?: string;	
+
+	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
 
 	@IsOptional()
 	@IsDate()
@@ -395,6 +419,10 @@ export class CreateDisplayPhotoDto {
 	sdSize?: number
 
 	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
+
+	@IsOptional()
 	@IsDate()
 	lastUpdated?: Date;
 
@@ -415,6 +443,10 @@ export class UpdateDisplayPhotoDto {
 	@IsString()
 	@MaxLength(150)
 	description?: string;	
+
+	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
 
 	@IsOptional()
 	@IsDate()
@@ -528,6 +560,10 @@ export class CreateListRatingDto {
 	reviewLink: string;
 
 	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
+
+	@IsOptional()
 	@IsDate()
 	lastUpdated: Date;
 
@@ -551,6 +587,10 @@ export class UpdateListRatingDto {
 	@IsNotEmpty()
 	@IsString()
 	reviewLink: string;
+
+	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
 
 	@IsOptional()
 	@IsDate()
