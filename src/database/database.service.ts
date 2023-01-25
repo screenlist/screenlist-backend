@@ -119,9 +119,7 @@ export class DatabaseService extends Datastore{
 				return word[0].toUpperCase() + word.substring(1)
 			}
 		})
-		console.log(title)
-		console.log(workingSentence)
-		console.log(final)
+		
 		return final.join(" ")
 	}
 
@@ -151,6 +149,7 @@ export class DatabaseService extends Datastore{
 	// Content methods
 	async createContentEntity(data: CreateContentDto, opt: ContentOpt){
 		const contentKey = this.key('Content');
+		const userKey = this.key(['User', opt.user])
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
 		data.slug = data.type == 'blog' ? data.headline.toLowerCase().concat(`-${new Date(opt.time).toISOString()}`).replace(/[^0-9a-z]/gi, '-') : data.type;
@@ -166,6 +165,11 @@ export class DatabaseService extends Datastore{
 					throw new BadRequestException('Slug already exists')
 				}
 			}
+
+			const [user] = await this.get(userKey);
+
+			data.author = user.userName
+			data.authorUid
 
 			await this.insert(entity)
 			const historyObj: HistoryOpt = {
@@ -236,8 +240,8 @@ export class DatabaseService extends Datastore{
 			const history = await this.createHistory(historyObj);
 
 			const searchRecord = {
-				objectID: entity.key.id,
-				author: data.author,
+				objectID: entity[this.KEY]['id'],
+				author: entity.author,
 				headline: data.headline,
 				tags: data.tags,
 				lastUpdated: data.lastUpdated
