@@ -170,7 +170,7 @@ export class ContentService {
 
 	async createContributionsGuide(data: CreateContentDto, opt: ContentOpt){
 		data.type = 'contributions';
-		const query = this.db.createQuery('Content').filter('type', '=', 'contributionsGuide');
+		const query = this.db.createQuery('Content').filter('type', '=', 'contributions');
 		try {
 			const [article] = await this.db.runQuery(query);
 			if(article.length > 0) { throw new BadRequestException('Action not allowed') };

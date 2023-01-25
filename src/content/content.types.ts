@@ -16,6 +16,6 @@ export interface Content {
 
 export interface ContentOpt {
 	user: string,
-	time,
+	time: Date,
 	contentId?: string
 }
