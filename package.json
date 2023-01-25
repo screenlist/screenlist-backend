@@ -2,9 +2,9 @@
   "name": "screenlist",
   "version": "0.0.1",
   "description": "",
-  "author": "",
+  "author": "Alex Kokobane",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0",
   "main": "dist/main.js",
   "scripts": {
     "prebuild": "rimraf dist",
