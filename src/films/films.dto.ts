@@ -162,6 +162,10 @@ export class CreateStillDto {
 	@IsEmpty()
 	stillIndex?: string;
 
+	@IsOptional()
+	@IsEmpty()
+	parentId?: string;
+
 	@IsOptional()	
 	@IsEmpty()
 	originalUrl?: string;
@@ -264,6 +268,10 @@ export class CreatePosterDto {
 	@IsOptional()	
 	@IsEmpty()
 	posterIndex?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	parentId?: string;
 
 	@IsOptional()	
 	@IsEmpty()
@@ -370,6 +378,10 @@ export class CreateDisplayPhotoDto {
 	@IsEmpty()
 	photoIndex?: string;
 
+	@IsOptional()
+	@IsEmpty()
+	parentId?: string;
+
 	@IsOptional()	
 	@IsEmpty()
 	originalUrl?: string;
@@ -458,6 +470,10 @@ export class CreateContentPhotoDto {
 	@IsOptional()	
 	@IsEmpty()
 	photoIndex?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	parentId?: string;
 
 	@IsOptional()	
 	@IsEmpty()

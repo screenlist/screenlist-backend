@@ -260,6 +260,7 @@ export class DatabaseService extends Datastore{
 		data.photoIndex = opt.imageId;
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
+		data.parentId = opt.parentId;
 		const entity = {
 			key: photoKey,
 			data: data
@@ -419,6 +420,7 @@ export class DatabaseService extends Datastore{
 		data.photoIndex = opt.imageId;
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
+		data.parentId = opt.parentId;
 		const entity = {
 			key: photoKey,
 			data: data
@@ -735,6 +737,7 @@ export class DatabaseService extends Datastore{
 		data.stillIndex = opt.imageId;
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
+		data.parentId = opt.parentId;
 		const entity = {
 			key: stillKey,
 			data: data
@@ -806,6 +809,7 @@ export class DatabaseService extends Datastore{
 		data.posterIndex = opt.imageId;
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
+		data.parentId = opt.parentId;
 		const entity = {
 			key: posterKey,
 			data: data
@@ -959,6 +963,7 @@ export class DatabaseService extends Datastore{
 		data.photoIndex = opt.imageId;
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
+		data.parentId = opt.parentId;
 		const entity = {
 			key: photoKey,
 			data: data
@@ -1186,6 +1191,7 @@ export class DatabaseService extends Datastore{
 		data.photoIndex = opt.imageId;
 		data.lastUpdated = opt.time;
 		data.created = opt.time;
+		data.parentId = opt.parentId;
 		const entity = {
 			key: photoKey,
 			data: data
