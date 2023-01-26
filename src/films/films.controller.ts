@@ -373,6 +373,7 @@ export class FilmsController {
 		@Param('roleId') roleId: string, 
 		@Headers('AuthorizationToken') idToken: string
 	){
+		console.log('the right route')
 		const roleOptions: PersonRoleOpt = {
 			user: await this.authService.getUserUid(idToken),
 			time: new Date(),
@@ -382,63 +383,5 @@ export class FilmsController {
 			parentKind: 'Film'
 		}
 		return await this.peopleService.deleteOneRole(roleOptions);
-	}
-
-	// Link methods
-	@Post(':filmId/platforms/:platformId/links')
-	@Roles('member')
-	async createOneLink(
-		@Param('filmId') filmId: string,
-		@Param('platformId') platformId: string,
-		@Body() createLinkDto: CreateLinkDto, 
-		@Headers('AuthorizationToken') idToken: string
-	){
-		const roleOptions: LinkOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date(),
-			platformId: platformId,
-			parentId: filmId,
-			parentKind: 'Film'
-		}
-		return await this.platformsService.createOneLink(createLinkDto, roleOptions);
-	}
-
-	@Patch(':filmId/platforms/:platformId/links/:linkId')
-	@Roles('member')
-	async updateOneLink(
-		@Param('filmId') filmId: string,
-		@Param('platformId') platformId: string,
-		@Param('linkId') linkId: string,
-		@Body() updateLinkDto: UpdateLinkDto, 
-		@Headers('AuthorizationToken') idToken: string
-	){
-		const roleOptions: LinkOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date(),
-			platformId: platformId,
-			parentId: filmId,
-			linkId: linkId,
-			parentKind: 'Film'
-		}
-		return await this.platformsService.updateOneLink(updateLinkDto, roleOptions);
-	}
-
-	@Delete(':filmId/platforms/:platformId/links/:linkId')
-	@Roles('member')
-	async deleteOneLink(
-		@Param('filmId') filmId: string,
-		@Param('platformId') platformId: string,
-		@Param('linkId') linkId: string, 
-		@Headers('AuthorizationToken') idToken: string
-	){
-		const roleOptions: LinkOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date(),
-			platformId: platformId,
-			parentId: filmId,
-			linkId: linkId,
-			parentKind: 'Film'
-		}
-		return await this.platformsService.deleteOneLink(roleOptions);
 	}
 }
