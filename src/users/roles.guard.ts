@@ -21,7 +21,7 @@ export class RolesGuard implements CanActivate {
 		// console.log(roleAllowed)
 		// console.log('current path')
 		// console.log(path)
-		if(!roleAllowed){			
+		if(!roleAllowed){
 			return true;
 		}
 		
@@ -29,6 +29,12 @@ export class RolesGuard implements CanActivate {
 		// console.log('token of the roles guard')
 		// console.log(token.substring(0, 10))
 		const uid = await this.authService.getUserUid(token)
+		const emailVerified = await this.authService.emailVerified(token);
+
+		// Don't let users with unverified emails register
+		if(path === '/users/register' && emailVerified === true){
+			return true
+		}
 
 		const user = await this.usersService.findUser(uid)
 
@@ -37,9 +43,7 @@ export class RolesGuard implements CanActivate {
 		}
 
 		const userRole = user.role as string
-		// console.log(userRole)
-		const emailVerified = await this.authService.emailVerified(token);
-		// console.log(emailVerified)
+
 		const match = this.authService.matchRoles(userRole, roleAllowed, emailVerified, path);
 		console.log('The match returned', match)
 		return match

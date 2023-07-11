@@ -2,9 +2,9 @@
   "name": "screenlist",
   "version": "0.0.1",
   "description": "",
-  "author": "",
+  "author": "Alex Kokobane",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0",
   "main": "dist/main.js",
   "scripts": {
     "prebuild": "rimraf dist",
@@ -32,7 +32,8 @@
     "algoliasearch": "^4.14.2",
     "axios": "^1.2.1",
     "class-transformer": "^0.5.1",
-    "class-validator": "^0.13.2",
+    "class-validator": "^0.14.0",
+    "cross-fetch": "^3.1.5",
     "firebase-admin": "^11.0.1",
     "joi": "^17.6.2",
     "mysql2": "^2.3.3",
@@ -40,8 +41,7 @@
     "rimraf": "^3.0.2",
     "rxjs": "^7.2.0",
     "sharp": "^0.31.0",
-    "typeorm": "^0.3.9",
-    "typesense": "^1.4.1"
+    "typeorm": "^0.3.9"
   },
   "devDependencies": {
     "@nestjs/cli": "^9.0.0",

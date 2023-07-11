@@ -1,6 +1,7 @@
 import { 
 	Controller, 
 	Get,
+	Res,
 	Post,
 	Put,
 	Delete,
@@ -11,14 +12,28 @@ import {
 	HttpException,
 	UploadedFiles,
 	UseInterceptors, 
-	BadRequestException
+	BadRequestException,
+	NotFoundException,
+	StreamableFile
 } from '@nestjs/common';
+import { Response } from 'express';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { StorageService } from './storage.service'
 
 @Controller('storage')
 export class StorageController {
 	constructor(private storageService: StorageService){}
+
+	@Get(':name')
+	async getPhoto(@Param('name') name: string, @Res() res: Response){
+		try {
+			const {buffer, type} = await this.storageService.getPhoto(name);
+			res.set('Content-Type', type)
+			res.send(buffer)
+		} catch (err: any){
+			throw new NotFoundException()
+		}
+	}
 
 	@Post('file')
 	@UseInterceptors(FileFieldsInterceptor([

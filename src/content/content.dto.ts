@@ -10,10 +10,15 @@ import {
 } from 'class-validator';
 
 export class CreateContentDto {
-	@IsNotEmpty()
-	@IsString()
+	@IsOptional()
+	@IsEmpty()
 	@MaxLength(60)
 	author: string;
+
+	@IsOptional()
+	@IsEmpty()
+	@IsString()
+	authorUid: string;
 
 	@IsNotEmpty()
 	@IsString()
@@ -30,12 +35,8 @@ export class CreateContentDto {
 	body: string;
 
 	@IsOptional()
-	@IsArray()
-	tags: [{
-		kind: string,
-		id: string,
-		displayName: string
-	}];
+	@IsString()
+	tags: string;
 
 	@IsOptional()
 	@IsEmpty()
@@ -58,12 +59,6 @@ export class UpdateContentDto {
 	@IsOptional()
 	@IsNotEmpty()
 	@IsString()
-	@MaxLength(60)
-	author: string;
-
-	@IsOptional()
-	@IsNotEmpty()
-	@IsString()
 	@MaxLength(150)
 	headline: string;
 
@@ -79,12 +74,8 @@ export class UpdateContentDto {
 	body: string;
 
 	@IsOptional()
-	@IsArray()
-	tags: [{
-		kind: string,
-		id: string,
-		displayName: string
-	}];
+	@IsString()
+	tags: string;
 
 	@IsOptional()
 	@IsEmpty()

@@ -283,7 +283,7 @@ export class ContentController {
 			user: await this.authService.getUserUid(idToken),
 			time: new Date()
 		}
-		return await this.contentService.createPrivacyPolicy(createContent, contentOptions);
+		return await this.contentService.createContributionsGuide(createContent, contentOptions);
 	}
 
 	@Get('contributions')

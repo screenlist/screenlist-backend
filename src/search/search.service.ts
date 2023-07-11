@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import Typesense from 'typesense';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()

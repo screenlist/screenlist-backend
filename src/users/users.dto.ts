@@ -30,6 +30,20 @@ export class CreateUserDto {
 	role: string;
 
 	@IsOptional()
+	@IsEmpty()
+	@IsNumber()
+	mailId?: number;
+
+
+	@IsOptional()
+	@IsString()
+	displayName?: string;
+
+	@IsOptional()
+	@IsString()
+	publication?: string;
+
+	@IsOptional()
 	@IsDate()
 	created: Date;
 
@@ -54,13 +68,16 @@ export class UpdateUserDto {
 
 	@IsOptional()
 	@IsEmpty()
-	@IsString()
-	photoUrl?: string;
+	@IsNumber()
+	mailId?: number;
 
 	@IsOptional()
-	@IsEmpty()
 	@IsString()
-	photoOriginalName?: string;
+	displayName?: string;
+
+	@IsOptional()
+	@IsString()
+	publication?: string;
 
 	@IsOptional()
 	@IsDate()
@@ -161,6 +178,11 @@ export class CreateRequestDto {
 
 	@IsOptional()
 	@IsEmpty()
+	@IsBoolean()
+	acknowledged: boolean;
+
+	@IsOptional()
+	@IsEmpty()
 	@IsString()
 	createdBy: string;
 
@@ -192,6 +214,11 @@ export class UpdateRequestDto {
 	@IsEmpty()
 	@IsBoolean()
 	approved?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	@IsBoolean()
+	acknowledged?: boolean;
 
 	@IsOptional()
 	@IsEmpty()

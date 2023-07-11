@@ -15,6 +15,8 @@ import {
 } from '@nestjs/common';
 import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
+import { FrequencyGuard } from '../database/frequency.guard';
+import { Frequency } from '../database/frequency.decorator';
 import { CompaniesService } from './companies.service';
 import {
 	CreateCompanyRoleDto,
@@ -62,6 +64,8 @@ export class CompaniesController {
 	}
 
 	@Get(':id')
+	@UseGuards(FrequencyGuard)
+	@Frequency('Company')
 	async findOne(@Param('id') id: string){
 		return await this.companiesService.findOne(id);
 	}
@@ -93,6 +97,28 @@ export class CompaniesController {
 			companyId: id
 		}
 		return await this.companiesService.deleteOne(companyOptions);
+	}
+
+	@Get(':id/history')
+	async findHistory(
+		@Param('id') companyId: string,
+		@Headers('x-page-cursor') cursor: string
+	){
+		return await this.companiesService.findHistory(companyId);
+	}
+
+	@Patch(':id/settings/verify')
+	@Roles('moderator')
+	async verifyEdit(
+		@Param('id') id: string,
+		@Headers('AuthorizationToken') idToken: string
+	){
+		const companyOptions: CompanyOpt = {
+			user: await this.authService.getUserUid(idToken),
+			time: new Date(),
+			companyId: id
+		}
+		return await this.companiesService.verifyEdit(companyOptions.user, id);
 	}
 
 	@Post(':id/photo')
@@ -147,5 +173,11 @@ export class CompaniesController {
 			imageId: index
 		}
 		return await this.companiesService.removePhoto(imageOptions)
+	}
+
+	@Get('data/unmoderated')
+	@Roles('moderator')
+	async getUnmoderated(){
+		return await this.companiesService.findAllUnverified()
 	}
 }

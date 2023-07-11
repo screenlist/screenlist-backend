@@ -14,7 +14,7 @@ import {
 } from './people.types';
 import { HistoryOpt } from '../database/database.types';
 import { StorageService } from '../storage/storage.service';
-import { CreateDisplayPhotoDto, UpdateDisplayPhotoDto } from '../films/films.dto';
+import { CreateDisplayPhotoDto, UpdateDisplayPhotoDto, UpdateFilmDto } from '../films/films.dto';
 import { ImageOpt } from  '../films/films.types';
 
 @Injectable()
@@ -25,7 +25,8 @@ export class PeopleService {
 	){}
 
 	async findAll(): Promise<Person[]>{
-		const query =  this.db.createQuery('Person').order('name').limit(100);
+		//NT: edited the query
+		const query =  this.db.createQuery('Person').filter('editVerified', '=', true).order('lastUpdated', {descending: true}).limit(100);
 		try {
 			let [people] = await this.db.runQuery(query);
 			people = await Promise.all(
@@ -44,8 +45,27 @@ export class PeopleService {
 				})
 			)
 			return people
-		} catch {
+		} catch(err: any) {
+			// console.log(err)
 			throw new NotFoundException('Could not find people')
+		}
+	}
+
+	async findAllUnverified() {
+		const query = this.db.createQuery('Person').filter('editVerified', '=', false).limit(50);
+		try{
+			let [people] = await this.db.runQuery(query);
+
+			people = await Promise.all(
+				people.map((item) => {
+					item.id = item[this.db.KEY]['id'];
+					return item
+				})
+			);
+
+			return people;
+		} catch {
+			throw new NotFoundException('Could not retrieve people');
 		}
 	}
 
@@ -183,6 +203,7 @@ export class PeopleService {
 
 	async uploadPhoto(opt: ImageOpt, image: Express.Multer.File){
 		try {
+			if(opt.imageId !== '0'){ throw new BadRequestException('Unknown index') }
 			const data = await this.storage.uploadProfilePhoto(image)
 			const dto: CreateDisplayPhotoDto = { ...data }
 			const {entity, history} = await this.db.createPersonPhotoEntity(dto, opt);
@@ -202,6 +223,15 @@ export class PeopleService {
 	}
 
 	async removePhoto(opt: ImageOpt){
+		const person: UpdatePersonDto = {
+			editVerified: false
+		}
+		const personOptions: PersonOpt = {
+			time: opt.time,
+			user: opt.user,
+			personId: opt.parentId
+		}
+
 		try{
 			const photoKey = this.db.key([opt.parentKind, +opt.parentId, 'PersonPhoto', opt.imageId]);
 			const [photo] = await this.db.get(photoKey);
@@ -212,12 +242,23 @@ export class PeopleService {
 				id: photoKey.id,
 				action: 'delete',
 				time: opt.time,
+				pId: opt.parentId,
+				pKind: opt.parentKind
 			}
 			await this.storage.deleteProfilePhoto(photo.originalName);
 			await this.storage.deleteProfilePhoto(photo.hdName);
 			await this.storage.deleteProfilePhoto(photo.sdName);
 			await this.db.createHistory(historyObj);
-			await this.db.delete(photoKey)
+			await this.db.delete(photoKey);
+
+			await this.updateOne(person, personOptions);
+
+			const searchRecord = {
+				objectID: opt.parentId,
+				photoUrl: null
+			}
+			await this.db.algolia.initIndex('people').partialUpdateObject(searchRecord).wait();
+
 			return {'status': 'deleted'}
 		} catch(err: any) {
 			throw new BadRequestException(err.message)
@@ -228,10 +269,12 @@ export class PeopleService {
 		if(!data.category){
 			throw new BadRequestException('role category not specified')
 		}
+
 		try {
 			const {entity, history} = await this.db.createPersonRoleEntity(data, opt);
 			return { 'status': 'successfully created', 'role_id': entity.key.id }
 		} catch(err: any){
+			// console.log(err)
 			throw new BadRequestException(err.message)
 		}
 	}
@@ -246,7 +289,10 @@ export class PeopleService {
 	}
 
 	async deleteOneRole(opt: PersonRoleOpt){
-		const roleKey = this.db.key(['Person', +opt.personId, opt.parentKind, +opt.parentId, 'CompanyRole', +opt.roleId]);
+		const filmKey = this.db.key([opt.parentKind, +opt.parentId]);
+
+		const roleKey = this.db.key(['Person', +opt.personId, 'PersonRole', +opt.roleId]);
+		
 		try {
 			const [role] = await this.db.get(roleKey);
 			const historyObj: HistoryOpt = {
@@ -255,14 +301,73 @@ export class PeopleService {
 				id: roleKey.id,
 				time: opt.time,
 				action: 'delete',
-				user: opt.user
+				user: opt.user,
+				pId: opt.parentId,
+				pKind: opt.parentKind
 			}
 			await this.db.createHistory(historyObj);
-			const entity = {key: roleKey};
-			await this.db.delete(entity);
+			await this.db.delete(roleKey);
+
+			const [film] = await this.db.get(filmKey);
+			film.editVerified = false;
+			film.lastUpdated = opt.time;
+			await this.db.update(film);
+
 			return { 'status': 'successfully deleted' };
 		} catch (err: any){
 			throw new BadRequestException(err.message)
+		}
+	}
+
+	// Settings methods
+	async verifyEdit(user: string, id: string){
+		const time = new Date();
+		const personOptions: PersonOpt = {
+			user: user,
+			time: time,
+			personId: id
+		}
+		const data: UpdatePersonDto = {
+			editVerified: true
+		} 
+		try {
+			const {entity, history} = await this.db.updatePersonEntity(data, personOptions);
+			return entity;
+		} catch (err: any){
+			throw new BadRequestException(err.message)
+		}
+	}
+
+	// History
+	async findHistory(personId: string){
+		const personKey = this.db.key(['Person', +personId]);
+		try {
+			const [person] = await this.db.get(personKey);
+
+			const [personHistory] = await this.db.createQuery('History')
+				.filter('xKind', '=', 'Person')
+				.filter('xIdentifier', '=', +personId)
+				.filter('xTimestamp', '>', new Date(person.lastVerified))
+				.order('xTimestamp', {descending: true}).run();
+
+			const [photoHistory] = await this.db.createQuery('History')
+				.filter('xKind', '=', 'PersonPhoto')
+				.filter('xIdentifier', '=', '0')
+				.filter('wKind', '=', 'Person')
+				.filter('wIdentifier', '=', personId)
+				.filter('xTimestamp', '>', new Date(person.lastVerified))
+				.order('xTimestamp', {descending: true}).run();
+
+			const allHistories = [
+				...personHistory, 
+				...photoHistory
+			];
+
+			const sortedHistory = await this.db.decodeHistory(allHistories);
+			 // console.log('Sorted history', sortedHistory)
+			return sortedHistory;
+		} catch (err: any) {
+			throw new NotFoundException(err.message)
 		}
 	}
 }

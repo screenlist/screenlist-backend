@@ -40,12 +40,20 @@ export class CreateFilmDto {
 	@IsNumber()
 	runtime?: number;
 
+	@IsOptional()
+	@IsNumber()
+	boxOffice?: number;
+
+	@IsOptional()
+	@IsNumber()
+	budget?: number;
+
 	@IsNotEmpty()
-	@MaxLength(150)
+	@MaxLength(300)
 	logline: string;
 
 	@IsOptional()
-	@MaxLength(500)
+	@MaxLength(1000)
 	plotSummary?: string;
 
 	@IsOptional()
@@ -56,13 +64,30 @@ export class CreateFilmDto {
 	@IsString()
 	initialPlatform?: string;
 
-	@IsOptional()
-	@IsEmpty()
-	slug?: string;
-
 	@IsNotEmpty()
 	@IsArray()
 	genres?: [string];
+
+	@IsOptional()
+	@IsEmpty()
+	hasPoster?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	isHidden?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	editLocked?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	@IsDate()
+	lastVerified?: Date;
 
 	@IsOptional()
 	@IsDate()
@@ -75,10 +100,12 @@ export class CreateFilmDto {
 
 export class UpdateFilmDto {
 	@IsOptional()
+	@IsNotEmpty()
 	@MaxLength(60)
 	name?: string;
 
 	@IsOptional()
+	@IsNotEmpty()
 	@IsNumber()
 	year?: number;
 
@@ -87,6 +114,7 @@ export class UpdateFilmDto {
 	trailerUrl?: string;
 
 	@IsOptional()
+	@IsNotEmpty()
 	@MaxLength(20)
 	type?: string;
 
@@ -96,6 +124,7 @@ export class UpdateFilmDto {
 	format?: string;
 
 	@IsOptional()
+	@IsNotEmpty()
 	@MaxLength(20)
 	productionStage?: string;
 
@@ -104,11 +133,20 @@ export class UpdateFilmDto {
 	runtime?: number;
 
 	@IsOptional()
-	@MaxLength(150)
+	@IsNumber()
+	boxOffice?: number;
+
+	@IsOptional()
+	@IsNumber()
+	budget?: number;
+
+	@IsOptional()
+	@IsNotEmpty()
+	@MaxLength(300)
 	logline?: string;
 
 	@IsOptional()
-	@MaxLength(500)
+	@MaxLength(1000)
 	plotSummary?: string;
 
 	@IsOptional()
@@ -136,15 +174,28 @@ export class UpdateFilmDto {
 
 	@IsOptional()
 	@IsEmpty()
-	slug?: string;
+	hasPoster?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	isHidden?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	editLocked?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	@IsDate()
+	lastVerified?: Date;
 
 	@IsOptional()
 	@IsDate()
 	lastUpdated?: Date;
-
-	@IsOptional()
-	@IsDate()
-	created?: Date;
 }
 
 // Still
@@ -153,6 +204,14 @@ export class CreateStillDto {
 	@IsOptional()	
 	@IsEmpty()
 	stillIndex?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	parentId?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	parentKind?: string;
 
 	@IsOptional()	
 	@IsEmpty()
@@ -236,7 +295,18 @@ export class UpdateStillDto {
 	@IsOptional()
 	@IsNotEmpty()
 	@MaxLength(150)
-	description?: string;	
+	description?: string;
+
+	@IsOptional()
+	@IsNotEmpty()
+	@IsString()
+	@MaxLength(10)
+	source?: string;
+
+	@IsOptional()
+	@IsNotEmpty()
+	@IsString()
+	sourceLink?: string;
 
 	@IsOptional()
 	@IsDate()
@@ -248,6 +318,14 @@ export class CreatePosterDto {
 	@IsOptional()	
 	@IsEmpty()
 	posterIndex?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	parentId?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	parentKind?: string;
 
 	@IsOptional()	
 	@IsEmpty()
@@ -333,7 +411,18 @@ export class UpdatePosterDto {
 	@IsNotEmpty()
 	@IsString()
 	@MaxLength(150)
-	description?: string;	
+	description?: string;
+
+	@IsOptional()
+	@IsNotEmpty()
+	@IsString()
+	@MaxLength(10)
+	source?: string;
+
+	@IsOptional()
+	@IsNotEmpty()
+	@IsString()
+	sourceLink?: string;
 
 	@IsOptional()
 	@IsDate()
@@ -345,6 +434,10 @@ export class CreateDisplayPhotoDto {
 	@IsOptional()	
 	@IsEmpty()
 	photoIndex?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	parentId?: string;
 
 	@IsOptional()	
 	@IsEmpty()
@@ -414,7 +507,18 @@ export class UpdateDisplayPhotoDto {
 	@IsNotEmpty()
 	@IsString()
 	@MaxLength(150)
-	description?: string;	
+	description?: string;
+
+	@IsOptional()
+	@IsNotEmpty()
+	@IsString()
+	@MaxLength(10)
+	source?: string;
+
+	@IsOptional()
+	@IsNotEmpty()
+	@IsString()
+	sourceLink?: string;
 
 	@IsOptional()
 	@IsDate()
@@ -426,6 +530,10 @@ export class CreateContentPhotoDto {
 	@IsOptional()	
 	@IsEmpty()
 	photoIndex?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	parentId?: string;
 
 	@IsOptional()	
 	@IsEmpty()
@@ -498,6 +606,17 @@ export class UpdateContentPhotoDto {
 	description?: string;	
 
 	@IsOptional()
+	@IsNotEmpty()
+	@IsString()
+	@MaxLength(10)
+	source?: string;
+
+	@IsOptional()
+	@IsNotEmpty()
+	@IsString()
+	sourceLink?: string;
+
+	@IsOptional()
 	@IsDate()
 	lastUpdated?: Date;
 }
@@ -515,6 +634,16 @@ export class CreateListRatingDto {
 	@IsString()
 	authorUid: string;
 
+	@IsOptional()
+	@IsEmpty()
+	@IsString()
+	parentId: string;	
+
+	@IsOptional()
+	@IsEmpty()
+	@IsString()
+	parentKind: string;
+
 	@IsNotEmpty()
 	@MaxLength(250)
 	verdict: string;
@@ -526,6 +655,10 @@ export class CreateListRatingDto {
 	@IsNotEmpty()
 	@IsString()
 	reviewLink: string;
+
+	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
 
 	@IsOptional()
 	@IsDate()
@@ -540,19 +673,23 @@ export class UpdateListRatingDto {
 	@IsOptional()
 	@IsNotEmpty()
 	@MaxLength(250)
-	verdict: string;
+	verdict?: string;
 
 	@IsOptional()
 	@IsNotEmpty()
 	@MaxLength(1)
-	listRating: string;
+	listRating?: string;
 
 	@IsOptional()
 	@IsNotEmpty()
 	@IsString()
-	reviewLink: string;
+	reviewLink?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	editVerified?: boolean;
 
 	@IsOptional()
 	@IsDate()
-	lastUpdated: Date;
+	lastUpdated?: Date;
 }
