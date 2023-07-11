@@ -14,7 +14,11 @@ import {
 	UseInterceptors 
 } from '@nestjs/common';
 import { RolesGuard } from '../users/roles.guard';
+import { FilmsEditGuard } from './films.edit.guard';
+import { FrequencyGuard } from '../database/frequency.guard';
 import { Roles } from '../users/roles.decorator';
+import { EditLock } from './films.edit.decorator';
+import { Frequency } from '../database/frequency.decorator';
 import { HistoryOpt } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
 import { FilmsService } from './films.service';
@@ -67,10 +71,48 @@ export class FilmsController {
 		private platformsService: PlatformsService,
 	){}
 
+	// Data methods
+	@Get('data/film-of-the-day')
+	@Roles('admin')
+	async getFilmOfTheDay(){
+		return await this.filmsService.getFilmOfTheDay();
+	}
+
+	@Get('data/latest')
+	async getLatestFilms(@Query('limit') size: number){
+		return await this.filmsService.getLatestReleases(size)
+	}
+
+	@Get('data/trending')
+	async getTrendingFilms(@Query('limit') size: number){
+		return await this.filmsService.getTrendingFilms(size)
+	}
+
+	@Get('data/recently-added')
+	async getRecentlyAdded(@Query('limit') size: number){
+		return await this.filmsService.getRecentlyAdded(size)
+	}
+
+	@Get('data/upcoming')
+	async getUpcoming(@Query('limit') size: number){
+		return await this.filmsService.getUpcoming(size)
+	}
+
+	@Get('data/awaiting-moderation')
+	@Roles('moderator')
+	async getUnmoderated(){
+		return await this.filmsService.findAllUnverified()
+	}
+
+	@Get('data/unmoderated-reviews')
+	@Roles('moderator')
+	async getUnmoderatedReviews(){
+		return await this.filmsService.findUnverifiedRatings()
+	}
+
 	// Core film methods
 	@Get()
 	async findAll(){
-		console.log("findAll Films")
 		return await this.filmsService.findAll()
 	}	
 
@@ -85,10 +127,17 @@ export class FilmsController {
 	}
 
 	@Get(':id')
+	@UseGuards(FrequencyGuard)
+	@Frequency('Film')
 	async findOne(
-		@Param('id') id: string
+		@Param('id') id: string,
+		@Query('minimal') style: boolean
 	){
-		return await this.filmsService.findOne(id)
+		if(style === true){
+			return await this.filmsService.findOneDetailsOnly(id)
+		} else {
+			return await this.filmsService.findOne(id)
+		}
 	}
 
 	@Patch(':id')
@@ -117,8 +166,58 @@ export class FilmsController {
 		@Param('id') filmId: string,
 		@Headers('x-page-cursor') cursor: string
 	){
-		console.log('findHistory')
-		return await this.filmsService.findHistory(filmId, cursor);
+		return await this.filmsService.findHistory(filmId);
+	}
+
+	// Settings
+	@Patch(':id/settings/hide')
+	@Roles('moderator')
+	async hideFilm(
+		@Param('id') id: string,
+		@Headers('AuthorizationToken') idToken: string
+	){
+		const user = await this.authService.getUserUid(idToken);
+		return await this.filmsService.hideFilm(user, id);
+	}
+
+	@Patch(':id/settings/unhide')
+	@Roles('moderator')
+	async unhideFilm(
+		@Param('id') id: string,
+		@Headers('AuthorizationToken') idToken: string
+	){
+		const user = await this.authService.getUserUid(idToken);
+		return await this.filmsService.unhideFilm(user, id);
+	}
+
+	@Patch(':id/settings/verify')
+	@Roles('moderator')
+	async verifyFilmEdit(
+		@Param('id') id: string,
+		@Headers('AuthorizationToken') idToken: string
+	){
+		const user = await this.authService.getUserUid(idToken);
+		return await this.filmsService.verifyFilmEdit(user, id);
+	}
+
+	@Patch(':id/settings/lock')
+	@Roles('moderator')
+	async lockFilmEdit(
+		@Param('id') id: string,
+		@Headers('AuthorizationToken') idToken: string
+	){
+		const user = await this.authService.getUserUid(idToken);
+		return await this.filmsService.lockFilmEdit(user, id);
+	}
+
+	@Patch(':id/settings/unlock')
+	@Roles('moderator')
+	async unlockFilmEdit(
+		@Param('id') id: string,
+		@Headers('AuthorizationToken') idToken: string
+	){
+		const user = await this.authService.getUserUid(idToken);
+		return await this.filmsService.unlockFilmEdit(user, id);
 	}
 
 	// Ratings methods
@@ -151,13 +250,49 @@ export class FilmsController {
 			user: await this.authService.getUserUid(idToken),
 			parentId: filmId,
 			parentKind: 'Film',
-			imageId: reviewId
+			ratingId: reviewId
 		}
 		return await this.filmsService.updateOneRating(updateListRatingDto, imageOptions);
 	}
 
+	@Delete(':filmId/reviews/:reviewId')
+	@Roles('journalist')
+	async deleteReview(
+		@Param('filmId') filmId: string,
+		@Param('reviewId') reviewId: string,
+		@Headers('AuthorizationToken') idToken: string
+	){
+		const imageOptions: RatingOpt = {
+			time: new Date(),
+			user: await this.authService.getUserUid(idToken),
+			parentId: filmId,
+			parentKind: 'Film',
+			ratingId: reviewId
+		}
+		return await this.filmsService.deleteOneRating(imageOptions);
+	}
+
+	@Patch(':filmId/reviews/:reviewId/verify')
+	@Roles('moderator')
+	async verifyReview(
+		@Param('filmId') filmId: string,
+		@Param('reviewId') reviewId: string,
+		@Headers('AuthorizationToken') idToken: string
+	){
+		const imageOptions: RatingOpt = {
+			time: new Date(),
+			user: await this.authService.getUserUid(idToken),
+			parentId: filmId,
+			parentKind: 'Film',
+			ratingId: reviewId
+		}
+		return await this.filmsService.verifyRating(imageOptions);
+	}
+
 	// Still methods
 	@Post(':filmId/stills')
+	@UseGuards(FilmsEditGuard)
+	@EditLock(true)
 	@Roles('member')
 	@UseInterceptors(FileInterceptor('still'))
 	async uploadStill(
@@ -177,6 +312,8 @@ export class FilmsController {
 	}
 
 	@Patch(':filmId/stills')
+	@UseGuards(FilmsEditGuard)
+	@EditLock(true)
 	@Roles('member')
 	async updateStillDescription(
 		@Param('filmId') filmId: string,
@@ -195,6 +332,8 @@ export class FilmsController {
 	}
 
 	@Delete(':filmId/stills')
+	@UseGuards(FilmsEditGuard)
+	@EditLock(true)
 	@Roles('member')
 	async deleteStill(
 		@Param('filmId') filmId: string,
@@ -214,6 +353,8 @@ export class FilmsController {
 
 	// Poster methods
 	@Post(':filmId/posters')
+	@UseGuards(FilmsEditGuard)
+	@EditLock(true)
 	@Roles('member')
 	@UseInterceptors(FileInterceptor('poster'))
 	async uploadPoster(
@@ -234,6 +375,8 @@ export class FilmsController {
 	}
 
 	@Patch(':filmId/posters')
+	@UseGuards(FilmsEditGuard)
+	@EditLock(true)
 	@Roles('member')
 	async updatePosterDescription(
 		@Param('filmId') filmId: string,
@@ -252,6 +395,8 @@ export class FilmsController {
 	}
 
 	@Delete(':filmId/posters')
+	@UseGuards(FilmsEditGuard)
+	@EditLock(true)
 	@Roles('member')
 	async deletePoster(
 		@Param('filmId') filmId: string,
@@ -270,6 +415,8 @@ export class FilmsController {
 
 	// CompanyRole methods
 	@Post(':filmId/companies/:companyId/roles')
+	@UseGuards(FilmsEditGuard)
+	@EditLock(true)
 	@Roles('member')
 	async createOneCompanyRole(
 		@Param('filmId') filmId: string,
@@ -284,10 +431,12 @@ export class FilmsController {
 			parentId: filmId,
 			parentKind: 'Film'
 		}
-		return await this.companiesService.createOneRole(createCompanyRoleDto, roleOptions);
+		return await this.filmsService.createCompanyRole(createCompanyRoleDto, roleOptions);
 	}
 
 	@Patch(':filmId/companies/:companyId/roles/:roleId')
+	@UseGuards(FilmsEditGuard)
+	@EditLock(true)
 	@Roles('member')
 	async updateOneCompanyRole(
 		@Param('filmId') filmId: string,
@@ -304,10 +453,12 @@ export class FilmsController {
 			roleId: roleId,
 			parentKind: 'Film'
 		}
-		return await this.companiesService.updateOneRole(updateCompanyRoleDto, roleOptions);
+		return await this.filmsService.updateCompanyRole(updateCompanyRoleDto, roleOptions);
 	}
 
 	@Delete(':filmId/companies/:companyId/roles/:roleId')
+	@UseGuards(FilmsEditGuard)
+	@EditLock(true)
 	@Roles('member')
 	async deleteOneCompanyRole(
 		@Param('filmId') filmId: string,
@@ -323,11 +474,13 @@ export class FilmsController {
 			roleId: roleId,
 			parentKind: 'Film'
 		}
-		return await this.companiesService.deleteOneRole(roleOptions);
+		return await this.filmsService.deleteCompanyRole(roleOptions);
 	}
 
 	// PersonRole methods
 	@Post(':filmId/people/:personId/roles')
+	@UseGuards(FilmsEditGuard)
+	@EditLock(true)
 	@Roles('member')
 	async createOnePersonRole(
 		@Param('filmId') filmId: string,
@@ -342,10 +495,12 @@ export class FilmsController {
 			parentId: filmId,
 			parentKind: 'Film'
 		}
-		return await this.peopleService.createOneRole(createPersonRoleDto, roleOptions);
+		return await this.filmsService.createPersonRole(createPersonRoleDto, roleOptions);
 	}
 
 	@Patch(':filmId/people/:personId/roles/:roleId')
+	@UseGuards(FilmsEditGuard)
+	@EditLock(true)
 	@Roles('member')
 	async updateOnePersonRole(
 		@Param('filmId') filmId: string,
@@ -362,10 +517,12 @@ export class FilmsController {
 			roleId: roleId,
 			parentKind: 'Film'
 		}
-		return await this.peopleService.updateOneRole(updatePersonRoleDto, roleOptions);
+		return await this.filmsService.updatePersonRole(updatePersonRoleDto, roleOptions);
 	}
 
 	@Delete(':filmId/people/:personId/roles/:roleId')
+	@UseGuards(FilmsEditGuard)
+	@EditLock(true)
 	@Roles('member')
 	async deleteOnePersonRole(
 		@Param('filmId') filmId: string,
@@ -373,7 +530,6 @@ export class FilmsController {
 		@Param('roleId') roleId: string, 
 		@Headers('AuthorizationToken') idToken: string
 	){
-		console.log('the right route')
 		const roleOptions: PersonRoleOpt = {
 			user: await this.authService.getUserUid(idToken),
 			time: new Date(),
@@ -382,6 +538,6 @@ export class FilmsController {
 			roleId: roleId,
 			parentKind: 'Film'
 		}
-		return await this.peopleService.deleteOneRole(roleOptions);
+		return await this.filmsService.deletePersonRole(roleOptions);
 	}
 }

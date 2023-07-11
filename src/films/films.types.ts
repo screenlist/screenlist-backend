@@ -97,7 +97,7 @@ export interface ImageOpt {
 }
 
 export interface RatingOpt {
-	imageId?: string,
+	ratingId?: string,
 	time: Date,
 	parentId: string,
 	parentKind: string,
