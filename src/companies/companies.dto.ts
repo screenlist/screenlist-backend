@@ -5,7 +5,8 @@ import {
 	IsString, 
 	IsEmpty,
 	MaxLength,
-	IsFQDN
+	IsFQDN,
+	IsNumber
 } from 'class-validator';
 
 export class CreateCompanyDto {
@@ -15,14 +16,23 @@ export class CreateCompanyDto {
 	name: string;
 
 	@IsOptional()
-	@IsEmpty()
-	profilePhotoUrl: string;
+	@IsNumber()
+	founded?: number;
 
 	@IsOptional()
-	@IsEmpty()
-	profilePhotoOriginalName: string;
+	@IsString()
+	city?: string;
 
-	@MaxLength(500)
+	@IsOptional()
+	@IsString()
+	country?: string;
+
+	@IsOptional()
+	@IsString()
+	director?: string;
+
+	@IsOptional()
+	@MaxLength(800)
 	description: string;
 
 	@IsOptional()
@@ -32,6 +42,19 @@ export class CreateCompanyDto {
 	@IsOptional()
 	@IsEmpty()
 	editVerified?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	isHidden?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	editLocked?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	@IsDate()
+	lastVerified?: Date;
 
 	@IsOptional()
 	@IsDate()
@@ -45,19 +68,28 @@ export class CreateCompanyDto {
 export class UpdateCompanyDto {
 	@IsOptional()
 	@IsString()
+	@IsNotEmpty()
 	@MaxLength(60)
 	name?: string;
 
 	@IsOptional()
-	@IsEmpty()
-	profilePhotoUrl?: string;
+	@IsNumber()
+	founded?: number;
 
 	@IsOptional()
-	@IsEmpty()
-	profilePhotoOriginalName?: string;
+	@IsString()
+	city?: string;
 
 	@IsOptional()
-	@MaxLength(500)
+	@IsString()
+	country?: string;
+
+	@IsOptional()
+	@IsString()
+	director?: string;
+
+	@IsOptional()
+	@MaxLength(800)
 	description?: string;
 
 	@IsOptional()
@@ -67,6 +99,19 @@ export class UpdateCompanyDto {
 	@IsOptional()
 	@IsEmpty()
 	editVerified?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	isHidden?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	editLocked?: boolean;
+
+	@IsOptional()
+	@IsEmpty()
+	@IsDate()
+	lastVerified?: Date;
 
 	@IsOptional()
 	@IsDate()
@@ -102,8 +147,9 @@ export class CreateCompanyRoleDto {
 	type: string;
 
 	@IsOptional()
-	@IsEmpty()
-	editVerified: boolean;
+	@IsNotEmpty()
+	@IsString()
+	capacity: string;
 
 	@IsOptional()
 	@IsDate()
@@ -116,12 +162,14 @@ export class CreateCompanyRoleDto {
 
 export class UpdateCompanyRoleDto {
 	@IsOptional()
+	@IsNotEmpty()
 	@IsString()
 	type?: string;
 
 	@IsOptional()
-	@IsEmpty()
-	editVerified?: boolean;
+	@IsNotEmpty()
+	@IsString()
+	capacity?: string;
 
 	@IsOptional()
 	@IsDate()
