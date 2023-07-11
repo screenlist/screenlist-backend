@@ -26,7 +26,6 @@ export class SeriesService {
 		private storage: StorageService,
 		private db: DatabaseService
 	){
-		this.db = new DatabaseService(configService);
 		this.storage = new StorageService(configService);
 	}
 
