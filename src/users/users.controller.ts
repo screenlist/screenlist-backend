@@ -90,14 +90,6 @@ export class UsersController {
 		return await this.usersService.checkUserName(userName);
 	}
 
-	// Similar the authenticateOne method except for the http verb and the latter
-	// returns only a userName
-	@Get(':userName')
-	async findOne(@Param('userName') userName: string){
-		console.log('findOne')
-		return await this.usersService.findUserByUsername(userName);
-	}
-
 	@Get('admins')
 	async findAdmins(){
 		console.log('findAdmins')
@@ -128,7 +120,7 @@ export class UsersController {
 		@Body() createUserDto: CreateUserDto,
 		@Headers('AuthorizationToken') idToken: string
 	){
-		console.log('setupUser', createUserDto, idToken.slice(0,10))
+		console.log('setupUser')
 		try{
 			const userOptions: UserOpt = {
 				user: await this.authService.getUserUid(idToken),
@@ -151,8 +143,22 @@ export class UsersController {
 		return await this.usersService.getUserName(user);
 	}
 
+	@Post('password')
+	async resetPasswordEmail(@Body('email') email: string){
+		return await this.usersService.passwordReset(email);
+	}
+
 	// Routes for updating user information
-	@Patch(':userName')
+
+	// Similar the authenticateOne method except for the http verb and the latter
+	// returns only a userName
+	@Get('u/:userName')
+	async findOne(@Param('userName') userName: string){
+		console.log('findOne')
+		return await this.usersService.findUserByUsername(userName);
+	}
+
+	@Patch('u/:userName')
 	@Roles('member')
 	async updateUser(
 		@Param('userName') userName: string,
@@ -168,14 +174,35 @@ export class UsersController {
 		return await this.usersService.updateUser(updateUserDto, userOptions);
 	}
 
-	@Delete('delete')
+	@Delete('u/:userName/delete')
 	@Roles('member')
-	async deleteAcount(@Headers('AuthorizationToken') idToken: string){
-		const uid = await this.authService.getUserUid(idToken);
-		return await this.usersService.deleteUser(uid);
+	async deleteAcount(
+		@Param('userName') userName: string,
+		@Headers('AuthorizationToken') idToken: string
+	){
+		const userOptions: UserOpt = {
+			user: await this.authService.getUserUid(idToken),
+			time: new Date(),
+			userName: userName
+		}
+		return await this.usersService.deleteUser(userOptions);
 	}
 
-	@Post(':userName/photo')
+	@Patch('u/:userName/email')
+	@Roles('member')
+	async handleEmail(
+		@Param('userName') userName: string,
+		@Headers('AuthorizationToken') idToken: string
+	){
+		const userOptions: UserOpt = {
+			user: await this.authService.getUserUid(idToken),
+			time: new Date(),
+			userName: userName
+		}
+		return await this.usersService.updateUserEmail(userOptions)
+	}
+
+	@Post('u/:userName/photo')
 	@Roles('member')
 	@UseInterceptors(FileInterceptor('profile'))
 	async updateUserPhoto(
@@ -192,10 +219,16 @@ export class UsersController {
 			parentKind: 'User',
 			imageId: index
 		}
-		return await this.usersService.uploadProfilePhoto(imageOptions, profile);
+		if(index === '0'){
+		 	return await this.usersService.uploadProfilePhoto(imageOptions, profile);
+		} else if(index === '1'){
+			return await this.usersService.uploadCoverPhoto(imageOptions, profile);
+		} else {
+			throw new BadRequestException('Unrecognised index')
+		}
 	}
 
-	@Patch(':userName/photo')
+	@Patch('u/:userName/photo')
 	@Roles('member')
 	async updatePhoto(
 		@Param('userName') userName: string,
@@ -213,7 +246,7 @@ export class UsersController {
 		return await this.usersService.updateProfilePhoto(updatePhoto, imageOptions);
 	}
 
-	@Delete(':userName/photo')
+	@Delete('u/:userName/photo')
 	@Roles('member')
 	async deleteUserPhoto(
 		@Headers('AuthorizationToken') idToken: string,
@@ -257,6 +290,23 @@ export class UsersController {
 		return await this.usersService.approveToSetJournalist(requestOptions);
 	}
 
+	@Patch('admin/journalists/requests/:requestId/reject')
+	@Roles('admin')
+	async rejectJournalist(
+		@Param('username') userName: string,
+		@Param('requestId') requestId: string,
+		@Headers('AuthorizationToken') idToken: string
+	){
+		console.log('rejectJournalist')
+		const requestOptions: RequestOpt = {
+			userName: userName,
+			user: await this.authService.getUserUid(idToken),
+			time: new Date(),
+			requestId: requestId
+		}
+		return await this.usersService.rejectToSetJournalist(requestOptions);
+	}
+
 	// Users use this route to request the journalist role
 	@Post('journalists/requests')
 	@Roles('member')
@@ -289,6 +339,48 @@ export class UsersController {
 		return await this.usersService.revokePrivilegedRole(subjectUid, userOptions);
 	}
 
+
+	@Post('super/admin')
+	@Roles('admin')
+	async makeAdmin(
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('username') uid: string
+	){
+		const userOptions: UserOpt = {
+			user: await this.authService.getUserUid(idToken),
+			time: new Date()
+		}
+		return await this.usersService.makeAdmin(uid, userOptions);
+	}
+
+	@Post('super/curator')
+	@Roles('admin')
+	async makeCurator(
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('username') uid: string
+	){
+		const userOptions: UserOpt = {
+			user: await this.authService.getUserUid(idToken),
+			time: new Date()
+		}
+		return await this.usersService.makeCurator(uid, userOptions);
+	}
+
+	@Post('super/moderator')
+	@Roles('admin')
+	async makeModerator(
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('username') uid: string
+	){
+		const userOptions: UserOpt = {
+			user: await this.authService.getUserUid(idToken),
+			time: new Date()
+		}
+		return await this.usersService.makeModerator(uid, userOptions);
+	}
+
+
+	// TO BE REMOVED
 	// Routes for proposing role votes
 	@Post('votes/admins')
 	@Roles('admin')
