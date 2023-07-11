@@ -15,6 +15,8 @@ import {
 } from '@nestjs/common';
 import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
+import { FrequencyGuard } from '../database/frequency.guard';
+import { Frequency } from '../database/frequency.decorator';
 import { HistoryOpt } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
 import {
@@ -61,6 +63,8 @@ export class PeopleController {
 	}
 
 	@Get(':id')
+	@UseGuards(FrequencyGuard)
+	@Frequency('Person')
 	async findOne(@Param('id') id: string){
 		return await this.peopleService.findOne(id);
 	}
@@ -92,6 +96,28 @@ export class PeopleController {
 			personId: id
 		}
 		return await this.peopleService.deleteOne(personOptions)
+	}
+
+	@Get(':id/history')
+	async findHistory(
+		@Param('id') personId: string,
+		@Headers('x-page-cursor') cursor: string
+	){
+		return await this.peopleService.findHistory(personId);
+	}
+
+	@Patch(':id/settings/verify')
+	@Roles('member')
+	async verifyEdit(
+		@Param('id') id: string,
+		@Headers('AuthorizationToken') idToken: string
+	){
+		const personOptions: PersonOpt = {
+			user: await this.authService.getUserUid(idToken),
+			time: new Date(),
+			personId: id
+		}
+		return await this.peopleService.verifyEdit(personOptions.user, id);
 	}
 
 	@Post(':id/photo')
@@ -146,5 +172,11 @@ export class PeopleController {
 			imageId: index
 		}
 		return await this.peopleService.removePhoto(imageOptions)
+	}
+
+	@Get('data/unmoderated')
+	@Roles('moderator')
+	async getUmoderated(){
+		return await this.peopleService.findAllUnverified()
 	}
 }
