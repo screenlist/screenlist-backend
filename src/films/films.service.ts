@@ -1006,6 +1006,8 @@ export class FilmsService {
 			let [filmsWithDate] = await this.db.runQuery(queryWithDate);			
 			let [filmsWithYear] = await this.db.runQuery(queryWithYear);
 
+			// filmsWithYear = filmsWithYear.filter((val) => filmsWithDate.indexOf(val) < 0);
+
 			filmsWithDate = await Promise.all(filmsWithDate.map(async (film) => {
 				film.id = film[this.db.KEY]['id'];
 				delete film[this.db.KEY];
@@ -1014,9 +1016,31 @@ export class FilmsService {
 				try {
 					const [poster] = await this.db.get(posterKey);
 					if(!poster){
+						// console.log(JSON.stringify(film))
 						return JSON.stringify(film)
 					} else {
 						film.posterUrl = poster.sdUrl;
+						// console.log(JSON.stringify(film))
+						return JSON.stringify(film)
+					}
+				} catch (err: any) {
+					throw new BadRequestException()
+				}
+			}))
+
+			filmsWithYear = await Promise.all(filmsWithYear.map(async (film) => {
+				film.id = film[this.db.KEY]['id'];
+				delete film[this.db.KEY];
+				const posterKey = this.db.key(['Film', +film.id, 'Poster', '0']);
+
+				try {
+					const [poster] = await this.db.get(posterKey);
+					if(!poster){
+						// console.log(JSON.stringify(film))
+						return JSON.stringify(film)
+					} else {
+						film.posterUrl = poster.sdUrl;
+						// console.log(JSON.stringify(film))
 						return JSON.stringify(film)
 					}
 				} catch {
@@ -1024,40 +1048,37 @@ export class FilmsService {
 				}
 			}))
 
-			filmsWithYear = await Promise.all(filmsWithYear.map(async (film) => {
-				if(!film.hasOwnProperty('releaseDate')){
-					film.id = film[this.db.KEY]['id'];
-					delete film[this.db.KEY];
-					const posterKey = this.db.key(['Film', +film.id, 'Poster', '0']);
-
-					try {
-						const [poster] = await this.db.get(posterKey);
-						if(!poster){
-							return JSON.stringify(film)
-						} else {
-							film.posterUrl = poster.sdUrl;
-							return JSON.stringify(film)
-						}
-					} catch {
-						throw new BadRequestException()
-					}
-				}
-			}))
+			// console.log(filmsWithDate)
+			// console.log(filmsWithYear)
 
 			const allItems = filmsWithDate.concat(filmsWithYear);
-
+			// console.log(allItems)
 			const results = allItems.filter((val, index) => {
 				return allItems.indexOf(val) === index
-			}).filter((val) => {
-				if(val.releaseDate){
-					return val.releaseDate > now
+			}).map((val) => JSON.parse(val))
+			.slice(0, limit ? limit : 10).sort((a, b) => {
+				if(a.year > b.year) {
+					return 0
 				} else {
-					return val
+					return -1
 				}
-			}).map((val) => JSON.parse(val)).slice(0, limit ? limit : 10);
+			}).sort((a, b) => {
+				if(a.created > b.created) {
+					return 0
+				} else {
+					return -1
+				}
+			}).sort((a, b) => {
+				if(a.releaseDate > b.releaseDate) {
+					return 0
+				} else {
+					return -1
+				}
+			});
 
 			return results;
 		} catch(err: any){
+			console.log(err)
 			throw new NotFoundException()
 		}
 	}
