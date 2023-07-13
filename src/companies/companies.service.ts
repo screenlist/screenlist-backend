@@ -252,7 +252,7 @@ export class CompaniesService {
 				dataObject: photo,
 				user: opt.user,
 				kind: 'CompanyPhoto',
-				id: photoKey.id,
+				id: photoKey.name,
 				action: 'delete',
 				time: opt.time,
 				pId: opt.parentId,
@@ -365,7 +365,7 @@ export class CompaniesService {
 
 			const [companyHistory] = await this.db.createQuery('History')
 				.filter('xKind', '=', 'Company')
-				.filter('xIdentifier', '=', +companyId)
+				.filter('xIdentifier', '=', companyId)
 				.filter('xTimestamp', '>', new Date(company.lastVerified))
 				.order('xTimestamp', {descending: true}).run();
 

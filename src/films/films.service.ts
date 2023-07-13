@@ -400,7 +400,7 @@ export class FilmsService {
 				time: time,
 				action: 'update',
 				kind: 'Film',
-				id: filmKey.id
+				id: JSON.stringify(filmKey.id)
 			}
 			await this.db.createHistory(historyObj);
 
@@ -526,7 +526,7 @@ export class FilmsService {
 				dataObject: film,
 				user: user,
 				kind: 'Film',
-				id: filmKey.id,
+				id: JSON.stringify(filmKey.id),
 				action: 'delete',
 				time: time,
 			}
@@ -716,7 +716,7 @@ export class FilmsService {
 				dataObject: poster,
 				user: opt.user,
 				kind: 'Poster',
-				id: posterKey.id,
+				id: posterKey.name,
 				action: 'delete',
 				time: opt.time,
 				pId: opt.parentId,
@@ -783,7 +783,7 @@ export class FilmsService {
 				dataObject: still,
 				user: opt.user,
 				kind: 'Still',
-				id:stillKey.id,
+				id:stillKey.name,
 				action: 'delete',
 				time: opt.time,
 				pId: opt.parentId,
@@ -1198,32 +1198,33 @@ export class FilmsService {
 		const filmKey = this.db.key(['Film', +filmId]);
 		try {
 			const [film] = await this.db.get(filmKey); 
+			const lastestMod = film.hasOwnProperty('lastVerified') ? new Date(film.lastVerified) : new Date(film.created)
 
 			const [stillsHistory] = await this.db.createQuery('History')
 				.filter('xKind', '=', 'Still')
 				.filter('wKind', '=', 'Film')
 				.filter('wIdentifier', '=', filmId)
-				.filter('xTimestamp', '>', new Date(film.lastVerified))
+				.filter('xTimestamp', '>=', lastestMod)
 				.order('xTimestamp', {descending: true}).run();
 
 			const [companiesHistory] = await this.db.createQuery('History')
 				.filter('xKind', '=', 'CompanyRole')
 				.filter('wKind', '=', 'Film')
 				.filter('wIdentifier', '=', filmId)
-				.filter('xTimestamp', '>', new Date(film.lastVerified))
+				.filter('xTimestamp', '>=', lastestMod)
 				.order('xTimestamp', {descending: true}).run();
 
 			const [peopleHistory] = await this.db.createQuery('History')
 				.filter('xKind', '=', 'PersonRole')
 				.filter('wKind', '=', 'Film')
 				.filter('wIdentifier', '=', filmId)
-				.filter('xTimestamp', '>', new Date(film.lastVerified))
+				.filter('xTimestamp', '>=', lastestMod)
 				.order('xTimestamp', {descending: true}).run();
 
 			const [filmHistory] = await this.db.createQuery('History')
 				.filter('xKind', '=', 'Film')
-				.filter('xIdentifier', '=', +filmId)
-				.filter('xTimestamp', '>', new Date(film.lastVerified))
+				.filter('xIdentifier', '=', filmId)
+				.filter('xTimestamp', '>=', lastestMod)
 				.order('xTimestamp', {descending: true}).run();
 
 			const [posterHistory] = await this.db.createQuery('History')
@@ -1231,7 +1232,7 @@ export class FilmsService {
 				.filter('xIdentifier', '=', '0')
 				.filter('wKind', '=', 'Film')
 				.filter('wIdentifier', '=', filmId)
-				.filter('xTimestamp', '>', new Date(film.lastVerified))
+				.filter('xTimestamp', '>=', lastestMod)
 				.order('xTimestamp', {descending: true}).run();
 
 			const allHistories = [

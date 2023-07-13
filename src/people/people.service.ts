@@ -239,7 +239,7 @@ export class PeopleService {
 				dataObject: photo,
 				user: opt.user,
 				kind: 'PersonPhoto',
-				id: photoKey.id,
+				id: photoKey.name,
 				action: 'delete',
 				time: opt.time,
 				pId: opt.parentId,
@@ -346,7 +346,7 @@ export class PeopleService {
 
 			const [personHistory] = await this.db.createQuery('History')
 				.filter('xKind', '=', 'Person')
-				.filter('xIdentifier', '=', +personId)
+				.filter('xIdentifier', '=', personId)
 				.filter('xTimestamp', '>', new Date(person.lastVerified))
 				.order('xTimestamp', {descending: true}).run();
 
@@ -357,7 +357,7 @@ export class PeopleService {
 				.filter('wIdentifier', '=', personId)
 				.filter('xTimestamp', '>', new Date(person.lastVerified))
 				.order('xTimestamp', {descending: true}).run();
-
+			// console.log(photoHistory)
 			const allHistories = [
 				...personHistory, 
 				...photoHistory
