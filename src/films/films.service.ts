@@ -269,6 +269,8 @@ export class FilmsService {
 	}
 
 	async createOne(film: CreateFilmDto, user: string){
+		// Don't allow films of non South African origin
+		if(film.countries.indexOf('South Africa') < 0){ throw new BadRequestException('All films must be of South African origin') }
 		// A variable to house all entities created
 		let entities = [];
 		// Creates the film details entity

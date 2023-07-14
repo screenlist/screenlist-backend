@@ -66,6 +66,18 @@ export class CreateFilmDto {
 
 	@IsNotEmpty()
 	@IsArray()
+	countries?: [string];
+
+	@IsNotEmpty()
+	@IsArray()
+	languages?: [string];
+
+	@IsOptional()
+	@IsString()
+	additionalLanguages?: string;
+
+	@IsNotEmpty()
+	@IsArray()
 	genres?: [string];
 
 	@IsOptional()
@@ -156,6 +168,20 @@ export class UpdateFilmDto {
 	@IsOptional()
 	@IsString()
 	initialPlatform?: string;
+
+	@IsOptional()
+	@IsNotEmpty()
+	@IsArray()
+	countries?: [string];
+
+	@IsOptional()
+	@IsNotEmpty()
+	@IsArray()
+	languages?: [string];
+
+	@IsOptional()
+	@IsString()
+	additionalLanguages?: string;
 
 	@IsOptional()
 	@IsNotEmpty()
