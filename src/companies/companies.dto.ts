@@ -142,11 +142,12 @@ export class CreateCompanyRoleDto {
 	@IsString()
 	ownerId: string;
 
+	@IsOptional()
 	@IsNotEmpty()
 	@IsString()
 	type: string;
 
-	@IsOptional()
+
 	@IsNotEmpty()
 	@IsString()
 	capacity: string;

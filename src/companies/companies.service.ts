@@ -113,15 +113,13 @@ export class CompaniesService {
 
 			const productions = []
 
-			const productionUnsorted = roles.filter((value) => value.type == 'production').sort((a, b) => {
+			const productionUnsorted = roles.sort((a, b) => {
 				if(a.year > b.year) {
 					return -1
 				} else {
 					return 0
 				}
-			});
-
-			productionUnsorted.forEach((item) => {
+			}).forEach((item) => {
 				const film = productions.find((val) => val.ownerId === item.ownerId)
 				const capacity = item.capacity ? [{
 					companyId: item.companyId,
@@ -140,18 +138,9 @@ export class CompaniesService {
 				}
 			})
 
-			const distributions = roles.filter((value) => value.type == 'distribution').sort((a, b) => {
-				if(a.year > b.year) {
-					return -1
-				} else {
-					return 0
-				}
-			});
-
 			return {
 				details,
 				productions,
-				distributions
 			}
 		} catch(err: any){
 			throw new NotFoundException('Company not found')

@@ -129,15 +129,9 @@ export class FilmsService {
 		const stillsQuery = this.db.createQuery('Still')
 			.hasAncestor(filmKey)
 			.order('stillIndex')
-			.limit(3); 
-		const distributorsQuery = this.db.createQuery('CompanyRole')
+			.limit(3);
+		const companiesQuery = this.db.createQuery('CompanyRole')
 			.filter('ownerId', '=', `${filmKey.id}`)
-			.filter('type', '=', 'distribution') 
-			.order('companyName');
-		const producersQuery = this.db.createQuery('CompanyRole')
-			.filter('ownerId', '=', `${filmKey.id}`)
-			.filter('type', '=', 'production')
-			.order('companyName');
 		const peopleQuery = this.db.createQuery('PersonRole')
 			.filter('ownerId', '=', `${filmKey.id}`)
 
@@ -149,8 +143,7 @@ export class FilmsService {
 			if(!details){ throw new NotFoundException() }
 
 			let [stills] = await this.db.runQuery(stillsQuery);
-			let [distributors] = await this.db.runQuery(distributorsQuery);
-			let [producers] = await this.db.runQuery(producersQuery);
+			let [companies] = await this.db.runQuery(companiesQuery);
 			let [people] = await this.db.runQuery(peopleQuery);
 			const reviews = await this.findRatings(id);
 
@@ -188,30 +181,15 @@ export class FilmsService {
 					}
 				})
 			)
-
-			distributors = await Promise.all(
-				distributors.map(async (item) => {
-					const key = this.db.key(['Company', +item.companyId]);
-					const photoKey = this.db.key(['Company', +item.companyId, 'CompanyPhoto', '0']);
-					const [company] = await this.db.get(key);
-					const [companyPhoto] = await this.db.get(photoKey);
-					const path = `/films/${item.ownerId}/companies/${item.companyId}/roles/${item[this.db.KEY]['id']}`;
-					return {
-						...item,
-						id: item[this.db.KEY]['id'],
-						photoUrl: companyPhoto?.sdUrl,
-						urlPath: path
-					}
-				})
-			)
 			
-			producers = await Promise.all(
-				producers.map(async (item) => {
+			companies = await Promise.all(
+				companies.map(async (item) => {
 					const key = this.db.key(['Company', +item.companyId]);
 					const photoKey = this.db.key(['Company', +item.companyId, 'CompanyPhoto', '0']);
 					const [company] = await this.db.get(key);
 					const [companyPhoto] = await this.db.get(photoKey);
 					const path = `/films/${item.ownerId}/companies/${item.companyId}/roles/${item[this.db.KEY]['id']}`;
+					if(item.type === 'distributor'){item.capacity = 'Distributor'}
 					return {
 						...item,
 						id: item[this.db.KEY]['id'],
@@ -241,8 +219,7 @@ export class FilmsService {
 			const film = {
 				details: details,
 				stills: stills as Still[],
-				producers: producers,
-				distributors: distributors,
+				companies: companies,
 				cast: [...mainCast, ...additionalCast],
 				crew: [...mainCrew, ...productionCrew, ...everyoneElse],
 				reviews: reviews
