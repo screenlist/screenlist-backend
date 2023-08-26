@@ -9,10 +9,7 @@ import { UploadedFileDto } from './storage.dto'
 @Injectable()
 export class StorageService extends Storage {
 	constructor(private configService: ConfigService){
-		super({
-			projectId: configService.get('PROJECT_ID'),
-			keyFilename: path.join(__dirname, '../../config/cloud.json')
-		})
+		super()
 	}
 
 	private readonly photoBucket = this.bucket(this.configService.get('STORAGE_IMAGES'));

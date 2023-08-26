@@ -81,10 +81,7 @@ import fetch from 'cross-fetch';
 @Injectable()
 export class DatabaseService extends Datastore{
 	constructor(private configService: ConfigService, private authService: AuthService){
-		super({
-			projectId: configService.get('PROJECT_ID'),
-			keyFilename: path.join(__dirname, '../../config/cloud.json')
-		})
+		super()
 	}
 
 	// Initialise AlgoliaSearch
@@ -632,9 +629,32 @@ export class DatabaseService extends Datastore{
 			}
 
 			// Modify existing data
+			// for (const key in data) {
+			// 	if(entity.hasOwnProperty(key)){
+			// 		entity[key] = data[key]
+			// 	} else {
+			// 		entity[key] = data[key]
+			// 	}
+			// }
+
 			for (const key in data) {
 				if(entity.hasOwnProperty(key)){
-					entity[key] = data[key]
+					if(typeof data[key] === 'string'){
+						// If the string is empty, delete the property
+						if(data[key] === '') { delete entity[key] } else { entity[key] = data[key] };
+					} else if(typeof data[key] === 'number') {
+						// If the number is zero, delete the property
+						if(data[key] === 0) { delete entity[key] } else { entity[key] = data[key] };
+					} else if(typeof data[key] === 'object' && data[key] instanceof Date) {
+						// If the date and time equals 1994/04/27 00:00:00 UTC+2, delete the property
+						if(new Date(data[key]).toISOString() === new Date(767397600000).toISOString()) {
+						  delete entity[key] 
+						} else { 
+							entity[key] = data[key] 
+						};
+					} else {
+						entity[key] = data[key]
+					}
 				} else {
 					entity[key] = data[key]
 				}
@@ -1691,7 +1711,7 @@ export class DatabaseService extends Datastore{
 						// If the number is zero, delete the property
 						if(data[key] === 0) { delete entity[key] } else { entity[key] = data[key] };
 					} else if(typeof data[key] === 'object' && data[key] instanceof Date) {
-						// If the date and time equals 1994/04/27 00:00:00 UCT+2, delete the property
+						// If the date and time equals 1994/04/27 00:00:00 UTC+2, delete the property
 						if(new Date(data[key]).toISOString() === new Date(767397600000).toISOString()) {
 						  delete entity[key] 
 						} else { 

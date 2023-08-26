@@ -10,6 +10,7 @@ export class AppService {
 	constructor(private configService: ConfigService) {}
 
 	getHello(): string {
+		console.log(process.env.CLIENT_URL)
 		return 'Hello World!';
 	}
 

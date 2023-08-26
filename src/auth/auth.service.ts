@@ -1,16 +1,18 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import * as path from 'path';
+import { ConfigService } from '@nestjs/config';
 import { UserOpt, User } from '../users/users.types';
 import { HistoryOpt } from '../database/database.types';
  
 @Injectable()
 export class AuthService {
+	constructor(private configService: ConfigService){}
  
-	private app = admin.initializeApp({
-		credential: admin.credential.cert(path.join(__dirname,'../../config/cloud.json'))
-	})
+	private app = admin.initializeApp()
+
 	private getAuth = this.app.auth;
+
 	async verifyRequest(idToken: string){
 		try {
 			const token = await this.getAuth().verifyIdToken(idToken, true);
