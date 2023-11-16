@@ -1,3 +1,5 @@
+
+
 export interface HistoryOpt {
 	prevDataObject?: any,
 	dataObject: any,
@@ -8,4 +10,12 @@ export interface HistoryOpt {
 	user: string,
 	time: Date,
 	action: string
+}
+
+export interface CursorTypes {
+	films?: string,
+	companies?: string,
+	people?: string,
+	content?: string,
+	users?: string
 }

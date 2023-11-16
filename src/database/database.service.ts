@@ -3,7 +3,7 @@ import { Datastore, Query } from '@google-cloud/datastore';
 import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
 import algoliasearch from 'algoliasearch';
-import { HistoryOpt } from './database.types';
+import { HistoryOpt, CursorTypes } from './database.types';
 import { 
 	Film, 
 	Poster, 
@@ -47,18 +47,6 @@ import {
 	PersonOpt,
 	PersonRoleOpt
 } from '../people/people.types';
-import {
-	CreateLinkDto,
-	UpdateLinkDto,
-	CreatePlatformDto,
-	UpdatePlatformDto
-} from '../platforms/platforms.dto';
-import {
-	Link,
-	Platform,
-	LinkOpt,
-	PlatformOpt
-} from '../platforms/platforms.types';
 import { 
 	CreateUserDto,  
 	UpdateUserDto,
@@ -76,11 +64,12 @@ import {
 } from '../content/content.dto';
 import { ContentOpt } from '../content/content.types';
 import { AuthService } from '../auth/auth.service';
+import { SearchService } from '../search/search.service';
 import fetch from 'cross-fetch';
 
 @Injectable()
 export class DatabaseService extends Datastore{
-	constructor(private configService: ConfigService, private authService: AuthService){
+	constructor(private configService: ConfigService, private authService: AuthService, private search: SearchService){
 		super()
 	}
 
@@ -120,6 +109,28 @@ export class DatabaseService extends Datastore{
 		})
 		
 		return final.join(" ")
+	}
+
+	dateToBigInt(date: Date){
+		return Math.floor(Number(new Date(date))/1000);
+	}
+
+	async recursiveQueries(cursor: string, query: any) {
+		const queryTakeOff = query.start(cursor);
+		
+		const results = await this.runQuery(queryTakeOff);
+		const entities = results[0];
+		let info = results[1];
+	
+		if (info.moreResults !== Datastore.NO_MORE_RESULTS) {
+			const nextResults = await this.recursiveQueries(info.endCursor, query);
+	
+			// Concatenate entities
+			results[0] = entities.concat(nextResults[0]);
+			info = nextResults[1];
+		}
+	
+		return {entities, info};
 	}
 
 	// History methods
@@ -296,6 +307,262 @@ export class DatabaseService extends Datastore{
 		}
 	}
 
+	// Search methods
+	async indexAll(){
+		let filmsQuery = this.createQuery('Film').limit(200);
+		let peopleQuery = this.createQuery('Person').limit(200);
+		let companiesQuery = this.createQuery('Company').limit(200);
+		let contentQuery = this.createQuery('Content').limit(200);
+		let usersQuery = this.createQuery('User').limit(200);
+
+		const films = []
+		const people = []
+		const companies = []
+		const content = []
+		const users = []
+		try {
+			// Films
+			let [filmsResults, filmsOptions] = await this.runQuery(filmsQuery);
+			filmsResults = await Promise.all(
+				filmsResults.map(async (item) => {
+					const [photo] = await this.get(this.key(['Film', +item[this.KEY]['id'],'Poster', '1']));
+					return {
+						id: item[this.KEY]['id'],
+						name: item.name,
+						year: item.year,
+						genres: item.genres,
+						type: item.type,
+						format: item.format,
+						productionStage: item.productionStage,
+						releaseDate: this.dateToBigInt(item.releaseDate),
+						initialPlatform: item.initialPlatform,
+						created: this.dateToBigInt(item.created),
+						lastUpdated: this.dateToBigInt(item.lastUpdated),
+						posterUrl: photo?.hdUrl
+					}
+				})
+			)
+			films.push(...filmsResults);
+			if(filmsOptions.moreResults !== this.NO_MORE_RESULTS) {
+				let moreFilms = await this.recursiveQueries(filmsOptions.endCursor, filmsQuery);
+				moreFilms.entities = await Promise.all(
+					moreFilms.entities.map(async (item) => {
+						const [photo] = await this.get(this.key(['Film', +item[this.KEY]['id'],'Poster', '0']));
+						return {
+							id: item[this.KEY]['id'],
+							name: item.name,
+							year: item.year,
+							genres: item.genres,
+							type: item.type,
+							format: item.format,
+							productionStage: item.productionStage,
+							releaseDate: this.dateToBigInt(item.releaseDate),
+							initialPlatform: item.initialPlatform,
+							created: this.dateToBigInt(item.created),
+							lastUpdated: this.dateToBigInt(item.lastUpdated),
+							posterUrl: photo?.hdUrl
+						}
+					})
+				)
+				films.push(...moreFilms.entities)
+			}
+
+			// People
+			let [peopleResults, peopleOptions] = await this.runQuery(peopleQuery);
+			peopleResults = await Promise.all(
+				peopleResults.map(async (item) => {
+					const [photo] = await this.get(this.key(['Person', +item[this.KEY]['id'],'PersonPhoto', '0']));
+					return {
+						id: item[this.KEY]['id'],
+						name: item.name,
+						occupation: item.occupation,
+						yearOfBirth: item.yearOfBirth,
+						cityOfOrigin: item.cityOfOrigin,
+						provinceOfOrigin: item.provinceOfOrigin,
+						gender: item.gender,
+						pronouns: item.pronouns,
+						description: item.description,
+						countryOfOrigin: item.countryOfOrigin,
+						nationality: item.nationality,
+						deathDate: this.dateToBigInt(item.deathDate),
+						created: this.dateToBigInt(item.created),
+						lastUpdated: this.dateToBigInt(item.lastUpdated),
+						photoUrl: photo?.hdUrl
+					}
+				})
+			)
+			people.push(...peopleResults);
+			if(peopleOptions.moreResults !== this.NO_MORE_RESULTS) {
+				const morePeople = await this.recursiveQueries(peopleOptions.endCursor, peopleQuery);
+				morePeople.entities = await Promise.all(
+					morePeople.entities.map(async (item) => {
+						const [photo] = await this.get(this.key(['Person', +item[this.KEY]['id'],'PersonPhoto', '0']));
+						return {
+							id: item[this.KEY]['id'],
+							name: item.name,
+							occupation: item.occupation,
+							yearOfBirth: item.yearOfBirth,
+							cityOfOrigin: item.cityOfOrigin,
+							provinceOfOrigin: item.provinceOfOrigin,
+							gender: item.gender,
+							pronouns: item.pronouns,
+							description: item.description,
+							countryOfOrigin: item.countryOfOrigin,
+							nationality: item.nationality,
+							deathDate: this.dateToBigInt(item.deathDate),
+							created: this.dateToBigInt(item.created),
+							lastUpdated: this.dateToBigInt(item.lastUpdated),
+							photoUrl: photo?.hdUrl
+						}
+					})
+				)
+				people.push(...morePeople.entities)
+			}
+
+			// Companies
+			let [companiesResults, companiesOptions] = await this.runQuery(companiesQuery);
+			companiesResults = await Promise.all(
+				companiesResults.map(async (item) => {
+					const [photo] = await this.get(this.key(['Company', +item[this.KEY]['id'],'CompanyPhoto', '0']));
+					return {
+						id: item[this.KEY]['id'],
+						name: item.name,
+						founder: item.founder,
+						director: item.director,
+						founded: item.founded,
+						description: item.description,
+						country: item.country,
+						city: item.city,
+						created: this.dateToBigInt(item.created),
+						lastUpdated: this.dateToBigInt(item.lastUpdated),
+						photoUrl: photo?.hdUrl
+					}
+				})
+			)
+			companies.push(...companiesResults);
+			if(companiesOptions.moreResults !== this.NO_MORE_RESULTS) {
+				const moreCompanies = await this.recursiveQueries(companiesOptions.endCursor, companiesQuery);
+				moreCompanies.entities = await Promise.all(
+					moreCompanies.entities.map(async (item) => {
+						const [photo] = await this.get(this.key(['Company', +item[this.KEY]['id'],'CompanyPhoto', '0']));
+						return {
+							id: item[this.KEY]['id'],
+							name: item.name,
+							founder: item.founder,
+							director: item.director,
+							founded: item.founded,
+							description: item.description,
+							country: item.country,
+							city: item.city,
+							created: this.dateToBigInt(item.created),
+							lastUpdated: this.dateToBigInt(item.lastUpdated),
+							photoUrl: photo?.hdUrl
+						}
+					})
+				)
+				companies.push(...moreCompanies.entities)
+			}
+
+			// Content
+			let [contentResults, contentOptions] = await this.runQuery(contentQuery);
+			contentResults = await Promise.all(
+				contentResults.map(async (item) => {
+					const [photo] = await this.get(this.key(['Content', +item[this.KEY]['id'],'ContentPhoto', '0']));
+					return {
+						id: item[this.KEY]['id'],
+						author: item.author,
+						headline: item.headline,
+						tags: item.tags,
+						slug: item.slug,
+						created: this.dateToBigInt(item.created),
+						lastUpdated:this.dateToBigInt(item.lastUpdated),
+						photoUrl: photo?.hdUrl
+					}
+				})
+			)
+			content.push(...contentResults);
+			if(contentOptions.moreResults !== this.NO_MORE_RESULTS) {
+				const moreContent = await this.recursiveQueries(contentOptions.endCursor, contentQuery);
+				moreContent.entities = await Promise.all(
+					moreContent.entities.map(async (item) => {
+						const [photo] = await this.get(this.key(['Content', +item[this.KEY]['id'],'ContentPhoto', '0']));
+						return {
+							id: item[this.KEY]['id'],
+							author: item.author,
+							headline: item.headline,
+							tags: item.tags,
+							slug: item.slug,
+							created: this.dateToBigInt(item.created),
+							lastUpdated:this.dateToBigInt(item.lastUpdated),
+							photoUrl: photo?.hdUrl
+						}
+					})
+				)
+				content.push(...moreContent.entities)
+			}
+
+			// Users
+			let [usersResults, usersOptions] = await this.runQuery(usersQuery);
+			usersResults = await Promise.all(
+				usersResults.map(async (item) => {
+					const [photo] = await this.get(this.key(['User', item[this.KEY]['name'],'UserPhoto', '0']));
+					return {
+						id: item[this.KEY]['name'],
+						userName: item.userName,
+						displayName: item.displayName,
+						role: item.role,
+						bio: item.bio,
+						reputation: item.reputation,
+						publication: item.publication,
+						criticScore: item.criticScore,
+						created: this.dateToBigInt(item.created),
+						lastUpdated: this.dateToBigInt(item.lastUpdated),
+						photoUrl: photo?.hdUrl
+					}
+				})
+			)
+			users.push(...usersResults);
+			if(usersOptions.moreResults !== this.NO_MORE_RESULTS) {
+				const moreUsers = await this.recursiveQueries(usersOptions.endCursor, usersQuery);
+				moreUsers.entities = await Promise.all(
+					moreUsers.entities.map(async (item) => {
+						const [photo] = await this.get(this.key(['User', item[this.KEY]['name'],'UserPhoto', '0']));
+						return {
+							id: item[this.KEY]['name'],
+							userName: item.userName,
+							displayName: item.displayName,
+							role: item.role,
+							bio: item.bio,
+							reputation: item.reputation,
+							publication: item.publication,
+							criticScore: item.criticScore,
+							created: this.dateToBigInt(item.created),
+							lastUpdated: this.dateToBigInt(item.lastUpdated),
+							photoUrl: photo?.hdUrl
+						}
+					})
+				)
+				users.push(...moreUsers.entities)
+			}
+
+			const filmsJSONlines = films.map((item) => JSON.stringify(item)).join('\n');
+			const peopleJSONlines = people.map((item) => JSON.stringify(item)).join('\n');
+			const companiesJSONlines = companies.map((item) => JSON.stringify(item)).join('\n');
+			const contentJSONlines = content.map((item) => JSON.stringify(item)).join('\n');
+			const usersJSONlines = users.map((item) => JSON.stringify(item)).join('\n');
+
+			const filmsRes = await this.search.client.collections('films').documents().import(filmsJSONlines, {action: 'upsert'});
+			const peopleRes = await this.search.client.collections('people').documents().import(peopleJSONlines, {action: 'upsert'});
+			const companiesRes = await this.search.client.collections('companies').documents().import(companiesJSONlines, {action: 'upsert'});
+			const contentRes = await this.search.client.collections('content').documents().import(contentJSONlines, {action: 'upsert'});
+			const usersRes = await this.search.client.collections('users').documents().import(usersJSONlines, {action: 'upsert'});
+			console.log(filmsRes, peopleRes, companiesRes, contentRes, usersRes)
+			return {status: 'success'}
+		} catch(err: any) {
+			throw new BadRequestException(err.message)
+		}
+	}
+
 	// Frequency methods
 	async createFrequencyEntity(kind: string, id: string){
 		const frequencyKey = this.key('Frequency')
@@ -391,14 +658,16 @@ export class DatabaseService extends Datastore{
 			const history = await this.createHistory(historyObj);
 
 			const searchRecord = {
-				objectID: entity.key.id,
+				id: entity.key.id,
 				author: data.author,
 				headline: data.headline,
 				tags: data.tags,
-				created: data.created,
-				lastUpdated: data.lastUpdated
+				slug: data.slug,
+				created: this.dateToBigInt(data.created),
+				lastUpdated:this.dateToBigInt(data.lastUpdated)
 			}
-			await this.algolia.initIndex('content').saveObject(searchRecord).wait();
+			// await this.algolia.initIndex('content').saveObject(searchRecord).wait();
+			await this.search.client.collections('content').documents().create(searchRecord);
 
 			return {entity, history}
 		} catch(err: any) {
@@ -453,13 +722,14 @@ export class DatabaseService extends Datastore{
 			const history = await this.createHistory(historyObj);
 
 			const searchRecord = {
-				objectID: entity[this.KEY]['id'],
 				author: entity.author,
 				headline: data.headline,
 				tags: data.tags,
-				lastUpdated: data.lastUpdated
+				slug: data.slug,
+				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
-			await this.algolia.initIndex('content').partialUpdateObject(searchRecord).wait();
+			// await this.algolia.initIndex('content').partialUpdateObject(searchRecord).wait();
+			await this.search.client.collections('content').documents(entity[this.KEY]['id']).update(searchRecord);
 
 			return {entity, history}
 		} catch (err){
@@ -595,12 +865,19 @@ export class DatabaseService extends Datastore{
 			}
 
 			const searchRecord = {
-				objectID: entity.key.name,
-				username: data.userName,
-				created: data.created,
-				lastUpdated: data.lastUpdated
+				id: entity.key.name,
+				userName: data.userName,
+				displayName: data.displayName,
+				role: data.role,
+				bio: data.bio,
+				reputation: data.reputation,
+				publication: data.publication,
+				criticScore: data.criticScore,
+				created: this.dateToBigInt(data.created),
+				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
-			await this.algolia.initIndex('users').saveObject(searchRecord).wait();
+			// await this.algolia.initIndex('users').saveObject(searchRecord).wait();
+			await this.search.client.collections('users').documents().create(searchRecord);
 
 			return {entity, history: await this.createHistory(historyObj)}
 		} catch (err: any) {
@@ -704,11 +981,17 @@ export class DatabaseService extends Datastore{
 			}
 
 			const searchRecord = {
-				objectID: entity[this.KEY]['name'],
-				username: data.userName,
-				lastUpdated: data.lastUpdated
+				userName: data.userName,
+				displayName: data.displayName,
+				role: data.role,
+				bio: data.bio,
+				reputation: data.reputation,
+				publication: data.publication,
+				criticScore: data.criticScore,
+				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
-			await this.algolia.initIndex('users').partialUpdateObject(searchRecord).wait();
+			// await this.algolia.initIndex('users').partialUpdateObject(searchRecord).wait();
+			await this .search.client.collections('users').documents(entity[this.KEY]['name']).update(searchRecord);
 
 			// update the mail list, only if it wasn't just created	
 			if(entity.hasOwnProperty('mailId') && performUpdate === true){
@@ -760,7 +1043,7 @@ export class DatabaseService extends Datastore{
 			}
 			
 			await this.insert(entity);
-
+			
 			const historyObj: HistoryOpt = {
 				dataObject: data,
 				user: opt.user,
@@ -772,8 +1055,15 @@ export class DatabaseService extends Datastore{
 				pKind: opt.parentKind
 			}
 			const history = await this.createHistory(historyObj);
+
+			const searchRecord = {
+				photoUrl: data.hdUrl
+			}
+			await this.search.client.collections('users').documents(opt.parentId).update(searchRecord);
+
 			return {entity, history}
 		} catch (err: any) {
+			// console.log(err)
 			throw new NotFoundException(err.message);
 		}
 	}
@@ -815,69 +1105,6 @@ export class DatabaseService extends Datastore{
 			return {entity, history};
 		} catch(err: any){
 			throw new BadRequestException(err.message)
-		}
-	}
-
-	// Oudated
-	async createVotesEntity(data: CreateVotesDto, opt: VoteOpt){
-		const voteKey = this.key('Vote');
-		data.lastUpdated = opt.time;
-		data.created = opt.time;
-		const entity = {
-			key: voteKey,
-			data: data
-		}
-		try {
-			await this.insert(entity)
-			const historyObj: HistoryOpt = {
-				dataObject: data,
-				user: opt.user,
-				kind: 'Vote',
-				id: voteKey.id,
-				action: 'create',
-				time: opt.time,
-			}
-			const history = await this.createHistory(historyObj);
-			return {entity, history}
-		} catch (err: any) {
-			throw new NotFoundException(err.message);
-		}
-	}
-
-	async updateVotesEntity(data: UpdateVotesDto, opt: VoteOpt){
-		const voteKey = this.key(['Vote', +opt.votesId]);
-		data.lastUpdated = opt.time;
-		try {
-			const [entity] = await this.get(voteKey);
-			const dataBefore = entity;
-
-			if(!entity){
-				throw new BadRequestException("Action not allowed");
-			}
-
-			for (const key in data) {
-				if(entity.hasOwnProperty(key)){
-					entity[key] = data[key]
-				} else {
-					entity[key] = data[key]
-				}
-			}
-
-			await this.update(entity);
-
-			const historyObj: HistoryOpt = {
-				dataObject: data,
-				prevDataObject: dataBefore,
-				user: opt.user,
-				kind: 'Vote',
-				id: voteKey.id,
-				action: 'update',
-				time: opt.time
-			}
-			const history = await this.createHistory(historyObj);
-			return {entity, history}
-		} catch(err: any){
-			throw new BadRequestException(err.message);
 		}
 	}
 
@@ -954,9 +1181,12 @@ export class DatabaseService extends Datastore{
 	async calculateRatingScore(results: any[]){
 		const criticsQuery = this.createQuery('User').filter('role', '=', 'journalist');
 		try{
+			// 33% ratings total + 33% critic sample + 33% total critic reputation
+
 			const [critics] = await this.runQuery(criticsQuery);
 			const sampleCap = critics.length;
 			const totalRatings = results.length;
+			const totalCriticsScore = critics.reduce((sumSoFar, critic) => sumSoFar + critic.criticScore ? critic.criticScore : 0 , 0)
 
 			const upLists = results.filter((val) => val.listRating == 'u').length;
 			const neutralLists = results.filter((val) => val.listRating == 'n').length;
@@ -968,8 +1198,9 @@ export class DatabaseService extends Datastore{
 
 			const averageRatingsPercentage = ((upPoints+neutralPoints+downPoints)/totalRatings)*100;
 			const criticsSamplePercentage = (totalRatings/sampleCap)*100;
+			const criticScorePercentage = (totalCriticsScore/sampleCap*100)*100;
 			
-			const listScore = ((averageRatingsPercentage+criticsSamplePercentage)/200)*100;
+			const listScore = ((averageRatingsPercentage+criticsSamplePercentage+criticScorePercentage)/300)*100;
 
 			const info = {
 				up: upLists,
@@ -1048,8 +1279,6 @@ export class DatabaseService extends Datastore{
 		const parentKey = this.key([opt.parentKind, +opt.parentId]);
 		const query = this.createQuery('Rating').hasAncestor(parentKey);
 		try {
-			// const [user] = await this.get(userKey);
-
 			const [entity] = await this.get(ratingKey);
 			const dataBefore = {...entity};
 
@@ -1061,6 +1290,18 @@ export class DatabaseService extends Datastore{
 				} else {
 					entity[key] = data[key]
 				}
+			}
+
+			// Update critic reputation 
+			if(data.hasOwnProperty('editVerified')){
+				const authorKey = this.key(['User', entity.authorUid]);
+				const [user] = await this.get(authorKey);
+				if(!user.criticScore){
+					user.criticScore = 1
+				} else if(user.criticScore < 100){
+					user.criticScore = user.criticScore+1
+				}
+				await this.update(user);
 			}
 
 			const dataAfter = {...entity};
@@ -1226,10 +1467,10 @@ export class DatabaseService extends Datastore{
 			const history = await this.createHistory(historyObj);
 
 			const searchRecord = {
-				objectID: opt.parentId,
 				posterUrl: data.hdUrl
 			}
-			await this.algolia.initIndex('films').partialUpdateObject(searchRecord, {}).wait();
+			// await this.algolia.initIndex('films').partialUpdateObject(searchRecord, {}).wait();
+			await this.search.client.collections('films').documents(opt.parentId).update(searchRecord);
 
 			return {entity, history};
 		} catch (err: any) {
@@ -1313,13 +1554,23 @@ export class DatabaseService extends Datastore{
 			const history = await this.createHistory(historyObj);
 
 			const searchRecord = {
-				objectID: entity.key.id,
+				id: entity.key.id,
 				name: data.name,
 				occupation: data.occupation,
-				created: data.created,
-				lastUpdated: data.lastUpdated
+				yearOfBirth: data.yearOfBirth,
+				cityOfOrigin: data.cityOfOrigin,
+				provinceOfOrigin: data.provinceOfOrigin,
+				gender: data.gender,
+				pronouns: data.pronouns,
+				description: data.description,
+				countryOfOrigin: data.countryOfOrigin,
+				nationality: data.nationality,
+				deathDate: this.dateToBigInt(data.deathDate),
+				created: this.dateToBigInt(data.created),
+				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
-			await this.algolia.initIndex('people').saveObject(searchRecord).wait();
+			// await this.algolia.initIndex('people').saveObject(searchRecord).wait();
+			await this.search.client.collections('people').documents().create(searchRecord);
 
 			return { entity, history }
 		} catch (err: any) {
@@ -1397,12 +1648,21 @@ export class DatabaseService extends Datastore{
 			const history = await this.createHistory(historyObj);
 
 			const searchRecord = {
-				objectID: entity[this.KEY]['id'],
 				name: data.name,
 				occupation: data.occupation,
-				lastUpdated: data.lastUpdated
+				yearOfBirth: data.yearOfBirth,
+				cityOfOrigin: data.cityOfOrigin,
+				provinceOfOrigin: data.provinceOfOrigin,
+				gender: data.gender,
+				pronouns: data.pronouns,
+				description: data.description,
+				countryOfOrigin: data.countryOfOrigin,
+				nationality: data.nationality,
+				deathDate: this.dateToBigInt(data.deathDate),
+				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
-			await this.algolia.initIndex('people').partialUpdateObject(searchRecord).wait();
+			// await this.algolia.initIndex('people').partialUpdateObject(searchRecord).wait();
+			await this.search.client.collections('people').documents(personKey.id).update(searchRecord);
 
 			return {entity, history}
 		} catch(err: any){
@@ -1462,10 +1722,10 @@ export class DatabaseService extends Datastore{
 				pKind: opt.parentKind
 			}
 			const searchRecord = {
-				objectID: opt.parentId,
 				photoUrl: data.hdUrl
 			}
-			await this.algolia.initIndex('people').partialUpdateObject(searchRecord).wait();
+			// await this.algolia.initIndex('people').partialUpdateObject(searchRecord).wait();
+			await this.search.client.collections('people').documents(opt.parentId).update(searchRecord);
 
 			const history = await this.createHistory(historyObj);
 			return {entity, history}
@@ -1657,12 +1917,19 @@ export class DatabaseService extends Datastore{
 			const history = await this.createHistory(historyObj);
 
 			const searchRecord = {
-				objectID: entity.key.id,
+				id: entity.key.id,
 				name: data.name,
-				created: data.created,
-				lastUpdated: data.lastUpdated
+				founder: data.founder,
+				director: data.director,
+				founded: data.founded,
+				description: data.description,
+				country: data.country,
+				city: data.city,
+				created: this.dateToBigInt(data.created),
+				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
-			await this.algolia.initIndex('companies').saveObject(searchRecord).wait();
+			// await this.algolia.initIndex('companies').saveObject(searchRecord).wait();
+			await this.search.client.collections('companies').documents().create(searchRecord);
 
 			return {entity, history}
 		} catch (err: any) {
@@ -1740,15 +2007,21 @@ export class DatabaseService extends Datastore{
 			const history = await this.createHistory(historyObj);
 
 			const searchRecord = {
-				objectID: entity[this.KEY]['id'],
 				name: data.name,
-				created: data.created,
-				lastUpdated: data.lastUpdated
+				founder: data.founder,
+				director: data.director,
+				founded: data.founded,
+				description: data.description,
+				country: data.country,
+				city: data.city,
+				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
-			await this.algolia.initIndex('companies').partialUpdateObject(searchRecord).wait();
+			// await this.algolia.initIndex('companies').partialUpdateObject(searchRecord).wait();
+			await this.search.client.collections('companies').documents(companyKey.id).update(searchRecord);
 
 			return {entity, history}
 		} catch(err: any){
+			// console.log(err)
 			throw new BadRequestException(err.message);
 		}
 	}
@@ -1796,10 +2069,11 @@ export class DatabaseService extends Datastore{
 			const history = await this.createHistory(historyObj);
 
 			const searchRecord = {
-				objectID: opt.parentId,
 				photoUrl: data.hdUrl
 			}
-			await this.algolia.initIndex('companies').partialUpdateObject(searchRecord).wait();
+			// await this.algolia.initIndex('companies').partialUpdateObject(searchRecord).wait();
+			await this.search.client.collections('companies').documents(opt.parentId).update(searchRecord);
+
 			return {entity, history}
 		} catch (err: any) {
 			throw new NotFoundException(err.message);
@@ -1948,141 +2222,6 @@ export class DatabaseService extends Datastore{
 			const history = await this.createHistory(historyObj);
 
 			return {entity, history}
-		} catch(err: any){
-			throw new BadRequestException(err.message);
-		}
-	}
-
-	// Platform methods
-	async createPlatformEntity(data: CreatePlatformDto, opt: PlatformOpt){
-		const platformKey = this.key('Platform');
-		data.created = opt.time;
-		data.lastUpdated = opt.time;
-		const entity = {
-			key: platformKey,
-			data: data
-		}
-
-		try {
-			await this.insert(entity);
-
-			const historyObj: HistoryOpt = {
-				dataObject: data,
-				user: opt.user,
-				kind: 'Platform',
-				id: platformKey.id,
-				action: 'create',
-				time: opt.time,
-			}
-			const history = await this.createHistory(historyObj);
-			return { entity, history }
-		} catch (err: any) {
-			throw new NotFoundException(err.message);
-		}
-	}
-
-	async updatePlatformEntity(data: UpdatePlatformDto, opt: PlatformOpt){
-		data.lastUpdated = opt.time;
-		const platformKey = this.key(['Platform', +opt.platformId]);
-
-		try {
-			const [entity] = await this.get(platformKey)
-
-			if(!entity){
-				throw new BadRequestException("Action not allowed");
-			}
-
-			for (const key in data) {
-				if(entity.hasOwnProperty(key)){
-					entity[key] = data[key]
-				} else {
-					entity[key] = data[key]
-				}
-			}
-
-			await this.update(entity);
-
-			const historyObj: HistoryOpt = {
-				dataObject: entity,
-				user: opt.user,
-				kind: 'Platform',
-				id: platformKey.id,
-				action: 'update',
-				time: opt.time,
-			}
-			const history = await this.createHistory(historyObj);
-			return {entity, history}
-		} catch(err: any){
-			throw new BadRequestException(err.message);
-		}
-	}
-
-	// Link methods
-	async createLinkEntity(data: CreateLinkDto, opt: LinkOpt){
-		data.lastUpdated = opt.time;
-		data.created = opt.time;
-		data.ownerKind = opt.parentKind;
-		data.ownerId = opt.parentId;
-		data.platformId = opt.platformId
-		// Creates a link
-		const platformKey = this.key(['Platform', +opt.platformId])
-		const linkKey = this.key(['Platform', +platformKey.id, opt.parentKind, +opt.parentId, 'Link']);
-		const entity = {
-			key: linkKey,
-			data: data
-		}
-		try {
-			await this.insert(entity);
-			// Creates history
-			const historyObj: HistoryOpt = {
-				dataObject: data,
-				user: opt.user,
-				kind: 'Link',
-				id: linkKey.id,
-				action: 'create',
-				time: opt.time,
-			}
-			const history = await this.createHistory(historyObj);
-			return { entity, history }
-		} catch (err: any) {
-			throw new NotFoundException(err.message);
-		}
-	}
-
-	async updateLinkEntity(data: UpdateLinkDto, opt: LinkOpt){
-		const platformKey = this.key(['Platform', +opt.platformId]);
-			
-		const linkKey = this.key(['Platform', +platformKey.id, opt.parentKind, +opt.parentId,'Link', +opt.linkId]);
-		data.lastUpdated = opt.time;
-
-		try {
-			const [entity] = await this.get(linkKey)
-
-			if(!entity){
-				throw new BadRequestException("Action not allowed");
-			}
-
-			for (const key in data) {
-				if(entity.hasOwnProperty(key)){
-					entity[key] = data[key]
-				} else {
-					entity[key] = data[key]
-				}
-			}
-
-			await this.update(entity);
-
-			// Creates history
-			const historyObj: HistoryOpt = {
-				dataObject: entity,
-				user: opt.user,
-				kind: 'Link',
-				id: platformKey.id,
-				action: 'update',
-				time: opt.time,
-			}
-			const history = await this.createHistory(historyObj);
-			return { entity, history }
 		} catch(err: any){
 			throw new BadRequestException(err.message);
 		}

@@ -10,8 +10,7 @@ export class AppService {
 	constructor(private configService: ConfigService) {}
 
 	getHello(): string {
-		console.log(process.env.CLIENT_URL)
-		return 'Hello World!';
+		return 'Copyright 2023, Makamuta Pty Ltd.';
 	}
 
 	async refreshClient(path: string) {
@@ -31,7 +30,7 @@ export class AppService {
       const res = await fetch(path);
     	if(res.status >= 400){ throw new BadRequestException('Error Extracting Image') }
     	const blob = await res.blob()
-    	if(blob.type == 'image/png' || blob.type == 'image/jpeg'){
+    	if(blob.type == 'image/png' || blob.type == 'image/jpeg' || blob.type == 'image/webp'){
 	    	const unit8 = new Uint8Array(await blob.arrayBuffer())
 	    	return {uint8: unit8, type: blob.type}
 	    } else { throw new BadRequestException('Unsupported File Extension') }

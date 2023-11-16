@@ -3,18 +3,19 @@ import { FilmsController } from './films.controller';
 import { FilmsService } from './films.service';
 import { CompaniesModule } from '../companies/companies.module';
 import { UsersModule } from '../users/users.module';
-import { PlatformsModule } from '../platforms/platforms.module';
 import { PeopleModule } from '../people/people.module';
 import { DatabaseModule } from '../database/database.module';
 import { StorageModule } from '../storage/storage.module';
 import { AuthModule } from '../auth/auth.module';
+import { SearchModule } from '../search/search.module';
+
 
 @Module({
 	imports: [
 		CompaniesModule,
 		UsersModule,
-		PlatformsModule,
 		PeopleModule,
+		SearchModule,
 		DatabaseModule,
 		StorageModule,
 		AuthModule
