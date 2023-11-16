@@ -16,24 +16,39 @@ import { SearchService } from './search.service'
 export class SearchController {
 	constructor(private search: SearchService){}
 	
-	@Get('quick')
-	async quickSearch(
-		@Query('film') film: string,
-		@Query('series') series: string,
-		@Query('company') company: string,
-		@Query('person') person: string,
-		@Query('platform') platform: string,
-	) {
-		if(film){
-			return await this.search.quickSearch('film', film)
-		} else if (series){
-			return await this.search.quickSearch('series', series)
-		} else if(company){
-			return await this.search.quickSearch('company', company)
-		} else if(person){
-			return await this.search.quickSearch('person', person)
-		} else if(platform){
-			return await this.search.quickSearch('platform', person)
-		}
+	@Get()
+	async searchFunction(){
+		return await this.search.getAllCollections()
 	}
+
+	@Get('create')
+	async testFunc0(){
+		return await this.search.createCollections()
+	}
+
+	@Get('delete')
+	async testFunc1(){
+		return await this.search.deleteAllCollections()
+	}
+	
+	// @Get('quick')
+	// async quickSearch(
+	// 	@Query('film') film: string,
+	// 	@Query('series') series: string,
+	// 	@Query('company') company: string,
+	// 	@Query('person') person: string,
+	// 	@Query('platform') platform: string,
+	// ) {
+	// 	if(film){
+	// 		return await this.search.quickSearch('film', film)
+	// 	} else if (series){
+	// 		return await this.search.quickSearch('series', series)
+	// 	} else if(company){
+	// 		return await this.search.quickSearch('company', company)
+	// 	} else if(person){
+	// 		return await this.search.quickSearch('person', person)
+	// 	} else if(platform){
+	// 		return await this.search.quickSearch('platform', person)
+	// 	}
+	// }
 }
