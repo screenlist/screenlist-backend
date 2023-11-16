@@ -307,6 +307,11 @@ export class UsersController {
 		return await this.usersService.rejectToSetJournalist(requestOptions);
 	}
 
+	@Get('admin/index')
+	async indexDatabase(){
+		return await this.usersService.indexDatabase()
+	}
+
 	// Users use this route to request the journalist role
 	@Post('journalists/requests')
 	@Roles('member')
@@ -338,7 +343,6 @@ export class UsersController {
 		}
 		return await this.usersService.revokePrivilegedRole(subjectUid, userOptions);
 	}
-
 
 	@Post('super/admin')
 	@Roles('admin')
@@ -377,117 +381,5 @@ export class UsersController {
 			time: new Date()
 		}
 		return await this.usersService.makeModerator(uid, userOptions);
-	}
-
-
-	// TO BE REMOVED
-	// Routes for proposing role votes
-	@Post('votes/admins')
-	@Roles('admin')
-	async proposeVoteForAdmin(
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('username') userName: string,
-		@Query('vote_for') voteFor: string
-	){
-		console.log('proposeVoteForAdmin')
-		const voteOptions: VoteOpt = {
-			user: await this.authService.getUserUid(idToken),
-			userName: userName,
-			time: new Date(),
-			userToVoteFor: voteFor
-		}
-		return await this.usersService.proposeAdminVote(voteOptions);
-	}
-
-	@Post('votes/curators')
-	@Roles('admin')
-	async proposeVoteForCurator(
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('username') userName: string,
-		@Query('vote_for') voteFor: string
-	){
-		console.log('proposeVoteForCurator')
-		const voteOptions: VoteOpt = {
-			user: await this.authService.getUserUid(idToken),
-			userName: userName,
-			time: new Date(),
-			userToVoteFor: voteFor
-		}
-		return await this.usersService.proposeCuratorVote(voteOptions);
-	}
-
-	@Post('votes/moderators')
-	@Roles('moderator')
-	async proposeVoteForModerator(
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('username') userName: string,
-		@Query('vote_for') voteFor: string
-	){
-		console.log('proposeVoteForModerator')
-		const voteOptions: VoteOpt = {
-			user: await this.authService.getUserUid(idToken),
-			userName: userName,
-			time: new Date(),
-			userToVoteFor: voteFor
-		}
-		return await this.usersService.proposeModeratorVote(voteOptions);
-	}
-
-	// Routes for role voting
-	@Post('votes/:votesId/admins')
-	@Roles('admin')
-	async voteForAdmin(
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('username') userName: string,
-		@Param('votesId') votesId: string,
-		@Query('vote_for') voteFor: string
-	){
-		console.log('voteForAdmin')
-		const voteOptions: VoteOpt = {
-			user: await this.authService.getUserUid(idToken),
-			userName: userName,
-			time: new Date(),
-			votesId: votesId,
-			userToVoteFor: voteFor
-		}
-		return await this.usersService.voteToSetAdmin(voteOptions);
-	}
-
-	@Post('votes/:votesId/curators')
-	@Roles('admin')
-	async voteForCurator(
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('username') userName: string,
-		@Param('votesId') votesId: string,
-		@Query('vote_for') voteFor: string
-	){
-		console.log('voteForCurator')
-		const voteOptions: VoteOpt = {
-			user: await this.authService.getUserUid(idToken),
-			userName: userName,
-			time: new Date(),
-			votesId: votesId,
-			userToVoteFor: voteFor
-		}
-		return await this.usersService.voteToSetCurator(voteOptions);
-	}
-
-	@Post('votes/:votesId/moderators')
-	@Roles('moderator')
-	async voteForModerator(
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('username') userName: string,
-		@Param('votesId') votesId: string,
-		@Query('vote_for') voteFor: string
-	){
-		console.log('voteForModerator')
-		const voteOptions: VoteOpt = {
-			user: await this.authService.getUserUid(idToken),
-			userName: userName,
-			time: new Date(),
-			votesId: votesId,
-			userToVoteFor: voteFor
-		}
-		return await this.usersService.voteToSetModerator(voteOptions);
 	}
 }

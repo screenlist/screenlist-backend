@@ -27,7 +27,7 @@ export class RolesGuard implements CanActivate {
 		
 		const token: string = request.headers['authorizationtoken'];		
 		// console.log('token of the roles guard')
-		// console.log(token.substring(0, 10))
+		console.log(token)
 		const uid = await this.authService.getUserUid(token)
 		const emailVerified = await this.authService.emailVerified(token);
 
