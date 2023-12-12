@@ -17,12 +17,14 @@ import { CreateDisplayPhotoDto, UpdateDisplayPhotoDto, UpdateFilmDto } from '../
 import { ImageOpt } from  '../films/films.types';
 import { HistoryOpt } from '../database/database.types';
 import { StorageService } from '../storage/storage.service';
+import { SearchService } from 'src/search/search.service';
 
 @Injectable()
 export class CompaniesService {
 	constructor(
 		private storage: StorageService,
-		private db: DatabaseService
+		private db: DatabaseService,
+		private search: SearchService
 	){}
 
 	async findAll(): Promise<Company[]>{
@@ -113,25 +115,25 @@ export class CompaniesService {
 
 			const productions = []
 
-			const productionUnsorted = roles.filter((value) => value.type == 'production').sort((a, b) => {
+			roles.sort((a, b) => {
 				if(a.year > b.year) {
 					return -1
+				} else if (a.year < b.year) {
+					return 1;
 				} else {
 					return 0
 				}
-			});
-
-			productionUnsorted.forEach((item) => {
-				const film = productions.find((val) => val.ownerId === item.ownerId)
-				const capacity = item.capacity ? [{
+			}).forEach((item) => {
+				const filmIndex = productions.findIndex((val) => val.ownerId === item.ownerId)
+				const capacity = [{
 					companyId: item.companyId,
-					capacity: item.capacity,
+					capacity: item.capacity ? item.capacity : item.type,
 					urlPath: item.urlPath,
 					id: item.id
-				}] : []
-
-				if(film){
-					productions[film].roles.push(...capacity)
+				}]
+				// console.log(film)
+				if(filmIndex !== -1){
+					productions[filmIndex].roles.push(...capacity)
 				} else {
 					productions.push({
 						...item,
@@ -140,18 +142,9 @@ export class CompaniesService {
 				}
 			})
 
-			const distributions = roles.filter((value) => value.type == 'distribution').sort((a, b) => {
-				if(a.year > b.year) {
-					return -1
-				} else {
-					return 0
-				}
-			});
-
 			return {
 				details,
-				productions,
-				distributions
+				productions
 			}
 		} catch(err: any){
 			throw new NotFoundException('Company not found')
@@ -178,7 +171,7 @@ export class CompaniesService {
 
 	async deleteOne(opt: CompanyOpt){
 		const companyKey = this.db.key(['Company', +opt.companyId]);
-		const entities = [{key: companyKey}]; // entites to be deleted
+		const entities = [companyKey]; // entites to be deleted
 		const rolesQuery = this.db.createQuery('CompanyRole').hasAncestor(companyKey);
 		try {
 			const [roles] = await this.db.runQuery(rolesQuery);
@@ -194,7 +187,7 @@ export class CompaniesService {
 			await this.db.createHistory(historyObj);
 			roles.forEach(async (role) => {
 				const roleKey = role[this.db.KEY];
-				entities.push({key: roleKey});
+				entities.push(roleKey);
 				const roleHistoryObj: HistoryOpt = {
 					dataObject: role,
 					kind: 'CompanyRole',
@@ -205,7 +198,8 @@ export class CompaniesService {
 				}
 				await this.db.createHistory(roleHistoryObj);
 			})
-			await this.db.algolia.initIndex('companies').deleteObject(companyKey.id);
+			// await this.db.algolia.initIndex('companies').deleteObject(companyKey.id);
+			await this.search.client.collections('companies').documents(companyKey.id).delete();
 			await this.db.delete(entities);
 			return { 'status': 'deleted' };
 		} catch(err:any) {
@@ -252,7 +246,7 @@ export class CompaniesService {
 				dataObject: photo,
 				user: opt.user,
 				kind: 'CompanyPhoto',
-				id: photoKey.id,
+				id: photoKey.name,
 				action: 'delete',
 				time: opt.time,
 				pId: opt.parentId,
@@ -267,10 +261,9 @@ export class CompaniesService {
 			await this.updateOne(company, companyOptions);
 
 			const searchRecord = {
-				objectID: opt.parentId,
-				photoUrl: null
+				posterUrl: null
 			}
-			await this.db.algolia.initIndex('companies').partialUpdateObject(searchRecord).wait();
+			await this.search.client.collections('companies').documents(opt.parentId).update(searchRecord);
 
 			return {'status': 'deleted'}
 		} catch {
@@ -279,8 +272,8 @@ export class CompaniesService {
 	}
 
 	async createOneRole(data: CreateCompanyRoleDto, opt: CompanyRoleOpt){
-		if(!data.type){
-			throw new BadRequestException('role type not specified')
+		if(!data.capacity){
+			throw new BadRequestException('role capacity not specified')
 		}
 
 		try {
@@ -352,7 +345,7 @@ export class CompaniesService {
 			const {entity, history} = await this.db.updateCompanyEntity(data, companyOptions);
 			return entity;
 		} catch (err: any){
-			console.log()
+			// console.log(err)
 			throw new BadRequestException(err.message);
 		}
 	}
@@ -365,7 +358,7 @@ export class CompaniesService {
 
 			const [companyHistory] = await this.db.createQuery('History')
 				.filter('xKind', '=', 'Company')
-				.filter('xIdentifier', '=', +companyId)
+				.filter('xIdentifier', '=', companyId)
 				.filter('xTimestamp', '>', new Date(company.lastVerified))
 				.order('xTimestamp', {descending: true}).run();
 

@@ -6,9 +6,6 @@ import {
 	PersonRole, 
 	Person,
 } from '../people/people.types';
-import {
-	Link
-} from '../platforms/platforms.types'
 
 export interface Still {
 	id: string;
@@ -82,7 +79,6 @@ export interface FilmType {
 	stills?: Still[];
 	actors?: PersonRole[];
 	crew?: PersonRole[];
-	platforms?: Link[];
 	distributors?: CompanyRole[];
 	producers?: CompanyRole[]
 }

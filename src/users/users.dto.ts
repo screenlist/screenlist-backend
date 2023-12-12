@@ -7,7 +7,8 @@ import {
 	MaxLength,
 	IsFQDN,
 	IsNumber,
-	IsBoolean
+	IsBoolean,
+	IsArray
 } from 'class-validator';
 
 export class CreateUserDto {
@@ -32,16 +33,35 @@ export class CreateUserDto {
 	@IsOptional()
 	@IsEmpty()
 	@IsNumber()
+	reputation?: number; // min 0
+
+	@IsOptional()
+	@IsEmpty()
+	@IsNumber()
 	mailId?: number;
 
+	@IsOptional()
+	@IsArray()
+	favouriteFilms?: string[]
 
 	@IsOptional()
 	@IsString()
+	@MaxLength(60)
 	displayName?: string;
 
 	@IsOptional()
 	@IsString()
 	publication?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	@IsNumber()
+	criticScore?: number; // min 0; max 100
+
+	@IsOptional()
+	@IsEmpty()
+	@IsString()
+	customerCode?: string;
 
 	@IsOptional()
 	@IsDate()
@@ -78,6 +98,25 @@ export class UpdateUserDto {
 	@IsOptional()
 	@IsString()
 	publication?: string;
+
+	@IsOptional()
+	@IsEmpty()
+	@IsNumber()
+	reputation?: number; // min 0
+
+	@IsOptional()
+	@IsEmpty()
+	@IsNumber()
+	criticScore?: number;
+
+	@IsOptional()
+	@IsArray()
+	favouriteFilms?: string[]
+
+	@IsOptional()
+	@IsEmpty()
+	@IsString()
+	customerCode?: string;
 
 	@IsOptional()
 	@IsDate()

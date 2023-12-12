@@ -2,35 +2,33 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { SeriesModule } from './series/series.module';
 import { FilmsModule } from './films/films.module';
 import { SearchModule } from './search/search.module';
 import { UsersModule } from './users/users.module';
-import { PlatformsModule } from './platforms/platforms.module';
 import { PeopleModule } from './people/people.module';
 import { StorageModule } from './storage/storage.module';
 import { CompaniesModule } from './companies/companies.module';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { ContentModule } from './content/content.module';
+import { PaymentsModule } from './payments/payments.module';
 
 
 @Module({
   imports: [
-    SeriesModule, 
     FilmsModule, 
     SearchModule, 
     UsersModule,
     ConfigModule.forRoot({
       isGlobal: true
     }),
-    PlatformsModule,
     PeopleModule,
     StorageModule,
     CompaniesModule,
     DatabaseModule,
     AuthModule,
-    ContentModule
+    ContentModule,
+    PaymentsModule
   ],
   controllers: [AppController],
   providers: [AppService],

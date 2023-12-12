@@ -33,6 +33,12 @@ export class ContentController {
 		private contentService: ContentService,
 		private authService: AuthService
 	){}
+		/* MISC METHODS */
+	@Get('episodes')
+	async getEpisodes(){
+		return await this.contentService.getEpisodes()
+	}
+
 	/* CONTENT PHOTO METHODS */
 	@Post('photo')
 	@Roles('curator')
@@ -314,5 +320,124 @@ export class ContentController {
 			time: new Date()
 		}
 		return await this.contentService.deleteOne(contentOptions, 'contributions', 'contributions');
+	}
+
+	/* MARGINAL METHODS */
+
+	@Get('marginal/articles')
+	async getArticles(
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('page') page: number
+	) {
+		let user: any;
+		if(idToken){
+			user = await this.authService.getUserUid(idToken);
+		}
+		
+		const index = page ? page : 0
+		return await this.contentService.getArticles(index, user);
+	}
+
+	@Get('marginal/articles/:slug')
+	async getArticle(
+		@Headers('AuthorizationToken') idToken: string,
+		@Param('slug') slug: string
+	) {
+		let user: any;
+		if(idToken){
+			user = await this.authService.getUserUid(idToken);
+		}
+
+		return await this.contentService.getArticle(slug, user);
+	}
+
+	@Get('marginal/lifetime')
+	@Roles('member')
+	async getLifetimeArticles(
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('page') page: number
+	) {
+		let user = await this.authService.getUserUid(idToken);
+		return await this.contentService.getBoughtArticles(user);
+	}
+	
+	@Get('marginal/newsletters')
+	async getNewsletters(
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('page') page: number
+	) {
+		let user: any;
+		if(idToken){
+			user = await this.authService.getUserUid(idToken);
+		}
+
+		const index = page ? page : 0
+		return await this.contentService.getNewsletters(index, user);
+	}
+
+	@Get('marginal/newsletters/:slug')
+	async getNewsletter(
+		@Headers('AuthorizationToken') idToken: string,
+		@Param('slug') slug: string
+	) {
+		let user: any;
+		if(idToken){
+			user = await this.authService.getUserUid(idToken);
+		}
+
+		return await this.contentService.getNewsletter(slug, user);
+	}
+
+	@Get('marginal/authors')
+	async getAuthors(
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('page') page: number
+	) {
+		let user: any;
+		if(idToken){
+			user = await this.authService.getUserUid(idToken);
+		}
+
+		const index = page ? page : 0
+		return await this.contentService.getAuthors(index, user);
+	}
+
+	@Get('marginal/authors/:slug')
+	async getAuthor(
+		@Param('slug') slug: string
+	) {
+		return await this.contentService.getAuthor(slug);
+	}
+
+	@Get('marginal/podcasts')
+	async getPodcasts(
+		@Headers('AuthorizationToken') idToken: string,
+		@Query('page') page: number
+	) {
+		let user: any;
+		if(idToken){
+			user = await this.authService.getUserUid(idToken);
+		}
+
+		const index = page ? page : 0
+		return await this.contentService.getPodcasts(index, user);
+	}
+
+	@Get('marginal/podcasts/:slug')
+	async getPodcast(
+		@Headers('AuthorizationToken') idToken: string,
+		@Param('slug') slug: string
+	) {
+		let user: any;
+		if(idToken){
+			user = await this.authService.getUserUid(idToken);
+		}
+
+		return await this.contentService.getPodcast(slug);
+	}
+
+	@Get('marginal/about')
+	async getAbout() {
+		return await this.contentService.getAbout();
 	}
 }

@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { SearchController } from './search.controller';
 import { SearchService } from './search.service';
-import { DatabaseModule } from '../database/database.module';
+import { StorageModule } from '../storage/storage.module';
+// import { DatabaseModule } from '../database/database.module';
 
 @Module({
-	imports: [DatabaseModule],
+	imports: [StorageModule],
 	controllers: [SearchController],
-	providers: [SearchService]
+	providers: [SearchService],
+	exports: [SearchService]
 })
 export class SearchModule {}

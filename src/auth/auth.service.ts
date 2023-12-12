@@ -1,16 +1,21 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import * as admin from 'firebase-admin';
 import * as path from 'path';
+import { ConfigService } from '@nestjs/config';
 import { UserOpt, User } from '../users/users.types';
 import { HistoryOpt } from '../database/database.types';
+import { SESClient, SendRawEmailCommand } from "@aws-sdk/client-ses";
  
 @Injectable()
 export class AuthService {
+	constructor(private configService: ConfigService){}
  
-	private app = admin.initializeApp({
-		credential: admin.credential.cert(path.join(__dirname,'../../config/cloud.json'))
-	})
-	private getAuth = this.app.auth;
+	private app = admin.initializeApp()
+
+	public getAuth = this.app.auth;
+
+	private emailClient = new SESClient();
+
 	async verifyRequest(idToken: string){
 		try {
 			const token = await this.getAuth().verifyIdToken(idToken, true);
@@ -30,7 +35,7 @@ export class AuthService {
 	}
 
 	matchRoles(userRole: string, thresholdRole: string, verified: boolean, path: string){
-		console.log({userRole, thresholdRole, verified, path})
+		// console.log({userRole, thresholdRole, verified, path})
 		// Under no circumstance is an unverified user allowed
 		if(verified === false){
 			return false

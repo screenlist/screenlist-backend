@@ -52,12 +52,6 @@ import {
 } from '../people/people.dto';
 import { PersonRoleOpt } from '../people/people.types';
 import { PeopleService } from '../people/people.service';
-import {
-	CreateLinkDto,
-	UpdateLinkDto
-} from '../platforms/platforms.dto';
-import { LinkOpt } from '../platforms/platforms.types';
-import { PlatformsService } from '../platforms/platforms.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('films')
@@ -67,8 +61,7 @@ export class FilmsController {
 		private filmsService: FilmsService,
 		private companiesService: CompaniesService,
 		private authService: AuthService,
-		private peopleService: PeopleService,
-		private platformsService: PlatformsService,
+		private peopleService: PeopleService
 	){}
 
 	// Data methods

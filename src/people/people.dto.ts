@@ -7,7 +7,8 @@ import {
 	MaxLength,
 	IsFQDN,
 	IsNumber,
-	IsBoolean
+	IsBoolean,
+	IsArray
 } from 'class-validator';
 
 export class CreatePersonDto {
@@ -36,6 +37,26 @@ export class CreatePersonDto {
 	@IsOptional()
 	@IsNumber()
 	yearOfBirth?: number;
+
+	@IsOptional()
+	@IsString()
+	dateMonthOfBirth?: string;
+
+	@IsOptional()
+	@IsDate()
+	deathDate?: Date;
+
+	@IsOptional()
+	@IsArray()
+	nationality?: string[];
+
+	@IsOptional()
+	@IsString()
+	gender?: string;
+
+	@IsOptional()
+	@IsString()
+	pronouns?: string;
 
 	@IsOptional()
 	@IsString()
@@ -109,6 +130,26 @@ export class UpdatePersonDto {
 	@IsOptional()
 	@IsNumber()
 	yearOfBirth?: number;
+
+	@IsOptional()
+	@IsString()
+	dateMonthOfBirth?: string;
+
+	@IsOptional()
+	@IsDate()
+	deathDate?: Date;
+
+	@IsOptional()
+	@IsArray()
+	nationality?: string[];
+
+	@IsOptional()
+	@IsString()
+	gender?: string;
+
+	@IsOptional()
+	@IsString()
+	pronouns?: string;
 
 	@IsOptional()
 	@MaxLength(800)

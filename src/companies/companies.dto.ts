@@ -21,6 +21,10 @@ export class CreateCompanyDto {
 
 	@IsOptional()
 	@IsString()
+	dateMonthFounded?: string;
+
+	@IsOptional()
+	@IsString()
 	city?: string;
 
 	@IsOptional()
@@ -30,6 +34,14 @@ export class CreateCompanyDto {
 	@IsOptional()
 	@IsString()
 	director?: string;
+
+	@IsOptional()
+	@IsString()
+	founder?: string;
+
+	@IsOptional()
+	@IsString()
+	foundingPlace?: string;
 
 	@IsOptional()
 	@MaxLength(800)
@@ -78,6 +90,10 @@ export class UpdateCompanyDto {
 
 	@IsOptional()
 	@IsString()
+	dateMonthFounded?: string;
+
+	@IsOptional()
+	@IsString()
 	city?: string;
 
 	@IsOptional()
@@ -91,6 +107,14 @@ export class UpdateCompanyDto {
 	@IsOptional()
 	@MaxLength(800)
 	description?: string;
+
+	@IsOptional()
+	@IsString()
+	founder?: string;
+
+	@IsOptional()
+	@IsString()
+	foundingPlace?: string;
 
 	@IsOptional()
 	@IsFQDN()
@@ -142,11 +166,12 @@ export class CreateCompanyRoleDto {
 	@IsString()
 	ownerId: string;
 
+	@IsOptional()
 	@IsNotEmpty()
 	@IsString()
 	type: string;
 
-	@IsOptional()
+
 	@IsNotEmpty()
 	@IsString()
 	capacity: string;

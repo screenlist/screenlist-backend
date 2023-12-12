@@ -1,6 +1,7 @@
 import { Injectable, ParseFileOptions, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { ConfigService } from '@nestjs/config';
+import moment from 'moment'
 import { 
 	Film, 
 	Poster, 
@@ -32,11 +33,6 @@ import {
 } from '../companies/companies.dto';
 import { CompaniesService } from '../companies/companies.service';
 import {
-	Link,
-	Platform,
-} from '../platforms/platforms.types';
-import { PlatformsService } from '../platforms/platforms.service';
-import {
 	PersonRoleOpt,
 	PersonOpt,
 	PersonRole,
@@ -51,6 +47,7 @@ import { PeopleService } from '../people/people.service'
 import { StorageService } from '../storage/storage.service';
 import { HistoryOpt } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
+import { SearchService } from '../search/search.service';
 
 
 
@@ -59,6 +56,7 @@ export class FilmsService {
 	constructor(
 		private db: DatabaseService,
 		private storage: StorageService,
+		private search: SearchService,
 		private authService: AuthService,
 		private peopleService: PeopleService,
 		private companiesService: CompaniesService
@@ -129,15 +127,9 @@ export class FilmsService {
 		const stillsQuery = this.db.createQuery('Still')
 			.hasAncestor(filmKey)
 			.order('stillIndex')
-			.limit(3); 
-		const distributorsQuery = this.db.createQuery('CompanyRole')
+			.limit(3);
+		const companiesQuery = this.db.createQuery('CompanyRole')
 			.filter('ownerId', '=', `${filmKey.id}`)
-			.filter('type', '=', 'distribution') 
-			.order('companyName');
-		const producersQuery = this.db.createQuery('CompanyRole')
-			.filter('ownerId', '=', `${filmKey.id}`)
-			.filter('type', '=', 'production')
-			.order('companyName');
 		const peopleQuery = this.db.createQuery('PersonRole')
 			.filter('ownerId', '=', `${filmKey.id}`)
 
@@ -149,8 +141,7 @@ export class FilmsService {
 			if(!details){ throw new NotFoundException() }
 
 			let [stills] = await this.db.runQuery(stillsQuery);
-			let [distributors] = await this.db.runQuery(distributorsQuery);
-			let [producers] = await this.db.runQuery(producersQuery);
+			let [companies] = await this.db.runQuery(companiesQuery);
 			let [people] = await this.db.runQuery(peopleQuery);
 			const reviews = await this.findRatings(id);
 
@@ -188,30 +179,15 @@ export class FilmsService {
 					}
 				})
 			)
-
-			distributors = await Promise.all(
-				distributors.map(async (item) => {
-					const key = this.db.key(['Company', +item.companyId]);
-					const photoKey = this.db.key(['Company', +item.companyId, 'CompanyPhoto', '0']);
-					const [company] = await this.db.get(key);
-					const [companyPhoto] = await this.db.get(photoKey);
-					const path = `/films/${item.ownerId}/companies/${item.companyId}/roles/${item[this.db.KEY]['id']}`;
-					return {
-						...item,
-						id: item[this.db.KEY]['id'],
-						photoUrl: companyPhoto?.sdUrl,
-						urlPath: path
-					}
-				})
-			)
 			
-			producers = await Promise.all(
-				producers.map(async (item) => {
+			companies = await Promise.all(
+				companies.map(async (item) => {
 					const key = this.db.key(['Company', +item.companyId]);
 					const photoKey = this.db.key(['Company', +item.companyId, 'CompanyPhoto', '0']);
 					const [company] = await this.db.get(key);
 					const [companyPhoto] = await this.db.get(photoKey);
 					const path = `/films/${item.ownerId}/companies/${item.companyId}/roles/${item[this.db.KEY]['id']}`;
+					if(item.type === 'distributor'){item.capacity = 'Distributor'}
 					return {
 						...item,
 						id: item[this.db.KEY]['id'],
@@ -232,17 +208,16 @@ export class FilmsService {
 			})
 			
 			details.keyRoles = {
-				writer: people.filter((value) => value.title === 'writer'),
-				director: people.filter((value) => value.title === 'director'),
-				producer: people.filter((value) => value.title === 'producer'),
+				writer: people.filter((value) => value.title === 'Writer'),
+				director: people.filter((value) => value.title === 'Director'),
+				producer: people.filter((value) => value.title === 'Producer'),
 				cast: people.filter((value) => value.department === 'main cast')
 			}
 
 			const film = {
 				details: details,
 				stills: stills as Still[],
-				producers: producers,
-				distributors: distributors,
+				companies: companies,
 				cast: [...mainCast, ...additionalCast],
 				crew: [...mainCrew, ...productionCrew, ...everyoneElse],
 				reviews: reviews
@@ -269,6 +244,8 @@ export class FilmsService {
 	}
 
 	async createOne(film: CreateFilmDto, user: string){
+		// Don't allow films of non South African origin
+		if(film.countries.indexOf('South Africa') < 0){ throw new BadRequestException('All films must be of South African origin') }
 		// A variable to house all entities created
 		let entities = [];
 		// Creates the film details entity
@@ -306,19 +283,20 @@ export class FilmsService {
 			const history = await this.db.createHistory(historyObj);
 
 			const searchRecord = {
-				objectID: entity.key.id,
+				id: entity.key.id,
 				name: film.name,
 				year: film.year,
 				genres: film.genres,
 				type: film.type,
 				format: film.format,
 				productionStage: film.productionStage,
-				releaseDate: film.releaseDate,
+				releaseDate: this.db.dateToBigInt(film.releaseDate),
 				initialPlatform: film.initialPlatform,
-				created: film.created,
-				lastUpdated: film.lastUpdated
+				created: this.db.dateToBigInt(film.created),
+				lastUpdated: this.db.dateToBigInt(film.lastUpdated)
 			}
-			await this.db.algolia.initIndex('films').saveObject(searchRecord).wait();
+			// await this.db.algolia.initIndex('films').saveObject(searchRecord).wait();
+			await this.search.client.collections('films').documents().create(searchRecord);
 
 			return { 'status': 'created', 'film_id': filmKey.id }
 		} catch(err: any){
@@ -400,24 +378,26 @@ export class FilmsService {
 				time: time,
 				action: 'update',
 				kind: 'Film',
-				id: filmKey.id
+				id: JSON.stringify(filmKey.id)
 			}
 			await this.db.createHistory(historyObj);
 
 			const searchRecord = {
-				objectID: entity[this.db.KEY]['id'],
 				name: film.name,
 				year: film.year,
 				genres: film.genres,
 				type: film.type,
 				format: film.format,
+				listRatings: film.listRatings,
+				listScore: film.listScore,
 				productionStage: film.productionStage,
-				releaseDate: film.releaseDate,
+				releaseDate: this.db.dateToBigInt(film.releaseDate),
 				initialPlatform: film.initialPlatform,
-				lastUpdated: film.lastUpdated
+				lastUpdated: this.db.dateToBigInt(film.lastUpdated)
 			}
-			await this.db.algolia.initIndex('films').partialUpdateObject(searchRecord, {}).wait();
-
+			
+			// await this.db.algolia.initIndex('films').partialUpdateObject(searchRecord, {}).wait();
+			await this.search.client.collections('films').documents(entity[this.db.KEY]['id']).update(searchRecord);
 			return { id: filmKey.id, ...entity };
 		} catch(err: any){
 			console.log(err)
@@ -426,11 +406,10 @@ export class FilmsService {
 	}
 
 	async deleteOne(id: string, user: string){
-		const deletion = []
 		const time = new Date();
 		const filmKey = this.db.key(['Film', +id]);
+		const deletion = [filmKey];
 		const postersQuery = this.db.createQuery('Poster').hasAncestor(filmKey);
-		const linksQuery =this.db.createQuery('Link').hasAncestor(filmKey);
 		const stillsQuery = this.db.createQuery('Still').hasAncestor(filmKey);
 		const companiesRolesQuery = this.db.createQuery('CompanyRole').hasAncestor(filmKey);
 		const peopleRolesQuery = this.db.createQuery('PersonRole').hasAncestor(filmKey);
@@ -446,58 +425,49 @@ export class FilmsService {
 			// Deletes the actual files before adding entities
 			// to the deletion array
 			posters.forEach(async (poster: Poster) => {
-				const removal = await this.storage.deletePoster(poster.originalName);
-				if(removal){
-					deletion.push(poster);
-					const historyObj: HistoryOpt = {
-						dataObject: poster,
-						user: user,
-						kind: 'Poster',
-						id: poster[this.db.KEY]['id'],
-						action: 'delete',
-						time: time,
-						pId: id,
-						pKind: 'Film'
-					}
-					await this.db.createHistory(historyObj);
-				}
-			})
-			stills.forEach(async (still: Still) => {
-				const removal = await this.storage.deletePoster(still.originalName);
-				if(removal){
-					deletion.push(still);
-					const historyObj: HistoryOpt = {
-						dataObject: still,
-						user: user,
-						kind: 'Still',
-						id: still[this.db.KEY]['id'],
-						action: 'delete',
-						time: time,
-						pId: id,
-						pKind: 'Film'
-					}
-					await this.db.createHistory(historyObj);
-				}
-			})
-
-			const [links] = await this.db.runQuery(linksQuery);
-			const [companiesRoles] = await this.db.runQuery(companiesRolesQuery);
-			const [peopleRoles] = await this.db.runQuery(peopleRolesQuery);
-
-			links.forEach(async (link: Link) => {
-				deletion.push(link);
+				await this.storage.deletePoster(poster.originalName);
+				await this.storage.deletePoster(poster.hdName);
+				await this.storage.deletePoster(poster.sdName);
+				await this.storage.deletePoster(poster.lqName);
+				
+				deletion.push(poster[this.db.KEY]);
 				const historyObj: HistoryOpt = {
-					dataObject: link,
+					dataObject: poster,
 					user: user,
-					kind: 'Link',
-					id: link[this.db.KEY]['id'],
+					kind: 'Poster',
+					id: poster[this.db.KEY]['id'],
 					action: 'delete',
 					time: time,
+					pId: id,
+					pKind: 'Film'
 				}
 				await this.db.createHistory(historyObj);
 			})
+			stills.forEach(async (still: Still) => {
+				await this.storage.deleteStill(still.originalName);
+				await this.storage.deleteStill(still.hdName);
+				await this.storage.deleteStill(still.sdName);
+				await this.storage.deleteStill(still.lqName);
+				
+				deletion.push(still[this.db.KEY]);
+				const historyObj: HistoryOpt = {
+					dataObject: still,
+					user: user,
+					kind: 'Still',
+					id: still[this.db.KEY]['id'],
+					action: 'delete',
+					time: time,
+					pId: id,
+					pKind: 'Film'
+				}
+				await this.db.createHistory(historyObj);
+			})
+
+			const [companiesRoles] = await this.db.runQuery(companiesRolesQuery);
+			const [peopleRoles] = await this.db.runQuery(peopleRolesQuery);
+
 			companiesRoles.forEach(async (role: CompanyRole) => {
-				deletion.push(role);
+				deletion.push(role[this.db.KEY]);
 				const historyObj: HistoryOpt = {
 					dataObject: role,
 					user: user,
@@ -509,7 +479,7 @@ export class FilmsService {
 				await this.db.createHistory(historyObj);
 			})
 			peopleRoles.forEach(async (role: PersonRole) => {
-				deletion.push(role);
+				deletion.push(role[this.db.KEY]);
 				const historyObj: HistoryOpt = {
 					dataObject: role,
 					user: user,
@@ -526,13 +496,14 @@ export class FilmsService {
 				dataObject: film,
 				user: user,
 				kind: 'Film',
-				id: filmKey.id,
+				id: JSON.stringify(filmKey.id),
 				action: 'delete',
 				time: time,
 			}
-			await this.db.algolia.initIndex('films').deleteObject(filmKey.id)
+			// await this.db.algolia.initIndex('films').deleteObject(filmKey.id)
+			await this.search.client.collections('films').documents(filmKey.id).delete();
 			await this.db.createHistory(historyObj);
-			await this.db.transaction().delete(deletion);
+			await this.db.delete(deletion);
 			return {'status': 'deleted'}
 		} catch(err: any){
 			throw new BadRequestException(err.message)
@@ -548,9 +519,14 @@ export class FilmsService {
 			results = await Promise.all(
 				results.map(async (item) => {
 					const userKey = this.db.key(['User', item.authorUid]);
+					const photoKey = this.db.key(['UserPhoto', item.authorUid]);
 					try {
 						const [user] = await this.db.get(userKey);
+						const [photo] = await this.db.get(photoKey);
 						item.authorDisplayName = user?.displayName;
+						if(photo){
+							item.photoUrl = photo.sdUrl
+						}
 						if(!item.hasOwnProperty('publication')){
 							item.publication = user?.publication
 						}
@@ -716,7 +692,7 @@ export class FilmsService {
 				dataObject: poster,
 				user: opt.user,
 				kind: 'Poster',
-				id: posterKey.id,
+				id: posterKey.name,
 				action: 'delete',
 				time: opt.time,
 				pId: opt.parentId,
@@ -730,10 +706,10 @@ export class FilmsService {
 			await this.db.delete(posterKey)
 
 			const searchRecord = {
-				objectID: opt.parentId,
 				posterUrl: null
 			}
-			await this.db.algolia.initIndex('films').partialUpdateObject(searchRecord, {}).wait();
+			// await this.db.algolia.initIndex('films').partialUpdateObject(searchRecord, {}).wait();
+			await this.search.client.collections('films').documents(opt.parentId).update(searchRecord);
 
 			return {'status': 'deleted'}
 		} catch {
@@ -783,7 +759,7 @@ export class FilmsService {
 				dataObject: still,
 				user: opt.user,
 				kind: 'Still',
-				id:stillKey.id,
+				id:stillKey.name,
 				action: 'delete',
 				time: opt.time,
 				pId: opt.parentId,
@@ -811,6 +787,7 @@ export class FilmsService {
 
 			return serve;
 		} catch(err: any){
+			console.log(err)
 			throw new BadRequestException();
 		}
 	}
@@ -1006,6 +983,8 @@ export class FilmsService {
 			let [filmsWithDate] = await this.db.runQuery(queryWithDate);			
 			let [filmsWithYear] = await this.db.runQuery(queryWithYear);
 
+			// filmsWithYear = filmsWithYear.filter((val) => filmsWithDate.indexOf(val) < 0);
+
 			filmsWithDate = await Promise.all(filmsWithDate.map(async (film) => {
 				film.id = film[this.db.KEY]['id'];
 				delete film[this.db.KEY];
@@ -1014,9 +993,34 @@ export class FilmsService {
 				try {
 					const [poster] = await this.db.get(posterKey);
 					if(!poster){
+						// console.log(JSON.stringify(film))
 						return JSON.stringify(film)
 					} else {
 						film.posterUrl = poster.sdUrl;
+						// console.log(JSON.stringify(film))
+						return JSON.stringify(film)
+					}
+				} catch (err: any) {
+					throw new BadRequestException()
+				}
+			}))
+			console.log(filmsWithYear.length)
+			filmsWithYear = filmsWithYear.filter((val) => !val.releaseDate);
+			console.log(filmsWithYear.length)
+
+			filmsWithYear = await Promise.all(filmsWithYear.map(async (film) => {
+				film.id = film[this.db.KEY]['id'];
+				delete film[this.db.KEY];
+				const posterKey = this.db.key(['Film', +film.id, 'Poster', '0']);
+
+				try {
+					const [poster] = await this.db.get(posterKey);
+					if(!poster){
+						// console.log(JSON.stringify(film))
+						return JSON.stringify(film)
+					} else {
+						film.posterUrl = poster.sdUrl;
+						// console.log(JSON.stringify(film))
 						return JSON.stringify(film)
 					}
 				} catch {
@@ -1024,40 +1028,36 @@ export class FilmsService {
 				}
 			}))
 
-			filmsWithYear = await Promise.all(filmsWithYear.map(async (film) => {
-				if(!film.hasOwnProperty('releaseDate')){
-					film.id = film[this.db.KEY]['id'];
-					delete film[this.db.KEY];
-					const posterKey = this.db.key(['Film', +film.id, 'Poster', '0']);
-
-					try {
-						const [poster] = await this.db.get(posterKey);
-						if(!poster){
-							return JSON.stringify(film)
-						} else {
-							film.posterUrl = poster.sdUrl;
-							return JSON.stringify(film)
-						}
-					} catch {
-						throw new BadRequestException()
-					}
-				}
-			}))
-
+			// console.log(filmsWithDate)
+			// console.log(filmsWithYear)]
 			const allItems = filmsWithDate.concat(filmsWithYear);
-
+			// console.log(allItems)
 			const results = allItems.filter((val, index) => {
 				return allItems.indexOf(val) === index
-			}).filter((val) => {
-				if(val.releaseDate){
-					return val.releaseDate > now
+			}).map((val) => JSON.parse(val))
+			.slice(0, limit ? limit : 10).sort((a, b) => {
+				if(a.year > b.year) {
+					return 0
 				} else {
-					return val
+					return -1
 				}
-			}).map((val) => JSON.parse(val)).slice(0, limit ? limit : 10);
+			}).sort((a, b) => {
+				if(a.created > b.created) {
+					return 0
+				} else {
+					return -1
+				}
+			}).sort((a, b) => {
+				if(a.releaseDate > b.releaseDate) {
+					return 0
+				} else {
+					return -1
+				}
+			});
 
 			return results;
 		} catch(err: any){
+			// console.log(err)
 			throw new NotFoundException()
 		}
 	}
@@ -1091,10 +1091,10 @@ export class FilmsService {
 				try {
 					const [film] = await this.db.get(filmKey);
 					const [poster] = await this.db.get(posterKey);
-					if(!poster){
-						return {...film, id: id}
-					} else {
+					if(poster && film){
 						film.posterUrl = poster.sdUrl;
+						return {...film, id: id}
+					} else if(film && !poster) {						
 						return {...film, id: id}
 					}
 				} catch {
@@ -1104,7 +1104,7 @@ export class FilmsService {
 
 			return results;
 		} catch(err: any){
-			console.log(err)
+			// console.log(err)
 			throw new NotFoundException()
 		}
 	}
@@ -1177,32 +1177,33 @@ export class FilmsService {
 		const filmKey = this.db.key(['Film', +filmId]);
 		try {
 			const [film] = await this.db.get(filmKey); 
+			const lastestMod = film.hasOwnProperty('lastVerified') ? new Date(film.lastVerified) : new Date(film.created)
 
 			const [stillsHistory] = await this.db.createQuery('History')
 				.filter('xKind', '=', 'Still')
 				.filter('wKind', '=', 'Film')
 				.filter('wIdentifier', '=', filmId)
-				.filter('xTimestamp', '>', new Date(film.lastVerified))
+				.filter('xTimestamp', '>=', lastestMod)
 				.order('xTimestamp', {descending: true}).run();
 
 			const [companiesHistory] = await this.db.createQuery('History')
 				.filter('xKind', '=', 'CompanyRole')
 				.filter('wKind', '=', 'Film')
 				.filter('wIdentifier', '=', filmId)
-				.filter('xTimestamp', '>', new Date(film.lastVerified))
+				.filter('xTimestamp', '>=', lastestMod)
 				.order('xTimestamp', {descending: true}).run();
 
 			const [peopleHistory] = await this.db.createQuery('History')
 				.filter('xKind', '=', 'PersonRole')
 				.filter('wKind', '=', 'Film')
 				.filter('wIdentifier', '=', filmId)
-				.filter('xTimestamp', '>', new Date(film.lastVerified))
+				.filter('xTimestamp', '>=', lastestMod)
 				.order('xTimestamp', {descending: true}).run();
 
 			const [filmHistory] = await this.db.createQuery('History')
 				.filter('xKind', '=', 'Film')
-				.filter('xIdentifier', '=', +filmId)
-				.filter('xTimestamp', '>', new Date(film.lastVerified))
+				.filter('xIdentifier', '=', filmId)
+				.filter('xTimestamp', '>=', lastestMod)
 				.order('xTimestamp', {descending: true}).run();
 
 			const [posterHistory] = await this.db.createQuery('History')
@@ -1210,7 +1211,7 @@ export class FilmsService {
 				.filter('xIdentifier', '=', '0')
 				.filter('wKind', '=', 'Film')
 				.filter('wIdentifier', '=', filmId)
-				.filter('xTimestamp', '>', new Date(film.lastVerified))
+				.filter('xTimestamp', '>=', lastestMod)
 				.order('xTimestamp', {descending: true}).run();
 
 			const allHistories = [

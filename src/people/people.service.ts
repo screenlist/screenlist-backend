@@ -16,12 +16,14 @@ import { HistoryOpt } from '../database/database.types';
 import { StorageService } from '../storage/storage.service';
 import { CreateDisplayPhotoDto, UpdateDisplayPhotoDto, UpdateFilmDto } from '../films/films.dto';
 import { ImageOpt } from  '../films/films.types';
+import { SearchService } from 'src/search/search.service';
 
 @Injectable()
 export class PeopleService {
 	constructor(
 		private storage: StorageService,
-		private db: DatabaseService
+		private db: DatabaseService,
+		private search: SearchService
 	){}
 
 	async findAll(): Promise<Person[]>{
@@ -75,6 +77,7 @@ export class PeopleService {
 		const rolesQuery = this.db.createQuery('PersonRole').filter('personId', '=', id)
 		try {
 			const [person] = await this.db.get(personKey);
+			if(!person){throw new NotFoundException('Not found')}
 			const [photo] = await this.db.get(photoKey);
 			let [roles] = await this.db.runQuery(rolesQuery);
 			const filmography = [];
@@ -141,7 +144,7 @@ export class PeopleService {
 				},
 				filmography
 			}
-		} catch {
+		} catch(err) {
 			throw new NotFoundException("Person not found")
 		}
 	}
@@ -166,7 +169,7 @@ export class PeopleService {
 
 	async deleteOne(opt: PersonOpt){
 		const personKey = this.db.key(['{Person', +opt.personId]);
-		const entities = [{key: personKey}]; // entites to be deleted
+		const entities = [personKey]; // entites to be deleted
 		const rolesQuery = this.db.createQuery('{PersonRole').hasAncestor(personKey);
 		try {
 			const [roles] = await this.db.runQuery(rolesQuery);
@@ -182,7 +185,7 @@ export class PeopleService {
 			await this.db.createHistory(historyObj);
 			roles.forEach(async (role) => {
 				const roleKey = role[this.db.KEY];
-				entities.push({key: roleKey});
+				entities.push(roleKey);
 				const roleHistoryObj: HistoryOpt = {
 					dataObject: role,
 					kind: 'PersonRole',
@@ -193,8 +196,9 @@ export class PeopleService {
 				}
 				await this.db.createHistory(roleHistoryObj);
 			})
-			await this.db.algolia.initIndex('people').deleteObject(personKey.id)
-			await this.db.transaction().delete(entities);
+			// await this.db.algolia.initIndex('people').deleteObject(personKey.id)
+			await this.search.client.collections('people').documents(personKey.id).delete();
+			await this.db.delete(entities);
 			return { 'status': 'successfully deleted' };
 		} catch(err:any) {
 			throw new BadRequestException(err.message)
@@ -239,7 +243,7 @@ export class PeopleService {
 				dataObject: photo,
 				user: opt.user,
 				kind: 'PersonPhoto',
-				id: photoKey.id,
+				id: photoKey.name,
 				action: 'delete',
 				time: opt.time,
 				pId: opt.parentId,
@@ -254,10 +258,9 @@ export class PeopleService {
 			await this.updateOne(person, personOptions);
 
 			const searchRecord = {
-				objectID: opt.parentId,
-				photoUrl: null
+				posterUrl: null
 			}
-			await this.db.algolia.initIndex('people').partialUpdateObject(searchRecord).wait();
+			await this.search.client.collections('people').documents(opt.parentId).update(searchRecord);
 
 			return {'status': 'deleted'}
 		} catch(err: any) {
@@ -346,7 +349,7 @@ export class PeopleService {
 
 			const [personHistory] = await this.db.createQuery('History')
 				.filter('xKind', '=', 'Person')
-				.filter('xIdentifier', '=', +personId)
+				.filter('xIdentifier', '=', personId)
 				.filter('xTimestamp', '>', new Date(person.lastVerified))
 				.order('xTimestamp', {descending: true}).run();
 
@@ -357,7 +360,7 @@ export class PeopleService {
 				.filter('wIdentifier', '=', personId)
 				.filter('xTimestamp', '>', new Date(person.lastVerified))
 				.order('xTimestamp', {descending: true}).run();
-
+			// console.log(photoHistory)
 			const allHistories = [
 				...personHistory, 
 				...photoHistory

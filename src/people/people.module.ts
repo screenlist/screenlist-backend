@@ -5,9 +5,10 @@ import { AuthModule } from '../auth/auth.module';
 import { DatabaseModule } from '../database/database.module';
 import { StorageModule } from '../storage/storage.module';
 import { UsersModule } from '../users/users.module';
+import { SearchModule } from 'src/search/search.module';
 
 @Module({
-	imports: [AuthModule, DatabaseModule, StorageModule, UsersModule],
+	imports: [AuthModule, DatabaseModule, StorageModule, UsersModule, SearchModule],
 	providers: [PeopleService],
 	controllers: [PeopleController],
 	exports: [PeopleService]
