@@ -1,60 +1,50 @@
 import { Injectable, ParseFileOptions, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { ConfigService } from '@nestjs/config';
-import moment from 'moment'
 import { 
-	Film, 
-	Poster, 
-	Still,
-	FilmType,
+	Film,
 	ImageOpt,
-	RatingOpt
+	RatingOpt,
+	Photo,
+	Rating,
+	Today
 } from './films.types';
 import {
-	CreatePosterDto,
-	UpdatePosterDto,
-	CreateStillDto,
-	UpdateStillDto,
 	CreateFilmDto, 
 	UpdateFilmDto,
 	CreateListRatingDto,
-	UpdateListRatingDto
+	UpdateListRatingDto,
+	PhotoDto
 } from './films.dto';
 import {
-	CompanyOpt,
 	CompanyRoleOpt,
-	CompanyRole,
-	Company
+	Role
 } from '../companies/companies.types';
 import {
 	CreateCompanyRoleDto,
-	UpdateCompanyRoleDto,
-	UpdateCompanyDto
+	UpdateCompanyRoleDto
 } from '../companies/companies.dto';
 import { CompaniesService } from '../companies/companies.service';
 import {
-	PersonRoleOpt,
-	PersonOpt,
-	PersonRole,
-	Person
+	PersonRoleOpt
 } from '../people/people.types';
 import { 
 	CreatePersonRoleDto,
-	UpdatePersonRoleDto,
-	UpdatePersonDto
+	UpdatePersonRoleDto
 } from '../people/people.dto'
 import { PeopleService } from '../people/people.service'
 import { StorageService } from '../storage/storage.service';
-import { HistoryOpt } from '../database/database.types';
+import { CollectionFields, HistoryOpt, HistoryX, Hit } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
 import { SearchService } from '../search/search.service';
+import { UserExt } from 'src/users/users.types';
+import { FilmSchema } from 'src/search/search.types.';
 
 
 
 @Injectable()
 export class FilmsService {
 	constructor(
-		private db: DatabaseService,
+		private mongo: DatabaseService,
 		private storage: StorageService,
 		private search: SearchService,
 		private authService: AuthService,
@@ -62,28 +52,34 @@ export class FilmsService {
 		private companiesService: CompaniesService
 	){}
 
-	async findAll(cursor?: string) {
-		let query = this.db.createQuery('Film').filter('editVerified', '=', true).order('lastUpdated', {descending: true}).limit(100);
+	async findAll(page?: number, limit?: number) {
+		const	size = limit ? +limit : 50
+		const skip = ( (page ? +page : 1) - 1 ) * size
 		
-		// This will implement pagination [NOT FINISHED YET]
-		if(cursor){
-			query = query.start(cursor);
-		}
+		let query = this.mongo.db.collection<Film>('films').find({
+			editVerified: true,
+			isHidden: false
+		}).sort({'lastUpdated': -1}).skip(skip).limit(size)
 
 		try {
-			const films = await this.db.runQuery(query)
+			const films = await query.toArray()
 			// Loop through each film to retrieve its poster
-			const results = await Promise.all(films[0].map(async (film) => {
-				film.id = film[this.db.KEY]['id']
-				const posterKey = this.db.key(['Film', +film.id, 'Poster', '0']);
+			const results = await Promise.all(films.map(async (film) => {
 
 				try {
-					const [poster] = await this.db.get(posterKey);
-					if(!poster){
+					if(!film.hasPoster){
 						return film
 					} else {
-						film.posterUrl = poster.sdUrl ? poster.sdUrl : poster.lqUrl;
-						return film
+						const poster = await this.mongo.db.collection<Photo>('photos').findOne({
+							parentCollection: 'films', 
+							parentId: film.id, 
+							type: 'poster', 
+							photoIndex: 0
+						})
+						return {
+							posterUrl: poster.optimisedUrl,
+							...film
+						}
 					}
 				} catch {
 					throw new BadRequestException()
@@ -96,24 +92,9 @@ export class FilmsService {
 	}
 
 	async findAllUnverified() {
-		const query = this.db.createQuery('Film').filter('editVerified', '=', false).limit(50);
 		try {
-			let [films] = await this.db.runQuery(query);
+			let films = await this.mongo.db.collection<Film>('films').find({editVerified: false}).sort({lastUpdated: 1}).limit(50).toArray()
 			
-			films = await Promise.all(
-				films.map(async (film) => {
-					const filmId  = film[this.db.KEY]['id'];
-
-					try{
-						return {
-							id: filmId,
-							...film
-						}
-					} catch(err: any) {}
-				})
-			)
-			// films = films.map((film) => ({id: film[this.db.KEY]['id'], ...film}));
-
 			return films
 		} catch (err: any) {
 			throw new NotFoundException('Encountered trouble while trying to retrieve');
@@ -121,109 +102,101 @@ export class FilmsService {
 	}
 
 	async findOne(id: string) {
-		const filmKey = this.db.key(['Film', +id]);
-		const posterKey = this.db.key(['Film', +id, 'Poster', '0'])
-		// Create queries
-		const stillsQuery = this.db.createQuery('Still')
-			.hasAncestor(filmKey)
-			.order('stillIndex')
-			.limit(3);
-		const companiesQuery = this.db.createQuery('CompanyRole')
-			.filter('ownerId', '=', `${filmKey.id}`)
-		const peopleQuery = this.db.createQuery('PersonRole')
-			.filter('ownerId', '=', `${filmKey.id}`)
-
 		try {
 			// Run queries
-			const [details] = await this.db.get(filmKey);
-			const [poster] = await this.db.get(posterKey);
+			const film = await this.mongo.db.collection<Film>('films').findOne({id: id});
+			const poster = await this.mongo.db.collection<Photo>('photos').findOne({parentCollection: 'films', parentId: id, type: 'poster', photoIndex: 0})
 			// Check whether the film is public or deleted before continuing
-			if(!details){ throw new NotFoundException() }
+			if(!film){ throw new NotFoundException() }
 
-			let [stills] = await this.db.runQuery(stillsQuery);
-			let [companies] = await this.db.runQuery(companiesQuery);
-			let [people] = await this.db.runQuery(peopleQuery);
+			const stillsResults = await this.mongo.db.collection<Photo>('photos').find({
+				parentCollection: 'films',
+				parentId: id,
+				type: 'still'
+			}).sort({photoIndex: 1}).limit(3).toArray();
+
+			const companiesResults = await this.mongo.db.collection<Role>('roles').find({parentCollection: 'companies', ownerCollection: 'films', ownerId: id}).toArray()
+			const peopleResults = await this.mongo.db.collection<Role>('roles').find({parentCollection: 'people', ownerCollection: 'films', ownerId: id}).toArray()
 			const reviews = await this.findRatings(id);
 
-			// Extact the entity id/name from query to expose to the client
-			details.id = details[this.db.KEY]["id"]
-			details.poster = poster ? {
-				url: poster?.hdUrl,
-				id: poster[this.db.KEY]['name'],
-				credit: poster?.attribution,
-				altText: poster?.description
-			} : null;
-
-			stills = stills.map((item) => {
+			const stills = stillsResults.map((item) => {
 				return {
-					id: item[this.db.KEY]['name'],
-					url: item.hdUrl ? item.hdUrl : item.sdUrl,
+					id: item.id,
+					url: item.optimisedUrl,
 					credit: item.attribution,
 					altText: item.description
 				}
 			})
 
-			people = await Promise.all(
-				people.map(async (item) => {
-					const key = this.db.key(['Person', +item.personId]);
-					const photoKey = this.db.key(['Person', +item.personId, 'PersonPhoto', '0']);
-					const [person] = await this.db.get(key);
-					const [personPhoto] = await this.db.get(photoKey);
-					const path = `/films/${item.ownerId}/people/${item.personId}/roles/${item[this.db.KEY]['id']}`;
+			const people = await Promise.all(
+				peopleResults.map(async (item) => {
+					const personPhoto = await this.mongo.db.collection<Photo>('photos').findOne({
+						parentCollection: 'people',
+						parentId: item.parentId,
+						photoIndex: 0,
+						type: 'image'
+					})
+					const path = `/films/${item.ownerId}/people/${item.parentId}/roles/${item.id}`;
 
 					return {
 						...item,
-						photoUrl: personPhoto?.sdUrl,
-						id: item[this.db.KEY]['id'],
+						photoUrl: personPhoto?.optimisedUrl,
 						urlPath: path
 					}
 				})
 			)
 			
-			companies = await Promise.all(
-				companies.map(async (item) => {
-					const key = this.db.key(['Company', +item.companyId]);
-					const photoKey = this.db.key(['Company', +item.companyId, 'CompanyPhoto', '0']);
-					const [company] = await this.db.get(key);
-					const [companyPhoto] = await this.db.get(photoKey);
-					const path = `/films/${item.ownerId}/companies/${item.companyId}/roles/${item[this.db.KEY]['id']}`;
-					if(item.type === 'distributor'){item.capacity = 'Distributor'}
+			const companies = await Promise.all(
+				companiesResults.map(async (item) => {
+					const companyPhoto = await this.mongo.db.collection<Photo>('photos').findOne({
+						parentCollection: 'companies',
+						parentId: item.parentId,
+						photoIndex: 0,
+						type: 'image'
+					})
+					const path = `/films/${item.ownerId}/companies/${item.parentId}/roles/${item.id}`;
 					return {
 						...item,
-						id: item[this.db.KEY]['id'],
-						photoUrl: companyPhoto?.sdUrl,
+						photoUrl: companyPhoto?.optimisedUrl,
 						urlPath: path
 					}
 				})
 			)
 
 			// Filter people into designated categories
-			const mainCast = people.filter((value) => value.department == 'main cast');
-			const additionalCast = people.filter((value) => value.department == 'additional cast');
-			const mainCrew = people.filter((value) => value.department == 'above line');
-			const productionCrew = people.filter((value) => value.department == 'production');
+			const mainCast = people.filter((value) => value.department == 'Leading Cast');
+			const additionalCast = people.filter((value) => value.department == 'Supporting Cast');
+			const mainCrew = people.filter((value) => value.department == 'Above Line');
+			const productionCrew = people.filter((value) => value.department == 'Production');
 			const everyoneElse = people.filter((value) => {
 				const aboveElse = value.department == 'main cast' || value.department == 'additional cast' || value.department == 'above line' || value.department == 'production';
 				return !aboveElse;
 			})
-			
-			details.keyRoles = {
-				writer: people.filter((value) => value.title === 'Writer'),
-				director: people.filter((value) => value.title === 'Director'),
-				producer: people.filter((value) => value.title === 'Producer'),
-				cast: people.filter((value) => value.department === 'main cast')
+
+			const details = {
+				...film,
+				poster: poster ? {
+					url: poster.optimisedUrl,
+					id: poster.id,
+					credit: poster.attribution,
+					altText: poster.description
+				} : null,
+				keyRoles: {
+					writer: people.filter((value) => value.role === 'Writer'),
+					director: people.filter((value) => value.role === 'Director'),
+					producer: people.filter((value) => value.role === 'Producer'),
+					cast: people.filter((value) => value.department === 'Leading Cast')
+				}
 			}
 
-			const film = {
+			return {
 				details: details,
-				stills: stills as Still[],
+				stills: stills,
 				companies: companies,
 				cast: [...mainCast, ...additionalCast],
 				crew: [...mainCrew, ...productionCrew, ...everyoneElse],
 				reviews: reviews
 			}
-
-			return film
 		} catch(err: any){
 			// console.log(err)
 			throw new NotFoundException("Could not retrieve film");
@@ -231,13 +204,8 @@ export class FilmsService {
 	}
 
 	async findOneDetailsOnly(id: string){
-		const filmKey = this.db.key(['Film', +id]);
 		try {
-			const [film] = await this.db.get(filmKey);
-			return {
-				id: film[this.db.KEY]['id'],
-				...film
-			}
+			return this.mongo.db.collection<Film>('films').findOne({id: id})
 		} catch (err: any) {
 			throw new NotFoundException()
 		}
@@ -246,29 +214,26 @@ export class FilmsService {
 	async createOne(film: CreateFilmDto, user: string){
 		// Don't allow films of non South African origin
 		if(film.countries.indexOf('South Africa') < 0){ throw new BadRequestException('All films must be of South African origin') }
-		// A variable to house all entities created
-		let entities = [];
-		// Creates the film details entity
-		const filmKey = this.db.key('Film');
 		const time = new Date();
-		// film.slug = encodeURIComponent(filmName.toLowerCase().concat("-"+filmKey.id.toString()));
-		film.lastUpdated = time;
-		film.created = time;
-		film.editVerified = false;
-		film.editLocked = false;
-		film.isHidden = false;
-		film.hasPoster = false;
 		if(film.releaseDate){
 			film.releaseDate = new Date(film.releaseDate);
 		}
-
-		const entity = {
-			key: filmKey,
-			data: film
-		}
 		
 		try {
-			await this.db.insert(entity);
+			const entity: Film = {
+				id: await this.mongo.generateUniqueId('films', 12),
+				...film,
+				hasPoster: false,
+				listRatings: 0,
+				listScore: 0,
+				lastUpdated: time,
+				created: time,
+				editLocked: false,
+				isHidden: false,
+				editVerified: false,
+				lastVerified: time
+			}
+			await this.mongo.insertOne(entity, 'films');
 
 			// Write film action into history
 			const historyObj: HistoryOpt = {
@@ -276,99 +241,62 @@ export class FilmsService {
 				user: user,
 				time: time,
 				action: 'create',
-				kind: 'Film',
-				id: filmKey.id
+				kind: 'films',
+				id: entity.id
 			}
-			// save history last to await the entity id
-			const history = await this.db.createHistory(historyObj);
+			await this.mongo.createHistory(historyObj);
 
-			const searchRecord = {
-				id: entity.key.id,
-				name: film.name,
-				year: film.year,
-				genres: film.genres,
-				type: film.type,
-				format: film.format,
-				productionStage: film.productionStage,
-				releaseDate: this.db.dateToBigInt(film.releaseDate),
-				initialPlatform: film.initialPlatform,
-				created: this.db.dateToBigInt(film.created),
-				lastUpdated: this.db.dateToBigInt(film.lastUpdated)
+			const searchRecord: FilmSchema = {
+				id: entity.id,
+				name: entity.name,
+				year: entity.year,
+				genres: entity.genres,
+				type: entity.type,
+				format: entity.format,
+				productionStage: entity.productionStage,
+				releaseDate: this.mongo.dateToBigInt(entity.releaseDate),
+				initialPlatform: entity.initialPlatform,
+				created: this.mongo.dateToBigInt(entity.created),
+				lastUpdated: this.mongo.dateToBigInt(entity.lastUpdated),
+				logline: entity.logline,
+				listRatings: entity.listRatings,
+				listScore: entity.listScore
 			}
-			// await this.db.algolia.initIndex('films').saveObject(searchRecord).wait();
 			await this.search.client.collections('films').documents().create(searchRecord);
 
-			return { 'status': 'created', 'film_id': filmKey.id }
+			return entity
 		} catch(err: any){
 			throw new BadRequestException(err.message);
 		}
 	}
 
-	async updateOne(film: UpdateFilmDto, user: string, id: string){
+	async updateOne(film: UpdateFilmDto, user: string, id: string, remove?: CollectionFields<Film>){
 		const time = new Date()
-		const filmKey = this.db.key(['Film', +id]);		
-		film.lastUpdated = time;
 		if(film.releaseDate){
 			film.releaseDate = new Date(film.releaseDate);
 		}
+
+		if(remove && typeof remove === 'object'){ throw new BadRequestException('Provide an array for properties to remove') }
 		
 		try{
-			const [entity] = await this.db.get(filmKey);
+			const entity = await this.mongo.db.collection<Film>('films').findOne({id: id})
 			const dataBefore = {...entity};
 
 			if(!entity){
 				throw new BadRequestException("Action not allowed");
 			}
 
-			if(entity.editLocked === true && 
-				!film.hasOwnProperty('editLocked') &&
-				!film.hasOwnProperty('isHidden') &&
-				!film.hasOwnProperty('editVerified') &&
-				!film.hasOwnProperty('listScore') &&
-				!film.hasOwnProperty('listRatings')
-			){ throw new BadRequestException("Edit locked") }
+			if(entity.editLocked === true){ throw new BadRequestException("Edit locked") }
 
-			if( 
-				!film.hasOwnProperty('isHidden') && 
-				!film.hasOwnProperty('editLocked') &&
-				!film.hasOwnProperty('editVerified') &&
-				!film.hasOwnProperty('listScore') &&
-				!film.hasOwnProperty('listRatings')
-			) {	film.editVerified = false; }
-
-			if(film.editVerified === true){
-				film.lastVerified = time;
-			}
+			entity.lastUpdated = time
+			entity.editVerified = false
 
 			for (const key in film) {
-				if(entity.hasOwnProperty(key)){
-					if(typeof film[key] === 'string'){
-						// If the string is empty, delete the property
-						if(film[key] === '') { delete entity[key] } else { entity[key] = film[key] };
-					} else if(typeof film[key] === 'number') {
-						// If the number is zero, delete the property
-						if(film[key] === 0) { delete entity[key] } else { entity[key] = film[key] };
-					} else if(typeof film[key] === 'object' && film[key] instanceof Date) {
-						// If the date and time equals 1994/04/27 00:00:00 UCT+2, delete the property
-						if(new Date(film[key]).toISOString() === new Date(767397600000).toISOString()) {
-							delete entity[key] 
-						} else { 
-							entity[key] = film[key] 
-						};
-					} else {
-						entity[key] = film[key]
-					}
-				} else {
-					entity[key] = film[key]
-				}
+				entity[key] = film[key]
 			}
-			
-			const  dataAfter = {...entity}
-			await this.db.update(entity);
 
-			// console.log(JSON.stringify(film) === JSON.stringify(dataBefore))
-			// console.log('DB4', dataBefore)
-			// console.log('DAfter', dataAfter)
+			const updated = await this.mongo.updateOne<Film>(entity, 'films', remove)		
+			const  dataAfter = {...updated}			
 
 			// Create history
 			const historyObj: HistoryOpt = {
@@ -377,28 +305,35 @@ export class FilmsService {
 				user: user,
 				time: time,
 				action: 'update',
-				kind: 'Film',
-				id: JSON.stringify(filmKey.id)
+				kind: 'films',
+				id: id
 			}
-			await this.db.createHistory(historyObj);
+			await this.mongo.createHistory(historyObj);
 
-			const searchRecord = {
-				name: film.name,
-				year: film.year,
-				genres: film.genres,
-				type: film.type,
-				format: film.format,
-				listRatings: film.listRatings,
-				listScore: film.listScore,
-				productionStage: film.productionStage,
-				releaseDate: this.db.dateToBigInt(film.releaseDate),
-				initialPlatform: film.initialPlatform,
-				lastUpdated: this.db.dateToBigInt(film.lastUpdated)
+			const searchRecord: Partial<FilmSchema> = {
+				name: updated.name,
+				year: updated.year,
+				genres: updated.genres,
+				type: updated.type,
+				format: updated.format,
+				listRatings: updated.listRatings,
+				listScore: updated.listScore,
+				productionStage: updated.productionStage,
+				releaseDate: this.mongo.dateToBigInt(updated.releaseDate),
+				initialPlatform: updated.initialPlatform,
+				lastUpdated: this.mongo.dateToBigInt(updated.lastUpdated),
+				logline: updated.logline,
+			}
+			await this.search.client.collections('films').documents(entity.id).update(searchRecord);
+
+			if(entity.name !== updated.name){
+				await this.mongo.db.collection<Role>('roles').updateMany({
+					ownerCollection: 'films',
+					ownerId: updated.id
+				}, { $set: { ownerName: updated.name } })
 			}
 			
-			// await this.db.algolia.initIndex('films').partialUpdateObject(searchRecord, {}).wait();
-			await this.search.client.collections('films').documents(entity[this.db.KEY]['id']).update(searchRecord);
-			return { id: filmKey.id, ...entity };
+			return updated;
 		} catch(err: any){
 			console.log(err)
 			throw new BadRequestException(err.message)
@@ -407,155 +342,150 @@ export class FilmsService {
 
 	async deleteOne(id: string, user: string){
 		const time = new Date();
-		const filmKey = this.db.key(['Film', +id]);
-		const deletion = [filmKey];
-		const postersQuery = this.db.createQuery('Poster').hasAncestor(filmKey);
-		const stillsQuery = this.db.createQuery('Still').hasAncestor(filmKey);
-		const companiesRolesQuery = this.db.createQuery('CompanyRole').hasAncestor(filmKey);
-		const peopleRolesQuery = this.db.createQuery('PersonRole').hasAncestor(filmKey);
 		try {
-			const [film] = await this.db.get(filmKey);
+			const film = await this.mongo.db.collection<Film>('films').findOne({id: id})
 
 			if(film.editLocked === true){ throw new BadRequestException('Edit locked') };
 
-			deletion.push(film);
+			const posters = await this.mongo.db.collection<Photo>('photos').find({
+				parentCollection: 'films',
+				parentId: id,
+				type: 'poster'
+			}).toArray()
 
-			const [posters] = await this.db.runQuery(postersQuery);
-			const [stills] = await this.db.runQuery(stillsQuery);
-			// Deletes the actual files before adding entities
-			// to the deletion array
-			posters.forEach(async (poster: Poster) => {
-				await this.storage.deletePoster(poster.originalName);
-				await this.storage.deletePoster(poster.hdName);
-				await this.storage.deletePoster(poster.sdName);
-				await this.storage.deletePoster(poster.lqName);
-				
-				deletion.push(poster[this.db.KEY]);
-				const historyObj: HistoryOpt = {
-					dataObject: poster,
-					user: user,
-					kind: 'Poster',
-					id: poster[this.db.KEY]['id'],
-					action: 'delete',
-					time: time,
-					pId: id,
-					pKind: 'Film'
-				}
-				await this.db.createHistory(historyObj);
-			})
-			stills.forEach(async (still: Still) => {
-				await this.storage.deleteStill(still.originalName);
-				await this.storage.deleteStill(still.hdName);
-				await this.storage.deleteStill(still.sdName);
-				await this.storage.deleteStill(still.lqName);
-				
-				deletion.push(still[this.db.KEY]);
-				const historyObj: HistoryOpt = {
-					dataObject: still,
-					user: user,
-					kind: 'Still',
-					id: still[this.db.KEY]['id'],
-					action: 'delete',
-					time: time,
-					pId: id,
-					pKind: 'Film'
-				}
-				await this.db.createHistory(historyObj);
-			})
+			const stills = await this.mongo.db.collection<Photo>('photos').find({
+				parentCollection: 'films',
+				parentId: id,
+				type: 'still'
+			}).toArray()
 
-			const [companiesRoles] = await this.db.runQuery(companiesRolesQuery);
-			const [peopleRoles] = await this.db.runQuery(peopleRolesQuery);
+			// Writes their histories before deletetion and deletes the photo objects
+			await Promise.all(
+				posters.map(async (poster) => {
+					await this.storage.deletePhoto(poster.originalName);
+					await this.storage.deletePhoto(poster.optimisedName);
+					
+					const historyObj: HistoryOpt = {
+						dataObject: poster,
+						user: user,
+						kind: 'photos',
+						id: poster.id,
+						action: 'delete',
+						time: time,
+						pId: id,
+						pKind: 'films'
+					}
+					await this.mongo.createHistory(historyObj);
+				})
+			)
 
-			companiesRoles.forEach(async (role: CompanyRole) => {
-				deletion.push(role[this.db.KEY]);
-				const historyObj: HistoryOpt = {
-					dataObject: role,
-					user: user,
-					kind: 'CompanyRole',
-					id: role[this.db.KEY]['id'],
-					action: 'delete',
-					time: time,
-				}
-				await this.db.createHistory(historyObj);
-			})
-			peopleRoles.forEach(async (role: PersonRole) => {
-				deletion.push(role[this.db.KEY]);
-				const historyObj: HistoryOpt = {
-					dataObject: role,
-					user: user,
-					kind: 'PersonRole',
-					id: role[this.db.KEY]['id'],
-					action: 'delete',
-					time: time
-				}
-				await this.db.createHistory(historyObj);
-			})
+			await Promise.all(
+				stills.map(async (still) => {
+					await this.storage.deletePhoto(still.originalName);
+					await this.storage.deletePhoto(still.optimisedName);
+					
+					const historyObj: HistoryOpt = {
+						dataObject: still,
+						user: user,
+						kind: 'photos',
+						id: still.id,
+						action: 'delete',
+						time: time,
+						pId: id,
+						pKind: 'films'
+					}
+					await this.mongo.createHistory(historyObj);
+				})
+			)
+
+			const roles = await this.mongo.db.collection<Role>('roles').find({
+				ownerCollection: 'films',
+				ownerId: id
+			}).toArray()
+
+			await Promise.all(
+				roles.map(async (role) => {
+					const historyObj: HistoryOpt = {
+						dataObject: role,
+						user: user,
+						kind: 'roles',
+						id: role.id,
+						action: 'delete',
+						time: time,
+						pId: role.parentId,
+						pKind: role.parentCollection
+					}
+					await this.mongo.createHistory(historyObj);
+				})
+			)
 			
 			// Write action into history
 			const historyObj: HistoryOpt = {
 				dataObject: film,
 				user: user,
-				kind: 'Film',
-				id: JSON.stringify(filmKey.id),
+				kind: 'films',
+				id: film.id,
 				action: 'delete',
 				time: time,
 			}
 			// await this.db.algolia.initIndex('films').deleteObject(filmKey.id)
-			await this.search.client.collections('films').documents(filmKey.id).delete();
-			await this.db.createHistory(historyObj);
-			await this.db.delete(deletion);
+			await this.search.client.collections('films').documents(film.id).delete();
+			await this.mongo.createHistory(historyObj);
+			await this.mongo.db.collection<Photo>('photos').deleteMany({
+				parentCollection: 'films',
+				parentId: id
+			})
+			await this.mongo.db.collection<Role>('roles').deleteMany({
+				ownerCollection: 'films',
+				ownerId: id
+			})
+			await this.mongo.db.collection<Film>('films').deleteOne({id: id})
 			return {'status': 'deleted'}
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
 	}
 
-	async findRatings(filmId){
-		const filmKey = this.db.key(['Film', +filmId])
-		const query = this.db.createQuery('Rating').hasAncestor(filmKey).order('created');
+	async findRatings(filmId: string){
 		try {
-			let [results] = await this.db.runQuery(query);
+			const results = await this.mongo.db.collection<Rating>('ratings').find({
+				parentKind: 'films',
+				parentId: filmId
+			}).toArray()
 
-			results = await Promise.all(
+			const ratings = await Promise.all(
 				results.map(async (item) => {
-					const userKey = this.db.key(['User', item.authorUid]);
-					const photoKey = this.db.key(['UserPhoto', item.authorUid]);
 					try {
-						const [user] = await this.db.get(userKey);
-						const [photo] = await this.db.get(photoKey);
-						item.authorDisplayName = user?.displayName;
-						if(photo){
-							item.photoUrl = photo.sdUrl
+						const user = await this.mongo.db.collection<UserExt>('users').findOne({id: item.authorUid})
+						const forUserPhoto = await this.authService.client.users.getUser(item.authorUid)
+						return {
+							...item,
+							publication: user.publication,
+							authorDisplayName: user.fullName,
+							photoUrl: forUserPhoto.imageUrl,
+							authorUsername: user.username
 						}
-						if(!item.hasOwnProperty('publication')){
-							item.publication = user?.publication
-						}
-						return {id: item[this.db.KEY]['id'], ...item}
 					} catch (err : any){
 						throw new NotFoundException(err.message)
 					}
 				})
 			)
 		
-			return results
+			return ratings
 		} catch (err: any) {
-			console.log(err)
 			throw new NotFoundException()
 		}
 	}
 
 	async findUnverifiedRatings(){
-		const query = this.db.createQuery('Rating').filter('editVerified', '=', false).order('lastUpdated').limit(50);
 		try {
-			let [results] = await this.db.runQuery(query);
+			const ratings = await this.mongo.db.collection<Rating>('ratings').find({editVerified: false}).sort({lastUpdated: 1}).limit(50).toArray()
 
-			results = await Promise.all(
-				results.map(async (item) => {
-					const parentKey = this.db.key([item.parentKind, +item.parentId]);
+			const results = await Promise.all(
+				ratings.map(async (item) => {
 					try{
-						const [parent] = await this.db.get(parentKey);
-						return {
-							id: item[this.db.KEY]['id'], 
+						const parent = await this.mongo.db.collection<Film>('films').findOne({id: item.parentId})
+						return { 
 							parentName: parent.name,
 							...item
 						}
@@ -572,60 +502,155 @@ export class FilmsService {
 	}
 
 	async createOneRating(data: CreateListRatingDto, opt: RatingOpt){
-		data.editVerified = false;
+		if(data.reviewLink.slice(0,8) !== 'https://'){throw new BadRequestException(`The review link must begin with the secure protocol, "https://"`)}
+
 		try {
-			const {entity, info} = await this.db.createListRatingEntity(data, opt);
+			const existingReviews = await this.mongo.db.collection<Rating>('ratings').countDocuments({authorUid: opt.user});
+			if(existingReviews > 0) {throw new BadRequestException("You can only review once")};
 
-			const updateRatings: UpdateFilmDto = {
+			const user = await this.mongo.db.collection<UserExt>('users').findOne({id: opt.user})
+
+			const review: Rating = {
+				id: await this.mongo.generateUniqueId('ratings', 12),
+				authorUid: user.id,
+				editVerified: false,
+				lastUpdated: opt.time,
+				created: opt.time,
+				parentId: opt.parentId,
+				parentKind: 'films',
+				listRating: data.listRating as Rating['listRating'],
+				reviewLink: data.reviewLink,
+				verdict: data.verdict
+			}
+
+			await this.mongo.insertOne(review, 'ratings');
+
+			// Calculate the rating score
+			const results = await this.mongo.db.collection<Rating>('ratings').find({
+				parentId: opt.parentId,
+				parentKind: 'films'
+			}).toArray()
+
+			const info = await this.mongo.calculateRatingScore(results);
+
+			await this.mongo.updateOne({
+				id: opt.parentId,
 				listScore: info.listScore,
-				listRatings: info.totalRatings
-			} 
-			await this.updateOne(updateRatings, opt.user, opt.parentId);
+				listRating: info.totalRatings
+			}, 'films')
 
-			return {id: entity.key.id, ...entity.data}
+			const historyObj: HistoryOpt = {
+				dataObject: review,
+				user: opt.user,
+				kind: 'ratings',
+				id: review.id,
+				action: 'create',
+				time: opt.time,
+			}
+			await this.mongo.createHistory(historyObj);
+
+			const searchRecord: Partial<FilmSchema> = {
+				listRatings: info.totalRatings,
+				listScore: info.listScore
+			}
+			await this.search.client.collections('films').documents(opt.parentId).update(searchRecord)
+
+			return review
 		} catch (err: any) {
 			throw new BadRequestException(err.message)
 		}
 	}
 
 	async updateOneRating(data: UpdateListRatingDto, opt: RatingOpt){
-		data.editVerified = false;
+
+		if(data.reviewLink && data.reviewLink?.slice(0,8) !== 'https://'){
+			throw new BadRequestException(`The review link must begin with the secure protocol, "https://"`)
+		}
+
 		try {
-			const {entity, info} = await this.db.updateListRatingEntity(data, opt);
+			const entity = await this.mongo.db.collection<Rating>('ratings').findOne({id: opt.ratingId})
+			const dataBefore = {...entity};
 
-			const updateRatings: UpdateFilmDto = {
+			if(entity.authorUid !== opt.user){ throw new BadRequestException('Action not allowed') }
+			entity.editVerified = false
+			entity.lastUpdated = opt.time
+			for (const key in data) {
+				entity[key] = data[key]
+			}
+
+			const dataAfter = {...entity};
+			await this.mongo.updateOne(entity, 'ratings');
+
+			// Calculate the rating score
+			const results = await this.mongo.db.collection<Rating>('ratings').find({parentId: opt.parentId, parentKind: 'films'}).toArray();
+			const info = await this.mongo.calculateRatingScore(results);
+
+			const historyObj: HistoryOpt = {
+				dataObject: dataAfter,
+				prevDataObject: dataBefore,
+				user: opt.user,
+				kind: 'ratings',
+				id: entity.id,
+				action: 'update',
+				time: opt.time,
+			}
+
+			await this.mongo.createHistory(historyObj);
+			
+			await this.mongo.updateOne({
+				id: opt.parentId,
 				listScore: info.listScore,
-				listRatings: info.totalRatings,
-			} 
-			await this.updateOne(updateRatings, opt.user, opt.parentId);
+				listRatings: info.totalRatings
+			}, 'films')
 
-			return {id: entity[this.db.KEY]['id'], ...entity}
+			const searchRecord: Partial<FilmSchema> = {
+				listRatings: info.totalRatings,
+				listScore: info.listScore
+			}
+			await this.search.client.collections('films').documents(opt.parentId).update(searchRecord)
+
+			return entity
 		} catch (err: any) {
 			throw new BadRequestException()
 		}
 	}
 
 	async deleteOneRating(opt: RatingOpt){
-		const key = this.db.key(['Rating', +opt.ratingId]);
-
-		const updateRatings: UpdateFilmDto = {
-			listScore: 0,
-			listRatings: 0
-		}
-
-		const userKey = this.db.key(['User', opt.user]);
-
 		try {
-			const [user] = await this.db.get(userKey);
-			const [rating] = await this.db.get(key);
+			const user = await this.mongo.db.collection<UserExt>('users').findOne({id: opt.user})
+			const rating = await this.mongo.db.collection<Rating>('ratings').findOne({id: opt.ratingId})
 
 			if(rating.authorUid !== opt.user && user.role !== 'admin') {
 				throw new BadRequestException('Action not allowed')
 			}
 
-			await this.updateOne(updateRatings, opt.user, opt.parentId);
+			const historyObj: HistoryOpt = {
+				dataObject: rating,
+				user: opt.user,
+				kind: 'ratings',
+				id: rating.id,
+				action: 'delete',
+				time: opt.time,
+			}
+			await this.mongo.createHistory(historyObj);
 
-			await this.db.delete(key);
+			await this.mongo.db.collection<Rating>('ratings').deleteOne({id: opt.ratingId})
+
+			const results = await this.mongo.db.collection<Rating>('ratings').find({parentId: opt.parentId, parentKind: 'films'}).toArray();
+			const info = await this.mongo.calculateRatingScore(results);
+
+			await this.mongo.updateOne({
+				id: opt.parentId,
+				listScore: info.listScore,
+				listRatings: info.totalRatings
+			}, 'films')
+
+			const searchRecord: Partial<FilmSchema> = {
+				listRatings: info.totalRatings,
+				listScore: info.listScore
+			}
+			await this.search.client.collections('films').documents(opt.parentId).update(searchRecord)
+
 			return {'status': 'deleted'}
 		} catch (err: any) {
 			throw new BadRequestException()
@@ -633,82 +658,173 @@ export class FilmsService {
 	}
 
 	async verifyRating(opt: RatingOpt){
-		const updateRating: UpdateListRatingDto = {
-			editVerified: true
-		}
 		try {
-			const {entity, info} = await this.db.updateListRatingEntity(updateRating, opt);
-			return entity;
+			const review = await this.mongo.db.collection<Rating>('ratings').findOne({id: opt.ratingId})
+			review.editVerified = true
+			await this.mongo.updateOne<Rating>(review, 'ratings')
+
+			// Update critic score
+			const user = await this.mongo.db.collection<UserExt>('users').findOne({id: review.authorUid})
+			const recentReviews = await this.mongo.db.collection<Rating>('ratings').countDocuments({ authorUid: user.id })
+			const score = ( (recentReviews <= 48 ? recentReviews : 48 ) / 48 ) * 100
+			user.criticScore = score
+			await this.mongo.updateOne(user, 'users')
+
+			return {status: 'success'}
 		} catch(err: any){
 			throw new BadRequestException()
 		}
 	}
 
 	async uploadPoster(opt: ImageOpt, image: Express.Multer.File){
-		const results = [];
+		if(opt.index !== 0){ throw new BadRequestException('Unknown index') }
 		try {
-			// Update the parent first
-			const updateFilm: UpdateFilmDto = {
-				hasPoster: true
+			const existing = await this.mongo.db.collection<Photo>('photos').countDocuments({
+				parentCollection: 'films',
+				parentId: opt.parentId,
+				type: 'poster',
+				photoIndex: 0
+			})
+
+			if(existing >= 1) {
+				throw new BadRequestException("Too many posters for a single resource");
 			}
-			if(opt.imageId !== '0'){ throw new BadRequestException('Unknown index') }
 
-			await this.updateOne(updateFilm, opt.user, opt.parentId);
-
-			// Update the poster
 			const data = await this.storage.uploadPoster(image);
-			const createPoster: CreatePosterDto = {
-				...data
-			}
-			const {entity} = await this.db.createPosterEntity(createPoster, opt);
 
-			return {id: entity.key.name, ...entity.data}
+			const entity: Photo = {
+				...data,
+				photoIndex: 0,
+				parentCollection: 'films',
+				type: 'poster',
+				parentId: opt.parentId,
+				uploadedByUser: opt.user,
+				lastUpdated: opt.time,
+				created: opt.time,
+				id: await this.mongo.generateUniqueId('photos', 12)
+			}
+
+			await this.mongo.insertOne(entity, 'photos');
+
+			// Alert data change to the parent entity
+			await this.mongo.updateOne({
+				id: opt.parentId,
+				editVerified: false,
+				lastUpdated: opt.time,
+				hasPoster: true
+			}, 'films')
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'photos',
+				id: entity.id,
+				action: 'create',
+				time: opt.time,
+				pId: opt.parentId,
+				pKind: opt.parentKind
+			}
+			await this.mongo.createHistory(historyObj);
+
+			const searchRecord: Partial<FilmSchema> = {
+				posterUrl: data.optimisedUrl
+			}
+			await this.search.client.collections('films').documents(opt.parentId).update(searchRecord);
+
+			return entity
 		} catch (err: any) {
 			console.log(err)
 			throw new BadRequestException(err.message)
 		}
 	}
 
-	async updatePoster(data: UpdatePosterDto, opt: ImageOpt){
+	async updatePoster(data: PhotoDto, opt: ImageOpt){
 		try {
-			const {entity, history} = await this.db.updatePosterEntity(data, opt);
+			const entity = await this.mongo.db.collection<Photo>('photos').findOne({
+				parentCollection: 'films',
+				parentId: opt.parentId,
+				photoIndex: 0,
+				type: 'poster'
+			})
 
-			return {id: entity[this.db.KEY]['name'], ...entity}
-		} catch {
-			throw new BadRequestException();
+			const dataBefore = {...entity};
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				entity[key] = data[key]
+			}
+
+			entity.lastUpdated = opt.time
+
+			const dataAfter = {...entity};
+			await this.mongo.updateOne(entity, 'photos');
+
+			// Alert data change to the parent entity
+			await this.mongo.updateOne({
+				id: opt.parentId,
+				editVerified: false,
+				lastUpdated: opt.time
+			}, 'films')
+
+			const historyObj: HistoryOpt = {
+				dataObject: dataAfter,
+				prevDataObject: dataBefore,
+				user: opt.user,
+				kind: 'photos',
+				id: entity.id,
+				action: 'update',
+				time: opt.time,
+				pId: opt.parentId,
+				pKind: opt.parentKind
+			}
+			await this.mongo.createHistory(historyObj);
+			return entity
+		} catch (err: any){
+			throw new BadRequestException(err.message);
 		}
 	}
 
 	async deletePoster(opt: ImageOpt){
 		try{
-			const updateFilm: UpdateFilmDto = {
-				hasPoster: false
-			}
-			await this.updateOne(updateFilm, opt.user, opt.parentId);
-
-			const posterKey = this.db.key([opt.parentKind, +opt.parentId, 'Poster', opt.imageId]);
-			const [poster] = await this.db.get(posterKey);
+			const poster = await this.mongo.db.collection<Photo>('photos').findOne({
+				parentCollection: 'films',
+				parentId: opt.parentId,
+				type: 'poster',
+				photoIndex: 0
+			})
 			const historyObj: HistoryOpt = {
 				dataObject: poster,
 				user: opt.user,
-				kind: 'Poster',
-				id: posterKey.name,
+				kind: 'photos',
+				id: poster.id,
 				action: 'delete',
 				time: opt.time,
 				pId: opt.parentId,
 				pKind: opt.parentKind
 			}
-			await this.storage.deletePoster(poster.originalName);
-			await this.storage.deletePoster(poster.hdName);
-			await this.storage.deletePoster(poster.sdName);
-			await this.storage.deletePoster(poster.lqName);
-			await this.db.createHistory(historyObj);
-			await this.db.delete(posterKey)
+			await this.storage.deletePhoto(poster.originalName);
+			await this.storage.deletePhoto(poster.optimisedName);
+			await this.mongo.createHistory(historyObj);
+			await this.mongo.db.collection<Photo>('photos').deleteOne({
+				parentCollection: 'films',
+				parentId: opt.parentId,
+				type: 'poster',
+				photoIndex: 0
+			})
 
-			const searchRecord = {
+			await this.mongo.updateOne({
+				id: opt.parentId,
+				hasPoster: false,
+				editVerified: false,
+				lastUpdated: opt.time
+			}, 'films')
+
+			const searchRecord: Partial<FilmSchema> = {
 				posterUrl: null
 			}
-			// await this.db.algolia.initIndex('films').partialUpdateObject(searchRecord, {}).wait();
 			await this.search.client.collections('films').documents(opt.parentId).update(searchRecord);
 
 			return {'status': 'deleted'}
@@ -719,63 +835,147 @@ export class FilmsService {
 
 	async uploadStill(opt: ImageOpt, image: Express.Multer.File){
 		try {
-			if(opt.imageId !== '0' && opt.imageId !== '1' && opt.imageId !== '2'){ throw new BadRequestException('Unknown index') }
+			if(opt.index - 2 > 0){ throw new BadRequestException('Unknown index') }
 
-			const file = await this.storage.uploadStill(image);
-			
-			const creation: CreateStillDto = {
-				...file
+			const existing = await this.mongo.db.collection<Photo>('photos').countDocuments({
+				parentCollection: 'films',
+				parentId: opt.parentId,
+				type: 'still'
+			})
+
+			if(existing >= 3) {
+				throw new BadRequestException("Too many stills for a single resource");
 			}
 
-			const {entity, history} = await this.db.createStillEntity(creation, opt);
+			const file = await this.storage.uploadStill(image);
 
-			return { id: entity.key.name, ...entity.data }
+			const entity: Photo = {
+				id: await this.mongo.generateUniqueId('photos', 12),
+				...file,
+				photoIndex: opt.index,
+				parentCollection: 'films',
+				parentId: opt.parentId,
+				created: opt.time,
+				lastUpdated: opt.time,
+				uploadedByUser: opt.user,
+				type: 'still'
+			}
+			
+			await this.mongo.insertOne(entity, 'photos');
+
+			// Alert data change to the parent entity
+			await this.mongo.updateOne({
+				id: opt.parentId,
+				editVerified: false,
+				lastUpdated: opt.time
+			}, 'films')
+
+			const historyObj: HistoryOpt = {
+				dataObject: entity,
+				user: opt.user,
+				kind: 'photos',
+				id: entity.id,
+				action: 'create',
+				time: opt.time,
+				pId: opt.parentId,
+				pKind: opt.parentKind
+			}
+			await this.mongo.createHistory(historyObj);
+
+			return entity
 		} catch (err: any ) {
 			console.log(err)
 			throw new BadRequestException(err.message)
 		}
 	}
 
-	async updateStill(data: UpdateStillDto, opt: ImageOpt){
+	async updateStill(data: PhotoDto, opt: ImageOpt){
 		try {
-			const {entity, history} = await this.db.updateStillEntity(data, opt);
+			const entity = await this.mongo.db.collection<Photo>('photos').findOne({
+				parentCollection: 'films',
+				parentId: opt.parentId,
+				type: 'still',
+				photoIndex: opt.index
+			})
 
-			return { id: entity[this.db.KEY]['name'], ...entity }
-		} catch {
-			throw new BadRequestException();
+			const dataBefore = {...entity};
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				entity[key] = data[key]
+			}
+
+			entity.lastUpdated = opt.time
+
+			const dataAfter = {...entity};
+			await this.mongo.updateOne(entity, 'photos');
+
+			// Alert data change to the parent entity
+			await this.mongo.updateOne({
+				id: opt.parentId,
+				editVerified: false,
+				lastUpdated: opt.time
+			}, 'films')
+
+			const historyObj: HistoryOpt = {
+				dataObject: dataAfter,
+				prevDataObject: dataBefore,
+				user: opt.user,
+				kind: 'photos',
+				id: entity.id,
+				action: 'update',
+				time: opt.time,
+				pId: opt.parentId,
+				pKind: opt.parentKind
+			}
+			await this.mongo.createHistory(historyObj);
+
+			return entity;
+		} catch(err: any){
+			throw new BadRequestException(err.message)
 		}
 	}
 
 	async deleteStill(opt: ImageOpt){
 		try{
-			const updateFilm: UpdateFilmDto = {
-				editVerified: false
-			}
-			await this.updateOne(updateFilm, opt.user, opt.parentId);
+			const still = await this.mongo.db.collection<Photo>('photos').findOne({
+				parentCollection: 'films',
+				parentId: opt.parentId,
+				type: 'still',
+				photoIndex: opt.index
+			})
 
-			const stillKey = this.db.key([opt.parentKind, +opt.parentId, 'Still', opt.imageId]);
-			const [still] = await this.db.get(stillKey);
 			const historyObj: HistoryOpt = {
 				dataObject: still,
 				user: opt.user,
-				kind: 'Still',
-				id:stillKey.name,
+				kind: 'photos',
+				id: still.id,
 				action: 'delete',
 				time: opt.time,
 				pId: opt.parentId,
 				pKind: opt.parentKind
 			}
 	
-			await this.storage.deleteStill(still.originalName);
-			await this.storage.deleteStill(still.hdName);
-			await this.storage.deleteStill(still.sdName);
-			await this.storage.deleteStill(still.lqName);
-			await this.db.createHistory(historyObj);
-			await this.db.delete(stillKey);
+			await this.storage.deletePhoto(still.originalName);
+			await this.storage.deletePhoto(still.optimisedName);
+			await this.mongo.createHistory(historyObj);
+			await this.mongo.db.collection<Photo>('photos').deleteOne({
+				parentCollection: 'films',
+				parentId: opt.parentId,
+				type: 'still',
+				photoIndex: opt.index
+			})
+
+			await this.mongo.updateOne({
+				id: opt.parentId,
+				editVerified: false
+			}, 'films')
 
 			return {'status': 'deleted'}
 		} catch(err: any) {
-			console.log(err)
 			throw new BadRequestException()
 		}
 	}
@@ -787,7 +987,6 @@ export class FilmsService {
 
 			return serve;
 		} catch(err: any){
-			console.log(err)
 			throw new BadRequestException();
 		}
 	}
@@ -845,91 +1044,95 @@ export class FilmsService {
 	}
 
 	// Advanced methods
-	async getFilmOfTheDay(){
+	async selectFilmOfTheDay(){
 		const time = new Date();
 		const twelveMonthsAgo = new Date(Number(time)-(1000*60*60*24*365));
 		const seventyTwoMonthsAgo = new Date(Number(time)-(1000*60*60*24*1825));
-		const currentDay = new Date(time.toISOString().split('T')[0]);
-		const fiveYearsAgo = new Date(seventyTwoMonthsAgo.toISOString().split('T')[0]);
-		const queryFOTD =  this.db.createQuery('FOTD').filter('selectionDate', '=', currentDay);
 		try {
-			const [fotd] = await this.db.runQuery(queryFOTD);
-			const filmOfTheDay = fotd[0];
-			if(fotd.length < 1) {
-				const filmsQuery = this.db.createQuery('Film')
-					.filter('productionStage', '=', 'finished')
-					.filter('hasPoster', '=', true)
-					.filter('editVerified', '=', true)
-					.filter('releaseDate', '<=', twelveMonthsAgo)
-					.filter('editLocked', '=', true)
-					.limit(300);
-				let [films] = await this.db.runQuery(filmsQuery);
-				if(films.length < 1){ throw new NotFoundException('No films found') }
+			const films = await this.mongo.db.collection<Film>('films').find({
+				productionStage: 'finished',
+				hasPoster: true,
+				editLocked: true,
+				editVerified: true,
+				releaseDate: {$lte: twelveMonthsAgo}
+			}).limit(500).toArray();
 
-				const queryAllFOTD = this.db.createQuery('FOTD').filter('selectionDate', '>=', fiveYearsAgo);
-				const [allFotd] = await this.db.runQuery(queryAllFOTD);
-				
-				films = films.map((item) => {
-					const filmId = item[this.db.KEY]['id'];
+			if(films.length > 0){ 
 
-					const alreadySelected = allFotd.filter((value) => value.filmId = filmId);
-
-					if(alreadySelected.length === 0){ return {...item, id: filmId} };
+				const selected = await this.mongo.db.collection<Today>('today').find({created: {$lte: seventyTwoMonthsAgo}, collection: 'films'}).toArray();
+				const eligible = films.filter(item => {
+					return selected.filter(val => val.identifier === item.id).length > 0 ? false : true;
 				})
-				
-				const selectedFilm = films[Math.floor(Math.random()*films.length)];
-				
-				const [poster] = await this.db.get(this.db.key(['Film', +selectedFilm.id, 'Poster', '0']));
-				const [firstStill] = await this.db.get(this.db.key(['Film', +selectedFilm.id, 'Still', '0']));
-				const [secondStill] = await this.db.get(this.db.key(['Film', +selectedFilm.id, 'Still', '1']));
-				const [thirdStill] = await this.db.get(this.db.key(['Film', +selectedFilm.id, 'Still', '2']));
-				const newFotdKey = this.db.key('FOTD');
-				const entity = {
-					key: newFotdKey,
-					data: {
-						selectionDate: currentDay,
-						name: selectedFilm.name,
-						id: selectedFilm.id,
-						releaseDate: selectedFilm.releaseDate,
-						poster: poster,
-						logline: selectedFilm.logline,
-						plotSummary: selectedFilm.plotSummary,
-						genres: selectedFilm.genres,
-						type: selectedFilm.type,
-						format: selectedFilm.format,
-						listScore: selectedFilm.listScore,
-						stillOne: firstStill,
-						stillTwo: secondStill,
-						stillThree: thirdStill,
-						year: selectedFilm.year,
-						runtime: selectedFilm.runtime
-					}
+				const selection = eligible[Math.floor(Math.random()*eligible.length)];
+				const today: Today = {
+					id: await this.mongo.generateUniqueId('today', 12),
+					collection: 'films',
+					identifier: selection.id,
+					day: time.getDate(),
+					month: time.getMonth(),
+					year: time.getFullYear(),
+					created: time
 				}
-				await this.db.insert(entity);
-				return entity.data;
+				await this.mongo.insertOne(today, 'today')
+
 			}
-			return filmOfTheDay;
+		} catch(err) {
+			// throw new BadRequestException()
+		}
+	}
+
+	async getFilmOfTheDay(){
+		const time = new Date();
+		try {
+			const today = await this.mongo.db.collection<Today>('today').findOne({
+				day: time.getDate(),
+				month: time.getMonth(),
+				year: time.getFullYear(),
+				collection: 'films'
+			})
+
+			const film = await this.mongo.db.collection<Film>('films').findOne({id: today.identifier})
+			const poster = await this.mongo.db.collection<Photo>('photos').findOne({
+				parentCollection: 'films',
+				parentId: today.identifier,
+				type: 'poster',
+				photoIndex: 0
+			})
+			const stills = await this.mongo.db.collection<Photo>('photos').find({
+				parentCollection: 'films',
+				parentId: today.identifier,
+				type: 'still'
+			}).toArray();
+			const talent = await this.mongo.db.collection<Role>('roles').find({
+				ownerCollection: 'films',
+				ownerId: today.id,
+				role: {$in: ['Director', 'Writer', 'Producer']}
+			})
+			return { film, poster, stills, talent }
 		} catch (err: any) {
 			throw new NotFoundException()
 		}
 	}
 
 	async getRecentlyAdded(limit?: number){
-		let query = this.db.createQuery('Film').filter('hasPoster', '=', true).order('created', {descending: true}).limit(limit ? limit : 10);
 		try {
-			const films = await this.db.runQuery(query)
+			const films = await this.mongo.db.collection<Film>('films').find({
+				hasPoster: true,
+				isHidden: false
+			}).sort({created: -1}).limit(limit ? limit : 10).toArray();
 
-			const results = await Promise.all(films[0].map(async (film) => {
-				film.id = film[this.db.KEY]['id']
-				const posterKey = this.db.key(['Film', +film.id, 'Poster', '0']);
-
+			const results = await Promise.all(films.map(async (film) => {
 				try {
-					const [poster] = await this.db.get(posterKey);
-					if(!poster){
-						return film
-					} else {
-						film.posterUrl = poster.sdUrl;
-						return film
+					const poster = await this.mongo.db.collection<Photo>('photos').findOne({
+						parentCollection: 'films',
+						parentId: film.id,
+						photoIndex: 0,
+						type: 'poster'
+					})
+
+					return {
+						...film,
+						posterUrl: poster.optimisedUrl
 					}
 				} catch {
 					throw new BadRequestException()
@@ -943,26 +1146,26 @@ export class FilmsService {
 
 	async getLatestReleases(limit?: number){
 		const now = new Date()
-		let query = this.db.createQuery('Film')
-			.filter('hasPoster', '=', true)
-			.filter('productionStage', '=', 'finished')
-			.filter('releaseDate', '<=', now)
-			.order('releaseDate', {descending: true})
-			.limit(limit ? limit : 10);
 		try {
-			const films = await this.db.runQuery(query)
+			const films = await this.mongo.db.collection<Film>('films').find({
+				hasPoster: true,
+				isHidden: false,
+				productionStage: 'finished',
+				releaseDate: {$lte: now},
+			}).sort({releaseDate: -1}).limit(limit ? limit : 10).toArray()
 
-			const results = await Promise.all(films[0].map(async (film) => {
-				film.id = film[this.db.KEY]['id']
-				const posterKey = this.db.key(['Film', +film.id, 'Poster', '0']);
-
+			const results = await Promise.all(films.map(async (film) => {
 				try {
-					const [poster] = await this.db.get(posterKey);
-					if(!poster){
-						return film
-					} else {
-						film.posterUrl = poster.sdUrl;
-						return film
+					const poster = await this.mongo.db.collection<Photo>('photos').findOne({
+						parentCollection: 'films',
+						parentId: film.id,
+						photoIndex: 0,
+						type: 'poster'
+					})
+
+					return {
+						...film,
+						posterUl: poster.optimisedUrl
 					}
 				} catch {
 					throw new BadRequestException()
@@ -977,87 +1180,40 @@ export class FilmsService {
 	async getUpcoming(limit?: number){
 		const now = new Date();
 		const thisYear = now.getFullYear();
-		const queryWithDate = this.db.createQuery('Film').filter('hasPoster', '=', true).filter('releaseDate', '>=', now).order('releaseDate').limit(limit ? limit : 10);
-		const queryWithYear = this.db.createQuery('Film').filter('hasPoster', '=', true).filter('year', '>=', thisYear).order('year').order('lastUpdated').limit(50);
+
 		try {
-			let [filmsWithDate] = await this.db.runQuery(queryWithDate);			
-			let [filmsWithYear] = await this.db.runQuery(queryWithYear);
+			const films = await this.mongo.db.collection<Film>('films').find({
+				$and: [
+					{ hasPoster: true, isHidden: false },
+					{
+						$or: [
+							{ releaseDate: {$gt: now} },
+							{ releaseDate: {$exists: false}, year: {$gte: thisYear}, productionStage: {$ne: 'finished'} }
+						]
+					}
+				]
+			}).sort({year: 1}).sort({releaseDate: 1}).limit(limit ? limit : 10).toArray()
 
-			// filmsWithYear = filmsWithYear.filter((val) => filmsWithDate.indexOf(val) < 0);
-
-			filmsWithDate = await Promise.all(filmsWithDate.map(async (film) => {
-				film.id = film[this.db.KEY]['id'];
-				delete film[this.db.KEY];
-				const posterKey = this.db.key(['Film', +film.id, 'Poster', '0']);
-
+			const results = await Promise.all(films.map(async (film) => {
 				try {
-					const [poster] = await this.db.get(posterKey);
-					if(!poster){
-						// console.log(JSON.stringify(film))
-						return JSON.stringify(film)
-					} else {
-						film.posterUrl = poster.sdUrl;
-						// console.log(JSON.stringify(film))
-						return JSON.stringify(film)
+					const poster = await this.mongo.db.collection<Photo>('photos').findOne({
+						parentCollection: 'films',
+						parentId: film.id,
+						photoIndex: 0,
+						type: 'poster'
+					})
+
+					return {
+						...film,
+						posterUrl: poster.optimisedUrl
 					}
 				} catch (err: any) {
 					throw new BadRequestException()
 				}
 			}))
-			console.log(filmsWithYear.length)
-			filmsWithYear = filmsWithYear.filter((val) => !val.releaseDate);
-			console.log(filmsWithYear.length)
-
-			filmsWithYear = await Promise.all(filmsWithYear.map(async (film) => {
-				film.id = film[this.db.KEY]['id'];
-				delete film[this.db.KEY];
-				const posterKey = this.db.key(['Film', +film.id, 'Poster', '0']);
-
-				try {
-					const [poster] = await this.db.get(posterKey);
-					if(!poster){
-						// console.log(JSON.stringify(film))
-						return JSON.stringify(film)
-					} else {
-						film.posterUrl = poster.sdUrl;
-						// console.log(JSON.stringify(film))
-						return JSON.stringify(film)
-					}
-				} catch {
-					throw new BadRequestException()
-				}
-			}))
-
-			// console.log(filmsWithDate)
-			// console.log(filmsWithYear)]
-			const allItems = filmsWithDate.concat(filmsWithYear);
-			// console.log(allItems)
-			const results = allItems.filter((val, index) => {
-				return allItems.indexOf(val) === index
-			}).map((val) => JSON.parse(val))
-			.slice(0, limit ? limit : 10).sort((a, b) => {
-				if(a.year > b.year) {
-					return 0
-				} else {
-					return -1
-				}
-			}).sort((a, b) => {
-				if(a.created > b.created) {
-					return 0
-				} else {
-					return -1
-				}
-			}).sort((a, b) => {
-				if(a.releaseDate > b.releaseDate) {
-					return 0
-				} else {
-					return -1
-				}
-			});
 
 			return results;
 		} catch(err: any){
-			// console.log(err)
 			throw new NotFoundException()
 		}
 	}
@@ -1065,13 +1221,12 @@ export class FilmsService {
 	async getTrendingFilms(limit?: number){
 		const sevenDaysAgo = new Date(Number(new Date)-(1000*60*60*24*7));
 		try{
-			const [hits] = await this.db.createQuery('Hit').filter('xKind', '=', 'Film').filter('time', '>', sevenDaysAgo).run();
+			const hits = await this.mongo.db.collection<Hit>('hits').find({time: {$gt: sevenDaysAgo}}).toArray();
 			const occurrences = {};
 			
 			// Iterate through the hits
 			hits.forEach(obj => {
-				const filmId = obj.xId;
-				
+				const filmId = obj.identifier;				
 				// Increment the occurrence count for the film
 				if (occurrences.hasOwnProperty(filmId)) {
 					occurrences[filmId] += 1;
@@ -1081,152 +1236,159 @@ export class FilmsService {
 			});
 
 			const totalPairs: [string, number][] = Object.entries(occurrences);
-			const limitedSet = totalPairs.sort((a, b) => b[1] - a[1]).slice(0, limit ? limit+1 : 10);
+			const limitedSet = totalPairs.filter((val) => isNaN(+val[0]) === false ).sort((a, b) => b[1] - a[1]).slice(0, limit ? limit+1 : 10);
 
 			const results = await Promise.all(limitedSet.map(async (pair) => {
 				const id = pair[0];
-				const filmKey = this.db.key(['Film', +id])
-				const posterKey = this.db.key(['Film', +id, 'Poster', '0']);
 
 				try {
-					const [film] = await this.db.get(filmKey);
-					const [poster] = await this.db.get(posterKey);
-					if(poster && film){
-						film.posterUrl = poster.sdUrl;
-						return {...film, id: id}
-					} else if(film && !poster) {						
-						return {...film, id: id}
+					const film = await this.mongo.db.collection<Film>('films').findOne({id: id})
+					if(film.hasPoster === true){
+						const poster = await this.mongo.db.collection<Photo>('photos').findOne({
+							parentCollection: 'films',
+							parentId: id,
+							type: 'poster',
+							photoIndex: 0
+						})
+						
+						return {
+							...film,
+							posterUrl: poster.optimisedUrl
+						}
+					} else {						
+						return film
 					}
-				} catch {
+				} catch(err) {
 					throw new BadRequestException()
 				}
 			}))
-
-			return results;
+			
+			return results.filter((val) => typeof val === 'object');
 		} catch(err: any){
-			// console.log(err)
 			throw new NotFoundException()
 		}
 	}
 
 	// Settings Methods
-	async hideFilm(user: string, id: string){
+	async hideFilm(id: string){
 		try {
-			const updateFilm: UpdateFilmDto = {
+			await this.mongo.updateOne({
+				id: id,
 				isHidden: true
-			}
-			const film = await this.updateOne(updateFilm, user, id);
-			return film;
+			}, 'films')
+			return {status: 'success'};
 		} catch(err: any){
 			throw new BadRequestException()
 		}
 	}
 
-	async unhideFilm(user: string, id: string){
+	async unhideFilm(id: string){
 		try {
-			const updateFilm: UpdateFilmDto = {
+			await this.mongo.updateOne({
+				id: id,
 				isHidden: false
-			}
-			const film = await this.updateOne(updateFilm, user, id);
-			return film;
+			}, 'films')
+			return {status: 'success'};
 		} catch(err: any){
 			throw new BadRequestException()
 		}
 	}
 
-	async verifyFilmEdit(user: string, id: string){
+	async verifyFilmEdit(id: string){
 		try {
-			const updateFilm: UpdateFilmDto = {
-				editVerified: true
-			}
-			const film = await this.updateOne(updateFilm, user, id);
-			return film
+			const history = await this.justHistory(id);
+			const reputations = this.mongo.determineUserReputation(history);
+			await Promise.all(
+				reputations.map(async score => {
+					try {
+						const user = await this.mongo.db.collection<UserExt>('users').findOne({id: score[0]})
+						user.reputation += score[1]
+						await this.mongo.updateOne(user, 'users')
+					} catch (err: any){}
+				})
+			)
+
+			await this.mongo.updateOne({
+				id: id,
+				editVerified: true,
+				lastVerified: new Date()
+			}, 'films')
+			return {status: 'success'};
 		} catch(err: any){
-			console.log(err)
+			// console.log(err)
 			throw new BadRequestException()
 		}
 	}
 
-	async lockFilmEdit(user: string, id: string){
+	async lockFilmEdit(id: string){
 		try {
-			const updateFilm: UpdateFilmDto = {
+			await this.mongo.updateOne({
+				id: id,
 				editLocked: true
-			}
-			const film = await this.updateOne(updateFilm, user, id);
-			return film;
+			}, 'films')
+			return {status: 'success'};
 		} catch(err: any){
 			throw new BadRequestException()
 		}
 	}
 
-	async unlockFilmEdit(user: string, id: string){
+	async unlockFilmEdit(id: string){
 		try {
-			const updateFilm: UpdateFilmDto = {
+			await this.mongo.updateOne({
+				id: id,
 				editLocked: false
-			}
-			const film = await this.updateOne(updateFilm, user, id);
-			return film;
+			}, 'films')
+			return {status: 'success'};
 		} catch(err: any){
-			console.log(err)
 			throw new BadRequestException()
 		}
 	}
 
-	// History method [IN DEVELOPEMNT]
-	async findHistory(filmId: string){
-		const filmKey = this.db.key(['Film', +filmId]);
+	// History method
+	async justHistory(filmId: string){
 		try {
-			const [film] = await this.db.get(filmKey); 
+			const film = await this.mongo.db.collection<Film>('films').findOne({id: filmId})
 			const lastestMod = film.hasOwnProperty('lastVerified') ? new Date(film.lastVerified) : new Date(film.created)
 
-			const [stillsHistory] = await this.db.createQuery('History')
-				.filter('xKind', '=', 'Still')
-				.filter('wKind', '=', 'Film')
-				.filter('wIdentifier', '=', filmId)
-				.filter('xTimestamp', '>=', lastestMod)
-				.order('xTimestamp', {descending: true}).run();
+			const photosHistory = await this.mongo.db.collection<HistoryX>('history').find({
+				xKind: 'photos',
+				wKind: 'films',
+				wIdentifier: filmId,
+				xTimestamp: {$gte: lastestMod}
+			}).sort({xTimestamp: -1}).toArray();
 
-			const [companiesHistory] = await this.db.createQuery('History')
-				.filter('xKind', '=', 'CompanyRole')
-				.filter('wKind', '=', 'Film')
-				.filter('wIdentifier', '=', filmId)
-				.filter('xTimestamp', '>=', lastestMod)
-				.order('xTimestamp', {descending: true}).run();
+			const rolesHistory = await this.mongo.db.collection<HistoryX>('history').find({
+				xKind: 'roles',
+				wKind: 'films',
+				wIdentifier: filmId,
+				xTimestamp: {$gte: lastestMod}
+			}).sort({xTimestamp: -1}).toArray();
 
-			const [peopleHistory] = await this.db.createQuery('History')
-				.filter('xKind', '=', 'PersonRole')
-				.filter('wKind', '=', 'Film')
-				.filter('wIdentifier', '=', filmId)
-				.filter('xTimestamp', '>=', lastestMod)
-				.order('xTimestamp', {descending: true}).run();
-
-			const [filmHistory] = await this.db.createQuery('History')
-				.filter('xKind', '=', 'Film')
-				.filter('xIdentifier', '=', filmId)
-				.filter('xTimestamp', '>=', lastestMod)
-				.order('xTimestamp', {descending: true}).run();
-
-			const [posterHistory] = await this.db.createQuery('History')
-				.filter('xKind', '=', 'Poster')
-				.filter('xIdentifier', '=', '0')
-				.filter('wKind', '=', 'Film')
-				.filter('wIdentifier', '=', filmId)
-				.filter('xTimestamp', '>=', lastestMod)
-				.order('xTimestamp', {descending: true}).run();
+			const filmHistory = await this.mongo.db.collection<HistoryX>('history').find({
+				xKind: 'films',
+				xIdentifier: filmId,
+				xTimestamp: {$gte: lastestMod}
+			}).sort({xTimestamp: -1}).toArray();
 
 			const allHistories = [
 				...filmHistory, 
-				...posterHistory, 
-				...stillsHistory, 
-				...companiesHistory, 
-				...peopleHistory
-			];
+				...photosHistory,
+				...rolesHistory
+			]
 
-			const sortedHistory = await this.db.decodeHistory(allHistories);
-			 // console.log('Sorted history', sortedHistory)
+			return allHistories
+		} catch (err: any) {
+			throw new NotFoundException(err.message)
+		}
+	}
+
+	async findHistory(filmId: string){
+		try {
+			const history = await this.justHistory(filmId);
+			const sortedHistory = await this.mongo.decodeHistory(history);
+			
 			return sortedHistory;
 		} catch (err: any) {
-			console.log(err)
 			throw new NotFoundException(err.message)
 		}
 	}

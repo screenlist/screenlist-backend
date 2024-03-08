@@ -8,7 +8,8 @@ async function bootstrap() {
     transform: true,
     forbidUnknownValues: true,
     stopAtFirstError: true,
-    forbidNonWhitelisted: true
+    forbidNonWhitelisted: true,
+    whitelist: true
   })).enableCors({
     origin: process.env.CLIENT_URL
   })

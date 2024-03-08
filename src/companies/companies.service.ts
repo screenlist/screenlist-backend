@@ -8,61 +8,68 @@ import {
 } from './companies.dto';
 import {
 	Company,
-	CompanyRole,
-	CompanyType,
 	CompanyOpt,
-	CompanyRoleOpt
+	CompanyRoleOpt,
+	Role
 } from './companies.types';
-import { CreateDisplayPhotoDto, UpdateDisplayPhotoDto, UpdateFilmDto } from '../films/films.dto';
-import { ImageOpt } from  '../films/films.types';
-import { HistoryOpt } from '../database/database.types';
+import { PhotoDto } from '../films/films.dto';
+import { Film, ImageOpt, Photo } from  '../films/films.types';
+import { CollectionFields, HistoryOpt, HistoryX } from '../database/database.types';
 import { StorageService } from '../storage/storage.service';
 import { SearchService } from 'src/search/search.service';
+import { CompanySchema} from 'src/search/search.types.';
+import { UserExt } from 'src/users/users.types';
 
 @Injectable()
 export class CompaniesService {
 	constructor(
 		private storage: StorageService,
-		private db: DatabaseService,
+		private mongo: DatabaseService,
 		private search: SearchService
 	){}
 
-	async findAll(): Promise<Company[]>{
-		const query = this.db.createQuery('Company').filter('editVerified', '=', true).order('lastUpdated', {descending: true}).limit(100);
-		try{
-			let [companies] = await this.db.runQuery(query);
-			companies = await Promise.all(
-				companies.map(async (item) => {
-					const photoKey = this.db.key(['Company', +item[this.db.KEY]['id'], 'CompanyPhoto', '0']);
-					const [photo] = await this.db.get(photoKey);
-					item.id = item[this.db.KEY]['id'];
-					item.photo = photo ? {
-						url: photo?.sdUrl,
-						id: photo[this.db.KEY]['name'],
-						credit: photo?.attribution,
-						altText: photo?.description
-					} : null
+	async findAll(page?: number, limit?: number){
+		const	size = limit ? +limit : 50
+		const skip = ( (page ? +page : 1) - 1 ) * size
 
-					return item
+		let query = this.mongo.db.collection<Company>('companies').find({
+			editVerified: true,
+			isHidden: false
+		}).sort({'lastUpdated': -1}).skip(skip).limit(size)
+
+		try {
+			const companies = await query.toArray()
+
+			const data = await Promise.all(
+				companies.map(async (item) => {
+					const photo = await this.mongo.db.collection<Photo>('photos').findOne({parentId: item.id, type: 'image' , photoIndex: 0, parentCollection: 'companies'})
+
+					return {
+						...item,
+						photo: photo ? {
+							url: photo.optimisedDimensions,
+							id: photo.id,
+							credit: photo.attribution,
+							altText: photo.description
+						} : null
+					}
 				})
 			);
-			return companies
+
+			return {
+				data: data,
+				hasNextPage: await query.hasNext()
+			}
 		} catch(err: any) {
 			throw new NotFoundException('Could not retrieve companies');
 		}
 	}
 
 	async findAllUnverified() {
-		const query = this.db.createQuery('Company').filter('editVerified', '=', false).limit(100);
 		try{
-			let [companies] = await this.db.runQuery(query);
-
-			companies = await Promise.all(
-				companies.map((item) => {
-					item.id = item[this.db.KEY]['id'];
-					return item
-				})
-			);
+			let companies = await this.mongo.db.collection<Company>('companies').find({
+				editVerified: false,
+			}).sort({'lastUpdated': 1}).limit(50).toArray()
 
 			return companies
 		} catch {
@@ -70,41 +77,36 @@ export class CompaniesService {
 		}
 	}
 
-	async findOne(id: string): Promise<any>{
-		const companyKey = this.db.key(['Company', +id]);
-		const photoKey = this.db.key(['Company', +id, 'CompanyPhoto', '0']);
-		const rolesQuery = this.db.createQuery('CompanyRole').filter('companyId', '=', id)
+	async findOne(id: string) {
 
 		try {
-			const [details] = await this.db.get(companyKey);
-			const [photo] = await this.db.get(photoKey);
-			details.id = details[this.db.KEY]['id'];
-			details.photo = photo ? {
-				url: photo?.sdUrl,
-				id: photo[this.db.KEY]['name'],
-				credit: photo?.attribution,
-				altText: photo?.description
-			} : null;
+			const company = await this.mongo.db.collection<Company>('companies').findOne({ id: id })
+			const photo = await this.mongo.db.collection<Photo>('photos').findOne({parentCollection: 'companies', parentId: id, photoIndex: 0,  type: 'image'})
+			const details = { 
+				...company, 
+				photo: photo ? {
+					url: photo.optimisedUrl,
+					id: photo.id,
+					credit: photo.attribution,
+					altText: photo.description
+				} : null
+			}
 
-			let [roles] = await this.db.runQuery(rolesQuery);
+			const partialRoles = await this.mongo.db.collection<Role>('roles').find({parentId: id, parentCollection: 'companies'}).toArray()
 
-			roles = await Promise.all(
-				roles.map(async (item) => {
-					const parentKey = this.db.key([item.ownerKind, +item.ownerId]);
-					const posterKey = this.db.key([item.ownerKind, +item.ownerId, 'Poster', '0']);
-
+			const roles = await Promise.all(
+				partialRoles.map(async (item) => {
 					try {
 
-						const [parent] = await this.db.get(parentKey);
-						const [poster] = await this.db.get(posterKey);
+						const owner = await this.mongo.db.collection<Film>('films').findOne({id: item.ownerId})
+						const poster = await this.mongo.db.collection<Photo>('photos').findOne({type: 'poster', parentId: item.ownerId, photoIndex: 0, parentCollection: 'films'})
 
-						const path = `/${item.ownerKind == 'Film' ? 'films' : 'series'}/${item.ownerId}/companies/${item.companyId}/roles/${item[this.db.KEY]['id']}`;
+						const path = `/${item.ownerCollection == 'films' ? 'films' : 'series'}/${item.ownerId}/companies/${item.parentId}/roles/${item.id}`;
 						return {
-							id: item[this.db.KEY]['id'],
 							...item,
-							ownerName: parent.name,
-							posterUrl: poster?.lqUrl,
-							year: parent.year,
+							ownerName: owner.name,
+							posterUrl: poster?.optimisedUrl,
+							year: owner.year,
 							urlPath: path
 						}
 					} catch(err: any) {
@@ -115,19 +117,11 @@ export class CompaniesService {
 
 			const productions = []
 
-			roles.sort((a, b) => {
-				if(a.year > b.year) {
-					return -1
-				} else if (a.year < b.year) {
-					return 1;
-				} else {
-					return 0
-				}
-			}).forEach((item) => {
+			roles.sort((a, b) => a.year - b.year).forEach((item) => {
 				const filmIndex = productions.findIndex((val) => val.ownerId === item.ownerId)
 				const capacity = [{
-					companyId: item.companyId,
-					capacity: item.capacity ? item.capacity : item.type,
+					companyId: item.parentId,
+					capacity: item.role,
 					urlPath: item.urlPath,
 					id: item.id
 				}]
@@ -151,56 +145,152 @@ export class CompaniesService {
 		}
 	}
 
-	async createOne(data: CreateCompanyDto, opt: CompanyOpt){
+	async findOneDetailsOnly(id: string){
 		try {
-			const {entity, history} = await this.db.createCompanyEntity(data, opt);
-			return { id: entity.key.id, ...entity.data };
-		} catch(err: any) {
-			throw new BadRequestException(err.message)
+			return this.mongo.db.collection<Company>('companies').findOne({id: id})
+		} catch (err: any) {
+			throw new NotFoundException()
 		}
 	}
 
-	async updateOne(data: UpdateCompanyDto, opt: CompanyOpt){
+	async createOne(data: CreateCompanyDto, opt: CompanyOpt){
 		try {
-			const {entity, history} = await this.db.updateCompanyEntity(data, opt);
-			return { id: entity[this.db.KEY]['id'], ...entity }
+			const company: Company = {
+				id: await this.mongo.generateUniqueId('companies', 12),
+				...data,
+				created: opt.time,
+				lastUpdated: opt.time,
+				editVerified: false,
+				lastVerified: opt.time,
+				editLocked: false,
+				isHidden: false
+			}
+			await this.mongo.insertOne(company, 'companies');
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'companies',
+				id: company.id,
+				action: 'create',
+				time: opt.time,
+			}
+			await this.mongo.createHistory(historyObj);
+
+			const searchRecord: CompanySchema = {
+				id: company.id,
+				name: company.name,
+				founder: company.founder,
+				director: company.director,
+				founded: company.founded,
+				description: company.description,
+				country: company.country,
+				city: company.city,
+				created: this.mongo.dateToBigInt(company.created),
+				lastUpdated: this.mongo.dateToBigInt(company.lastUpdated)
+			}
+			// await this.algolia.initIndex('companies').saveObject(searchRecord).wait();
+			await this.search.client.collections('companies').documents().create(searchRecord);
+
+			return company
+		} catch (err: any) {
+			throw new NotFoundException(err.message);
+		}
+	}
+
+	async updateOne(data: UpdateCompanyDto, opt: CompanyOpt, remove?: CollectionFields<Company>){
+		if(remove && typeof remove === 'object'){ throw new BadRequestException('Provide an array for properties to remove') }
+
+		try {
+			const entity = await this.mongo.db.collection<Company>('companies').findOne({id: opt.companyId})
+			const dataBefore = {...entity};
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			if(entity.editLocked === true){ throw new BadRequestException("Edit locked") }
+
+			for (const key in data) {
+				entity[key] = data[key]
+			}
+
+			entity.lastUpdated = opt.time
+
+			await this.mongo.updateOne(entity, 'companies', remove)
+			
+			const updated = await this.mongo.db.collection<Company>('companies').findOne({id: opt.companyId})
+
+			const dataAfter = {...updated};
+			const historyObj: HistoryOpt = {
+				dataObject: dataAfter,
+				prevDataObject: dataBefore,
+				user: opt.user,
+				kind: 'companies',
+				id: opt.companyId,
+				action: 'update',
+				time: opt.time,
+			}
+			const history = await this.mongo.createHistory(historyObj);
+
+			const searchRecord: Partial<CompanySchema> = {
+				name: updated.name,
+				founder: updated.founder,
+				director: updated.director,
+				founded: updated.founded,
+				description: updated.description,
+				country: updated.country,
+				city: updated.city,
+				lastUpdated: this.mongo.dateToBigInt(updated.lastUpdated)
+			}
+			await this.search.client.collections('companies').documents(opt.companyId).update(searchRecord);
+
+			if(entity.name !== updated.name){
+				await this.mongo.db.collection<Role>('roles').updateMany({
+					parentCollection: 'companies',
+					parentId: updated.id
+				}, { $set: { parentName: updated.name } })
+			}
+
+			return updated
 		} catch(err: any){
-			throw new BadRequestException(err.message)
+			// console.log(err)
+			throw new BadRequestException(err.message);
 		}
 	}
 
 	async deleteOne(opt: CompanyOpt){
-		const companyKey = this.db.key(['Company', +opt.companyId]);
-		const entities = [companyKey]; // entites to be deleted
-		const rolesQuery = this.db.createQuery('CompanyRole').hasAncestor(companyKey);
 		try {
-			const [roles] = await this.db.runQuery(rolesQuery);
-			const [company] = await this.db.get(companyKey);
+			const roles = await this.mongo.db.collection<Role>('roles').find({parentCollection: 'companies', parentId: opt.companyId}).toArray();
+			const company = await this.mongo.db.collection<Company>('companies').findOne({id: opt.companyId})
 			const historyObj: HistoryOpt = {
 				dataObject: company,
-				kind: 'Company',
-				id: companyKey.id,
+				kind: 'companies',
+				id: company.id,
 				time: opt.time,
 				action: 'delete',
 				user: opt.user
 			}
-			await this.db.createHistory(historyObj);
-			roles.forEach(async (role) => {
-				const roleKey = role[this.db.KEY];
-				entities.push(roleKey);
-				const roleHistoryObj: HistoryOpt = {
-					dataObject: role,
-					kind: 'CompanyRole',
-					id: roleKey.id,
-					time: opt.time,
-					action: 'delete',
-					user: opt.user
-				}
-				await this.db.createHistory(roleHistoryObj);
-			})
-			// await this.db.algolia.initIndex('companies').deleteObject(companyKey.id);
-			await this.search.client.collections('companies').documents(companyKey.id).delete();
-			await this.db.delete(entities);
+			await this.mongo.createHistory(historyObj);
+			await Promise.all(
+				roles.map(async (role) => {
+					const roleHistoryObj: HistoryOpt = {
+						dataObject: role,
+						kind: 'roles',
+						id: role.id,
+						time: opt.time,
+						action: 'delete',
+						user: opt.user,
+						pId: opt.companyId,
+						pKind: 'companies'
+					}
+					await this.mongo.createHistory(roleHistoryObj);
+				})
+			)
+			
+			await this.search.client.collections('companies').documents(company.id).delete();
+			await this.mongo.db.collection<Role>('roles').deleteMany({parentCollection: 'companies', parentId: opt.companyId});
+			await this.mongo.db.collection<Company>('companies').deleteOne({id: opt.companyId});
 			return { 'status': 'deleted' };
 		} catch(err:any) {
 			throw new BadRequestException(err.message)
@@ -209,59 +299,142 @@ export class CompaniesService {
 
 	async uploadPhoto(opt: ImageOpt, image: Express.Multer.File){
 		try {
-			if(opt.imageId !== '0'){ throw new BadRequestException('Unknown index') }
-			const data = await this.storage.uploadCompanyLogo(image)
-			const dto: CreateDisplayPhotoDto = { ...data }
+			if(opt.index !== 0){ throw new BadRequestException('Unknown index') }
 
-			const {entity, history} = await this.db.createCompanyPhotoEntity(dto, opt);
-			return { id: entity.key.name, ...entity.data }
+			const existing = await this.mongo.db.collection<Photo>('photos').countDocuments({parentCollection: 'companies', parentId: opt.parentId, type: 'image', photoIndex: opt.index})
+			if(existing > 0) {
+				throw new BadRequestException("Too many photos for a single resource");
+			}
+
+			const data = await this.storage.uploadCompanyLogo(image)
+			const photo: Photo = { 
+				...data, 
+				id: await this.mongo.generateUniqueId('photos', 12),
+				type: 'image',
+				uploadedByUser: opt.user,
+				photoIndex: opt.index,
+				parentId: opt.parentId,
+				parentCollection: 'companies',
+				created: opt.time,
+				lastUpdated: opt.time
+			}
+			
+			await this.mongo.insertOne(photo, 'photos')
+
+			// Alert data change to the parent entity
+			await this.mongo.updateOne({
+				id: opt.parentId,
+				editVerified: false,
+				lastUpdated: opt.time
+			}, 'companies');
+
+			const historyObj: HistoryOpt = {
+				dataObject: photo,
+				user: opt.user,
+				kind: 'photos',
+				id: photo.id,
+				action: 'create',
+				time: opt.time,
+				pId: opt.parentId,
+				pKind: opt.parentKind
+			}
+			const history = await this.mongo.createHistory(historyObj);
+
+			const searchRecord: Partial<CompanySchema> = {
+				photoUrl: data.optimisedUrl
+			}
+			// await this.algolia.initIndex('companies').partialUpdateObject(searchRecord).wait();
+			await this.search.client.collections('companies').documents(opt.parentId).update(searchRecord);
+
+			return photo
 		} catch(err: any) {
 			throw new BadRequestException()
 		}
 	}
 
-	async updatePhoto(data: UpdateDisplayPhotoDto , opt: ImageOpt){
+	async updatePhoto(data: PhotoDto , opt: ImageOpt){
 		try {
-			const {entity, history} = await this.db.updateCompanyPhotoEntity(data, opt);
-			return { id: entity[this.db.KEY]['id'], ...entity }
-		} catch {
-			throw new BadRequestException()
+			const entity = await this.mongo.db.collection<Photo>('photos').findOne({
+				parentCollection: 'companies',
+				parentId: opt.parentId,
+				photoIndex: opt.index,
+				type: 'image'
+			})
+			const dataBefore = {...entity};
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				entity[key] = data[key]
+			}
+
+			entity.lastUpdated = opt.time
+
+			const dataAfter = {...entity};
+			await this.mongo.updateOne(entity, 'photos');
+
+			// Alert data change to the parent entity
+			await this.mongo.updateOne({
+				id: opt.parentId,
+				editVerified: false,
+				lastUpdated: opt.time
+			}, 'companies');
+
+			const historyObj: HistoryOpt = {
+				dataObject: dataAfter,
+				prevDataObject: dataBefore,
+				user: opt.user,
+				kind: 'photos',
+				id: entity.id,
+				action: 'update',
+				time: opt.time,
+				pId: opt.parentId,
+				pKind: opt.parentKind
+			}
+			await this.mongo.createHistory(historyObj);
+			return entity
+		} catch(err: any){
+			throw new BadRequestException(err.message)
 		}
 	}
 
 	async removePhoto(opt: ImageOpt){
-		const company: UpdateCompanyDto = {
-			editVerified: false
-		}
-		const companyOptions: CompanyOpt = {
-			time: opt.time,
-			user: opt.user,
-			companyId: opt.parentId
-		}
-
 		try{
-			const photoKey = this.db.key([opt.parentKind, +opt.parentId, 'CompanyPhoto', opt.imageId]);
-			const [photo] = await this.db.get(photoKey);
+			const photo = await this.mongo.db.collection<Photo>('photos').findOne({
+				parentCollection: 'companies',
+				parentId: opt.parentId,
+				photoIndex: opt.index,
+				type: 'image'
+			})
 			const historyObj: HistoryOpt = {
 				dataObject: photo,
 				user: opt.user,
-				kind: 'CompanyPhoto',
-				id: photoKey.name,
+				kind: 'photos',
+				id: photo.id,
 				action: 'delete',
 				time: opt.time,
 				pId: opt.parentId,
 				pKind: opt.parentKind
 			}
-			await this.storage.deleteProfilePhoto(photo.originalName);
-			await this.storage.deleteProfilePhoto(photo.hdName);
-			await this.storage.deleteProfilePhoto(photo.sdName);
-			await this.db.createHistory(historyObj);
-			await this.db.delete(photoKey);
+			await this.storage.deletePhoto(photo.originalName);
+			await this.storage.deletePhoto(photo.optimisedName);
+			await this.mongo.createHistory(historyObj);
+			await this.mongo.db.collection<Photo>('photos').deleteOne({
+				parentCollection: 'companies',
+				parentId: opt.parentId,
+				photoIndex: opt.index,
+				type: 'image'
+			});
 
-			await this.updateOne(company, companyOptions);
+			await this.mongo.updateOne({
+				id: opt.parentId,
+				editVerified: false
+			}, 'companies');
 
-			const searchRecord = {
-				posterUrl: null
+			const searchRecord: Partial<CompanySchema> = {
+				photoUrl: null
 			}
 			await this.search.client.collections('companies').documents(opt.parentId).update(searchRecord);
 
@@ -277,8 +450,40 @@ export class CompaniesService {
 		}
 
 		try {
-			const {entity, history} = await this.db.createCompanyRoleEntity(data, opt);
-			return { id: entity.key.id, ...entity.data }
+			const film = await this.mongo.db.collection<Film>('films').findOne({id: opt.parentId})
+
+			const role: Role = {
+				id: await this.mongo.generateUniqueId('roles', 12),
+				parentCollection: 'companies',
+				parentId: opt.companyId,
+				parentName: data.companyName,
+				ownerCollection: 'films',
+				ownerId: opt.parentId,
+				ownerName: film.name,
+				role: data.capacity,
+				lastUpdated: opt.time,
+				created: opt.time
+			}
+			await this.mongo.insertOne(role, 'roles')
+
+			film.editVerified = false
+			film.lastUpdated = opt.time
+			await this.mongo.updateOne(film, 'films')
+
+			// Create history
+			const historyObj: HistoryOpt = {
+				dataObject: role,
+				user: opt.user,
+				kind: 'roles',
+				id: role.id,
+				action: 'create',
+				time: opt.time,
+				pId: opt.parentId,
+				pKind: opt.parentKind
+			}
+			await this.mongo.createHistory(historyObj);
+
+			return role
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
@@ -286,29 +491,58 @@ export class CompaniesService {
 
 	async updateOneRole(data: UpdateCompanyRoleDto, opt: CompanyRoleOpt){
 		try {
-			const entityData = await this.db.updateCompanyRoleEntity(data, opt);
-			return { id: entityData.entity[this.db.KEY]['id'], ...entityData.entity }
+			const entity = await this.mongo.db.collection<Role>('roles').findOne({id: opt.roleId})
+			const dataBefore = {...entity};
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				entity[key] = data[key]
+			}
+
+			entity.lastUpdated = opt.time
+
+			const dataAfter = {...entity};
+			await this.mongo.updateOne(entity, 'roles');
+
+			// Alert data change to the parent entity
+			await this.mongo.updateOne({
+				id: opt.parentId,
+				editVerified: false,
+				lastUpdated: opt.time
+			}, 'films');
+
+
+			// Creates history
+			const historyObj: HistoryOpt = {
+				dataObject: dataAfter,
+				prevDataObject: dataBefore,
+				user: opt.user,
+				kind: 'roles',
+				id: entity.id,
+				action: 'update',
+				time: opt.time,
+				pId: opt.parentId,
+				pKind: opt.parentKind
+			}
+			await this.mongo.createHistory(historyObj);
+
+			return entity
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
 	}
 
 	async deleteOneRole(opt: CompanyRoleOpt){
-		const filmKey = this.db.key([opt.parentKind, +opt.parentId]);
-
-		const roleKey = this.db.key([
-			'Company', 
-			+opt.companyId,
-			'CompanyRole', 
-			+opt.roleId
-		]);
 
 		try {
-			const [role] = await this.db.get(roleKey);
+			const role = await this.mongo.db.collection<Role>('roles').findOne({id: opt.roleId})
 			const historyObj: HistoryOpt = {
 				dataObject: role,
-				kind: 'CompanyRole',
-				id: roleKey.id,
+				kind: 'roles',
+				id: role.id,
 				time: opt.time,
 				action: 'delete',
 				user: opt.user,
@@ -316,13 +550,14 @@ export class CompaniesService {
 				pId: opt.parentId
 			}
 
-			await this.db.delete(roleKey);
-			await this.db.createHistory(historyObj);
-
-			const [film] = await this.db.get(filmKey);
-			film.editVerified = false;
-			film.lastUpdated = opt.time;
-			await this.db.update(film);
+			await this.mongo.db.collection<Role>('roles').deleteOne({id: opt.roleId});
+			await this.mongo.createHistory(historyObj);
+			
+			await this.mongo.updateOne({
+				id: opt.parentId,
+				editVerified: false,
+				lastUpdated: opt.time
+			}, 'films');
 			
 			return { 'status': 'deleted' };
 		} catch (err: any){
@@ -331,51 +566,123 @@ export class CompaniesService {
 	}
 
 	// Settings methods
-	async verifyEdit(user: string, id: string){
+	async verifyEdit(id: string){
 		const time = new Date();
-		const companyOptions: CompanyOpt = {
-			user: user,
-			time: time,
-			companyId: id
-		}
-		const data: UpdateCompanyDto = {
-			editVerified: true
-		}
 		try {
-			const {entity, history} = await this.db.updateCompanyEntity(data, companyOptions);
-			return entity;
+			const history = await this.justHistory(id)
+			const reputations = this.mongo.determineUserReputation(history);
+			await Promise.all(
+				reputations.map(async score => {
+					try {
+						const user = await this.mongo.db.collection<UserExt>('users').findOne({id: score[0]})
+						user.reputation += score[1]
+						await this.mongo.updateOne(user, 'users')
+					} catch (err: any){}
+				})
+			)
+
+			await this.mongo.updateOne({
+				id: id,
+				editVerified: true,
+				lastVerified: time
+			}, 'companies')
+
+			return {status: 'success'};
 		} catch (err: any){
 			// console.log(err)
 			throw new BadRequestException(err.message);
 		}
 	}
 
-	// History
-	async findHistory(companyId: string){
-		const companyKey = this.db.key(['Company', +companyId]);
+	async hideFilm(id: string){
 		try {
-			const [company] = await this.db.get(companyKey);
+			await this.mongo.updateOne({
+				id: id,
+				isHidden: true
+			}, 'companies')
+			return {status: 'success'};
+		} catch(err: any){
+			throw new BadRequestException()
+		}
+	}
 
-			const [companyHistory] = await this.db.createQuery('History')
-				.filter('xKind', '=', 'Company')
-				.filter('xIdentifier', '=', companyId)
-				.filter('xTimestamp', '>', new Date(company.lastVerified))
-				.order('xTimestamp', {descending: true}).run();
+	async unhideFilm(id: string){
+		try {
+			await this.mongo.updateOne({
+				id: id,
+				isHidden: false
+			}, 'companies')
+			return {status: 'success'};
+		} catch(err: any){
+			throw new BadRequestException()
+		}
+	}
 
-			const [photoHistory] = await this.db.createQuery('History')
-				.filter('xKind', '=', 'CompanyPhoto')
-				.filter('xIdentifier', '=', '0')
-				.filter('wKind', '=', 'Company')
-				.filter('wIdentifier', '=', companyId)
-				.filter('xTimestamp', '>', new Date(company.lastVerified))
-				.order('xTimestamp', {descending: true}).run();
+	async lockFilmEdit(id: string){
+		try {
+			await this.mongo.updateOne({
+				id: id,
+				editLocked: true
+			}, 'companies')
+			return {status: 'success'};
+		} catch(err: any){
+			throw new BadRequestException()
+		}
+	}
+
+	async unlockFilmEdit(id: string){
+		try {
+			await this.mongo.updateOne({
+				id: id,
+				editLocked: false
+			}, 'companies')
+			return {status: 'success'};
+		} catch(err: any){
+			throw new BadRequestException()
+		}
+	}
+
+	// History
+	async justHistory(companyId: string){
+		try {
+			const company = await this.mongo.db.collection<Company>('companies').findOne({id: companyId})
+			const logo = await this.mongo.db.collection<Photo>('photos').findOne({
+				photoIndex: 0,
+				parentCollection: 'companies',
+				parentId: companyId,
+				type: 'image'
+			})
+
+			const companyHistory = await this.mongo.db.collection<HistoryX>('history').find({
+				xKind: 'companies',
+				xIdentifier: companyId,
+				xTimestamp: {$gt: company.lastVerified}
+			}).sort({xTimestamp: -1}).toArray();
+
+			const photoHistory = await this.mongo.db.collection<HistoryX>('history').find({
+				xKind: 'photos',
+				xIdentifier: logo.id,
+				wKind: 'companies',
+				wIdentifier: companyId,
+				xTimestamp: {$gt: company.lastVerified} 
+			}).sort({xTimestamp: -1}).toArray();
 
 			const allHistories = [
 				...companyHistory, 
 				...photoHistory
 			];
 
-			const sortedHistory = await this.db.decodeHistory(allHistories);
+			return allHistories
+		} catch (err: any) {
+			throw new NotFoundException(err.message)
+		}
+	}
+
+	async findHistory(companyId: string){
+		try {
+			const history = await this.justHistory(companyId);
+
+			const sortedHistory = await this.mongo.decodeHistory(history);
 			 // console.log('Sorted history', sortedHistory)
 			return sortedHistory;
 		} catch (err: any) {

@@ -75,31 +75,6 @@ export class CreatePersonDto {
 	@IsOptional()
 	@IsFQDN()
 	website: string;
-
-	@IsOptional()
-	@IsEmpty()
-	editVerified?: boolean;
-
-	@IsOptional()
-	@IsEmpty()
-	isHidden?: boolean;
-
-	@IsOptional()
-	@IsEmpty()
-	editLocked?: boolean;
-
-	@IsOptional()
-	@IsEmpty()
-	@IsDate()
-	lastVerified?: Date;
-
-	@IsOptional()
-	@IsDate()
-	created: Date;
-
-	@IsOptional()
-	@IsDate()
-	lastUpdated: Date;
 }
 
 export class UpdatePersonDto {
@@ -168,78 +143,7 @@ export class UpdatePersonDto {
 	@IsString()
 	@MaxLength(30)
 	instagramUsername?: string;
-
-	@IsOptional()
-	@IsEmpty()
-	editVerified?: boolean;
-
-	@IsOptional()
-	@IsEmpty()
-	isHidden?: boolean;
-
-	@IsOptional()
-	@IsEmpty()
-	editLocked?: boolean;
-
-	@IsOptional()
-	@IsEmpty()
-	@IsDate()
-	lastVerified?: Date;
-
-	@IsOptional()
-	@IsDate()
-	lastUpdated?: Date;
 }
-
-// export class PersonDraftDto {
-// 	@IsOptional()
-// 	@IsString()
-// 	@MaxLength(60)
-// 	name?: string;
-
-// 	@IsOptional()
-// 	@IsString()
-// 	@MaxLength(60)
-// 	occupation?: string;
-
-// 	@IsEmpty()
-// 	profilePhotoUrl?: string;
-
-// 	@IsEmpty()
-// 	profilePhotoOriginalName?: string;
-
-// 	@IsOptional()
-// 	@MaxLength(500)
-// 	description?: string;
-
-// 	@IsOptional()
-// 	@IsFQDN()
-// 	website?: string;
-
-// 	@IsOptional()
-// 	@IsString()
-// 	@MaxLength(15)
-// 	twitterUsername?: string;
-
-// 	@IsOptional()
-// 	@IsString()
-// 	@MaxLength(30)
-// 	instagramUsername?: string;
-
-// 	@IsOptional()
-// 	@IsDate()
-// 	created?: Date;
-
-// 	@IsOptional()
-// 	@IsString()
-// 	@IsEmpty()
-// 	xUserUid: string;
-
-// 	@IsOptional()
-// 	@IsBoolean()
-// 	@IsEmpty()
-// 	xApproved?: boolean;
-// }
 
 export class CreatePersonRoleDto {
 	@IsNotEmpty()
@@ -279,14 +183,6 @@ export class CreatePersonRoleDto {
 	@IsOptional()
 	@MaxLength(150)
 	characterDescription?: string;
-
-	@IsOptional()
-	@IsDate()
-	lastUpdated?: Date;
-
-	@IsOptional()
-	@IsDate()
-	created?: Date;
 }
 
 export class UpdatePersonRoleDto {
@@ -309,65 +205,4 @@ export class UpdatePersonRoleDto {
 	@IsOptional()
 	@MaxLength(150)
 	characterDescription?: string;
-
-	@IsOptional()
-	@IsDate()
-	lastUpdated?: Date;
 }
-
-// export class PersonRoleDraftDto {
-// 	@IsNotEmpty()
-// 	@IsString()
-// 	@MaxLength(60)
-// 	personName: string;
-
-// 	@IsOptional()
-// 	@IsString()
-// 	personId?: string;
-
-// 	@IsOptional()
-// 	@IsString()
-// 	ownerKind?: string;
-
-// 	@IsOptional()
-// 	@IsString()
-// 	ownerId: string;
-
-// 	@IsNotEmpty()
-// 	@MaxLength(30)
-// 	title: string;
-
-// 	@IsNotEmpty()
-// 	@MaxLength(20)
-// 	department: string;
-
-// 	@IsNotEmpty()
-// 	@MaxLength(20)
-// 	category: string;
-
-// 	@IsOptional()
-// 	@IsString()
-// 	@MaxLength(60)
-// 	characterName?: string;
-
-// 	@IsOptional()
-// 	@MaxLength(150)
-// 	characterDescription?: string;
-
-// 	@IsOptional()
-// 	@IsDate()
-// 	created?: Date;
-
-// 	@IsOptional()
-// 	@IsString()
-// 	xUserUid: string;
-
-// 	@IsOptional()
-// 	@IsString()
-// 	xKind: string;
-
-// 	@IsOptional()
-// 	@IsBoolean()
-// 	@IsEmpty()
-// 	xApproved?: boolean;
-// }

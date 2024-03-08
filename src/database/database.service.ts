@@ -1,93 +1,102 @@
-import { Injectable, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { Datastore, Query } from '@google-cloud/datastore';
-import * as path from 'path';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import algoliasearch from 'algoliasearch';
-import { HistoryOpt, CursorTypes } from './database.types';
-import { 
-	Film, 
-	Poster, 
-	Still,
-	ImageOpt,
-	RatingOpt
+import { HistoryOpt, ImmutableFields, Collection, CollectionFields, HistoryX, Hit, DecodedHistory } from './database.types';
+import {
+	Rating,
 } from '../films/films.types';
-import {
-	CreateStillDto,
-	UpdateStillDto,
-	CreatePosterDto,
-	UpdatePosterDto,
-	CreateListRatingDto,
-	UpdateListRatingDto,
-	CreateDisplayPhotoDto,
-	UpdateDisplayPhotoDto,
-	CreateContentPhotoDto,
-	UpdateContentPhotoDto
-} from '../films/films.dto';
-import {
-	CreateCompanyRoleDto,
-	UpdateCompanyRoleDto,
-	CreateCompanyDto,
-	UpdateCompanyDto
-} from '../companies/companies.dto';
-import { 
-	Company,	
-	CompanyRole, 
-	CompanyRoleOpt,
-	CompanyOpt
-} from '../companies/companies.types';
-import {
-	CreatePersonDto,
-	UpdatePersonDto,
-	CreatePersonRoleDto,
-	UpdatePersonRoleDto
-} from '../people/people.dto';
-import {
-	Person,
-	PersonRole,
-	PersonOpt,
-	PersonRoleOpt
-} from '../people/people.types';
-import { 
-	CreateUserDto,  
-	UpdateUserDto,
-	CreateVotesDto,
-	UpdateVotesDto,
-	CreateRequestDto,
-	UpdateRequestDto,
-	CreateJournalistInfoDto,
-	UpdateJournalistInfoDto
-} from '../users/users.dto';
-import { UserOpt, VoteOpt, RequestOpt } from '../users/users.types';
-import {
-	CreateContentDto,
-	UpdateContentDto
-} from '../content/content.dto';
-import { ContentOpt } from '../content/content.types';
-import { AuthService } from '../auth/auth.service';
-import { SearchService } from '../search/search.service';
-import fetch from 'cross-fetch';
+import { UserExt } from '../users/users.types';
+import { MongoClient, Db, OptionalUnlessRequiredId, Filter } from 'mongodb';
 
 @Injectable()
-export class DatabaseService extends Datastore{
-	constructor(private configService: ConfigService, private authService: AuthService, private search: SearchService){
-		super()
+export class DatabaseService {
+	constructor(private config: ConfigService){
+		this.connectDB()
 	}
 
-	// Initialise AlgoliaSearch
-	public algolia = algoliasearch(this.configService.get('ALGOLIA_ID'), this.configService.get('ALGOLIA_API'))
+	// Mongo
+	private client: MongoClient
+	public db: Db
 
-	// Runs the runQuery method but explicity exposes entity id in return
-	async runQueryFull(query: Query){
-		const [objects, info] = await this.runQuery(query)
-		return objects.map(obj => {
-			obj.id = obj[this.datastore.KEY]["id"]
-			return obj
-		})
+	private async connectDB(){              
+		try {
+			this.client = await new MongoClient(this.config.get('ATLAS_URI')).connect();
+			this.db = this.client.db(this.config.get('MONGO_DATABASE'));
+			console.log('Connected to MongoDB on the '+this.config.get('MONGO_DATABASE')+' database.')
+		} catch(err: any) {
+			console.log("Error: "+err.message)
+		} finally {
+			// Ensures that the client will close when you finish/error
+			await new MongoClient(this.config.get('ATLAS_URI')).close()
+		}
 	}
 
-	removeKey(obj){
-		delete obj[this.KEY]
-		return obj
+	private async enforceUnique(collection: string, idValue: string): Promise<void> {
+		try {
+			const count = await this.db.collection(collection).countDocuments({id: idValue})
+			if(count > 0) { throw new BadRequestException(`Error: duplicate ${collection} values`) }
+		} catch(err: any){
+			throw new BadRequestException(err.message)
+		}
+	}
+
+	public generateId(): string {
+		return Date.now().toString()
+	}
+
+	private generateRandomString(length: number) {
+		const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+		let randomString = '';
+
+		for (let i = 0; i < length; i++) {
+			const randomIndex = Math.floor(Math.random() * charset.length);
+			randomString += charset.charAt(randomIndex);
+		}
+
+		return randomString;
+	}
+
+	public async generateUniqueId(collection: Collection, length: number): Promise<string> {
+		const uid = this.generateId()+this.generateRandomString(length);
+		try {
+			const exist = await this.db.collection(collection).countDocuments({ id: uid });
+
+			if(exist > 0){
+				return await this.generateUniqueId(collection, length);
+			}
+
+			return uid;
+		} catch (err: any){
+			throw new BadRequestException(err.message)
+		}
+	}
+
+	public async insertOne<T extends ImmutableFields>(data: OptionalUnlessRequiredId<T>, collection: Collection){
+		try {
+			await this.enforceUnique(collection, data.id)
+			const doc = await this.db.collection<T>(collection).insertOne(data)
+			return doc
+		} catch(err: any){
+			throw new BadRequestException(err.message)
+		}
+	}
+
+	public async updateOne<T extends ImmutableFields>(data: T, collection: Collection, unset?: CollectionFields<T>){
+		let filteredUnsetValues: (keyof T)[];
+		if(unset){ filteredUnsetValues = unset.filter(val => val !== 'id') }
+		let valuesToRemove: any
+		if(filteredUnsetValues){
+			for( const val of filteredUnsetValues){
+				delete data[val]
+				valuesToRemove[val] = ''
+			}
+		}
+		try {                   
+			const {id, ...others } = data
+			const { value } = await this.db.collection<T>(collection).findOneAndUpdate({id: id} as Filter<T>, { $set: others as Partial<T>, $unset: valuesToRemove }, {returnDocument: 'after'})
+			return value
+		} catch(err: any){
+			throw new BadRequestException(err.message)
+		}
 	}
 
 	formatTitle(title: string){
@@ -115,31 +124,11 @@ export class DatabaseService extends Datastore{
 		return Math.floor(Number(new Date(date))/1000);
 	}
 
-	async recursiveQueries(cursor: string, query: any) {
-		const queryTakeOff = query.start(cursor);
-		
-		const results = await this.runQuery(queryTakeOff);
-		const entities = results[0];
-		let info = results[1];
-	
-		if (info.moreResults !== Datastore.NO_MORE_RESULTS) {
-			const nextResults = await this.recursiveQueries(info.endCursor, query);
-	
-			// Concatenate entities
-			results[0] = entities.concat(nextResults[0]);
-			info = nextResults[1];
-		}
-	
-		return {entities, info};
-	}
 
 	// History methods
 	async createHistory(opt: HistoryOpt){
-		const key = this.key('History');
-
-		const write =  {
-			key: key,
-			data: {
+		try {
+			const history: HistoryX = {
 				xBefore: opt.prevDataObject,
 				xAfter: opt.dataObject,
 				xIdentifier: opt.id,
@@ -149,31 +138,23 @@ export class DatabaseService extends Datastore{
 				xAction: opt.action,
 				xUser: opt.user,
 				xTimestamp: opt.time,
+				id: await this.generateUniqueId('history', 36)
 			}
-		}
-
-		try {
-			await this.insert(write)
-			return write
+			await this.insertOne(history, 'history')
+			return history
 		} catch (err: any) {
 			throw new BadRequestException(err.message);
 		}
 	}
 
-	historyFiltration(obj: any){
+	historyFiltration(obj: HistoryX){
 		const before = obj.xBefore;
 		const after = obj.xAfter;
-		// const after = {...before};
 		const action = obj.xAction;
 		const time = obj.xTimestamp;
 		const user = obj.xUser;
-		const oid = obj.xIdentifier;
-		const id = obj[this.KEY]['id'];
-		// console.log(oid, action, obj.xKind, time)
-
-		// for (const key in input) {
-		// 	after[key] = input[key];
-		// }
+		const oid = obj.xIdentifier; // document id
+		const id = obj.id;
 
 		const excludedProps = [
 			'created', 'lastUpdated', 'editVerified',
@@ -187,10 +168,21 @@ export class DatabaseService extends Datastore{
 			'hdName', 'sdName', 'sdUrl', 
 			'sdDimensions', 'sdSize', 'lqName',
 			'lqUrl', 'lqDimensions', 'lqSize', 
-			'source', 'sourceLink', 'hasPoster'
+			'source', 'sourceLink', 'hasPoster', 'id',
+			'parentCollection', 'ownerCollection', 'optimisedUrl',
+			'optimisedName', 'optimisedSize', 'optimisedDimensions'
 		]
 
-		const results = []
+		const results: {
+			before: any;
+			after: any;
+			property: string;
+			message: 'update' |'create' | 'delete';
+			userUid: string;
+			time: Date;
+			id: string;
+			oid: string;
+		}[] = []
 		// console.log('before', typeof before, action, obj.xKind, oid, time)
 		// console.log('after', typeof after, action, obj.xKind, oid, time)
 		if(action === 'update' && typeof before === 'object' && typeof after === 'object'){
@@ -270,27 +262,29 @@ export class DatabaseService extends Datastore{
 		return results
 	}
 
-	async decodeHistory(arr: any[]){
-		const results = []
+	async decodeHistory(arr: HistoryX[]){
+		const results: {
+			before: any;
+			after: any;
+			property: string;
+			message: 'update' |'create' | 'delete';
+			userUid: string;
+			time: Date;
+			id: string;
+			oid: string;
+		}[] = []
 		try {			
 			for(let i = 0; i < arr.length; i++){
 				let actions = this.historyFiltration(arr[i]);
 				actions = await Promise.all(
 					actions.map(async (val) => {
-						const userKey = this.key(['User', val.userUid]);
-						const [user] = await this.get(userKey);
+						const user = await this.db.collection<UserExt>('users').findOne({id: val.userUid})
 						
-						if(user){val['username'] = user.userName}
+						if(user){val['username'] = user.username}
 
 						return val
 					})
 				)
-				// for(let i = 0; i < actions.length; i++){
-				// 	const action = actions[i];
-				// 	const userKey = this.key(['User', action.userUid]);
-				// 	const [user] = await this.get(userKey);
-				// 	actions[i]['username'] = user.userName;
-				// }
 				results.push(...actions)
 			}
 
@@ -302,9 +296,181 @@ export class DatabaseService extends Datastore{
 				}
 			})
 		} catch (err: any) {
-			console.log(err)
 			throw new BadRequestException(err.message)
 		}
+	}	
+
+	determineUserReputation(history: HistoryX[]){
+		const userScore: {[key: string]: number} = {}
+		const modifications: {[key: string]: {
+			[key: string]: {
+				before: any;
+				after: any;
+				property: string;
+				message: 'update' |'create' | 'delete';
+				userUid: string;
+				time: Date;
+				id: string;
+				oid: string;
+			}[]
+		}} = {}
+
+		// Get individual property edits
+		const edits = history.map(item => this.historyFiltration(item)).flat().sort((a, b) => a.time > b.time ? 1 : -1)
+
+		// Map the properties
+		for(const edit of edits){
+			userScore[edit.userUid] = userScore[edit.userUid] || 2;
+
+			// Add document to modifications if it doesn't exist
+			if(!modifications[edit.oid]){ modifications[edit.oid] }
+
+			// Add a property to the document on the modifications if it doesn't exist
+			if(!modifications[edit.oid][edit.property]){ modifications[edit.oid][edit.property] }
+
+			// Add the edit of the specific property to the appropitate document
+			modifications[edit.oid][edit.property].push(edit)
+		}
+
+		// Function for point assignment
+		const assignPoints = (userId: string, points: number) => {
+			if(!userScore[userId]){ userScore[userId] = 2 }
+			userScore[userId] += points
+		}
+
+		// Iterate through each document and property modification to assign points to contributor
+		for (const documentId in modifications){
+			const properties = modifications[documentId]
+
+			for (const propertyName in properties){
+				 const modification = properties[propertyName]
+
+				for(let i = 0; i < modification.length - 1; i++){
+					const currentState = modification[i]
+					const nextState = modification[i]
+
+					if(currentState.userUid !== nextState.userUid){
+
+						if(nextState.message === 'update'){
+							assignPoints(currentState.userUid, -1)
+							assignPoints(nextState.userUid, 1)
+						} else if(nextState.message === 'delete'){
+							assignPoints(nextState.userUid, -2)
+						} else if(nextState.message === 'create'){
+							assignPoints(nextState.userUid, 2)
+						}
+
+					}
+				}
+
+			}
+
+		}
+
+		return Object.entries(userScore)
+
+	}
+
+	async get24HourEdits(userId: string){
+		const oneDayAgo = new Date(Number(new Date)-(1000*60*60*24));
+		try {
+			const editsSoFar = await this.db.collection<HistoryX>('history').countDocuments({
+				xUser: userId,
+				xTimestamp: {$gt: oneDayAgo}
+			})
+			return editsSoFar
+		} catch(err: any){
+			throw new NotFoundException()
+		}
+	}
+
+	async validateEditsQuota(userId: string){
+		try {
+			const edits = await this.get24HourEdits(userId)
+			const valid = edits > 15 ? false : true
+			return valid
+		} catch (err: any){
+			throw new BadRequestException('You have your daily quota')
+		}
+	}
+
+	// Frequency methods
+	async addHit(kind: Collection, id: string){
+		try {
+			const hit: Hit = {
+				id: await this.generateUniqueId('hits', 36),
+				collection: kind,
+				identifier: id,
+				time: new Date
+			}
+			await this.insertOne(hit, 'hits');
+			return hit
+		} catch (err: any){
+			throw new BadRequestException()
+		}
+	}
+
+	// List Rating Methods
+	async calculateRatingScore(results: Rating[]){
+		try{
+			// 33% ratings total + 33% critics sample + 33% total critics reputation
+			
+
+			const critics = await this.db.collection<UserExt>('users').find({role: 'journalist'}).toArray()
+			const sampleCap = critics.length;
+			const totalRatings = results.length;
+
+			const totalCriticsScore = critics.reduce((sumSoFar, critic) => sumSoFar + ( critic.criticScore ? critic.criticScore : 0 ) , 0)
+			const thisFilmCriticsScore = critics.filter( item => { 
+				const hasReviewedThisFilm = results.filter(val => val.authorUid === item.id).length > 0 ? true : false
+				return hasReviewedThisFilm
+			} ).reduce((sum, item) => sum + ( item.criticScore ? item.criticScore : 0 ) , 0)
+
+			const upLists = results.filter((val) => val.listRating == 'u').length;
+			const neutralLists = results.filter((val) => val.listRating == 'n').length;
+			const downLists = results.filter((val) => val.listRating == 'd').length;
+			
+			const upPoints = upLists*1;
+			const neutralPoints = neutralLists*0.5;
+			const downPoints = downLists*0.1;
+
+			const averageRatingsPercentage = ((upPoints+neutralPoints+downPoints)/totalRatings)*100;
+			const criticsSamplePercentage = (totalRatings/sampleCap)*100;
+			const criticScorePercentage = (thisFilmCriticsScore/totalCriticsScore)*100;
+			
+			const listScore = ((averageRatingsPercentage+criticsSamplePercentage+criticScorePercentage)/300)*100;
+
+			const info = {
+				up: upLists,
+				neutral: neutralLists,
+				down: downLists,
+				totalRatings: totalRatings,
+				listScore: Math.round(listScore)
+			}
+
+			return info
+		} catch(err: any){
+			throw new BadRequestException(err.message);
+		}
+	}
+
+	/**
+	async recursiveQueries(cursor: string, query: any) {
+		const queryTakeOff = query.start(cursor);
+		
+		const results = await this.runQuery(queryTakeOff);
+		const entities = results[0];
+		let info = results[1];
+	
+		if (info.moreResults !== Datastore.NO_MORE_RESULTS) {
+			const nextResults = await this.recursiveQueries(info.endCursor, query);
+	
+			// Concatenate entities
+			results[0] = entities.concat(nextResults[0]);
+			info = nextResults[1];
+		}
+	
+		return {entities, info};
 	}
 
 	// Search methods
@@ -325,7 +491,11 @@ export class DatabaseService extends Datastore{
 			let [filmsResults, filmsOptions] = await this.runQuery(filmsQuery);
 			filmsResults = await Promise.all(
 				filmsResults.map(async (item) => {
-					const [photo] = await this.get(this.key(['Film', +item[this.KEY]['id'],'Poster', '1']));
+					const [photo] = await this.get(this.key(['Film', +item[this.KEY]['id'],'Poster', '0']));
+					const [directors] = await this.createQuery('PersonRole').filter('ownerKind', '=', 'Film').filter('ownerId', '=', item[this.KEY]['id']).filter('title', '=', 'Director').run()
+					const directorNames = directors.map(val => val.personName)
+					// console.log(directors.length, item.name)
+					// console.log(photo?.hdUrl, item.name)
 					return {
 						id: item[this.KEY]['id'],
 						name: item.name,
@@ -338,7 +508,9 @@ export class DatabaseService extends Datastore{
 						initialPlatform: item.initialPlatform,
 						created: this.dateToBigInt(item.created),
 						lastUpdated: this.dateToBigInt(item.lastUpdated),
-						posterUrl: photo?.hdUrl
+						posterUrl: photo?.hdUrl,
+						logline: item.logline,
+						directors: directorNames
 					}
 				})
 			)
@@ -348,6 +520,8 @@ export class DatabaseService extends Datastore{
 				moreFilms.entities = await Promise.all(
 					moreFilms.entities.map(async (item) => {
 						const [photo] = await this.get(this.key(['Film', +item[this.KEY]['id'],'Poster', '0']));
+						const [directors] = await this.createQuery('PersonRole').filter('ownerId', '=', `${item[this.KEY]['id']}`).filter('title', '=', 'Director').run()
+						const directorNames = directors.map(val => val.personName)
 						return {
 							id: item[this.KEY]['id'],
 							name: item.name,
@@ -360,7 +534,9 @@ export class DatabaseService extends Datastore{
 							initialPlatform: item.initialPlatform,
 							created: this.dateToBigInt(item.created),
 							lastUpdated: this.dateToBigInt(item.lastUpdated),
-							posterUrl: photo?.hdUrl
+							posterUrl: photo?.hdUrl,
+							logline: item.logline,
+							directors: directorNames
 						}
 					})
 				)
@@ -551,76 +727,19 @@ export class DatabaseService extends Datastore{
 			const contentJSONlines = content.map((item) => JSON.stringify(item)).join('\n');
 			const usersJSONlines = users.map((item) => JSON.stringify(item)).join('\n');
 
-			const filmsRes = await this.search.client.collections('films').documents().import(filmsJSONlines, {action: 'upsert'});
-			const peopleRes = await this.search.client.collections('people').documents().import(peopleJSONlines, {action: 'upsert'});
-			const companiesRes = await this.search.client.collections('companies').documents().import(companiesJSONlines, {action: 'upsert'});
-			const contentRes = await this.search.client.collections('content').documents().import(contentJSONlines, {action: 'upsert'});
-			const usersRes = await this.search.client.collections('users').documents().import(usersJSONlines, {action: 'upsert'});
-			console.log(filmsRes, peopleRes, companiesRes, contentRes, usersRes)
+			const filmsRes = await this.search.collections('films').documents().import(filmsJSONlines, {action: 'upsert'});
+			const peopleRes = await this.search.collections('people').documents().import(peopleJSONlines, {action: 'upsert'});
+			const companiesRes = await this.search.collections('companies').documents().import(companiesJSONlines, {action: 'upsert'});
+			const contentRes = await this.search.collections('content').documents().import(contentJSONlines, {action: 'upsert'});
+			const usersRes = await this.search.collections('users').documents().import(usersJSONlines, {action: 'upsert'});
+			// console.log(filmsRes, peopleRes, companiesRes, contentRes, usersRes)
 			return {status: 'success'}
 		} catch(err: any) {
 			throw new BadRequestException(err.message)
 		}
 	}
 
-	// Frequency methods
-	async createFrequencyEntity(kind: string, id: string){
-		const frequencyKey = this.key('Frequency')
-		const data = {
-			key: frequencyKey,
-			data: {
-				xKind: kind,
-				xId: id,
-				count: 1
-			}
-		}
-		try {
-			await this.insert(data);
-			// Insert a hit
-			await this.insert({
-				key: this.key('Hit'),
-				data: {
-					xKind: kind,
-					xId: id,
-					time: new Date()
-				}
-			})
-			return data.data;
-		} catch (err: any){
-			throw new BadRequestException()
-		}
-	}
-
-	async updateFrequencyEntity(kind: string, id: string){
-		try {
-			const [arr] = await this.createQuery('Frequency')
-			.filter('xKind', '=', kind)
-			.filter('xId', '=', id).limit(1).run();
-
-			// Insert a hit
-			await this.insert({
-				key: this.key('Hit'),
-				data: {
-					xKind: kind,
-					xId: id,
-					time: new Date()
-				}
-			})
-
-			if(arr.length === 0){
-				return await this.createFrequencyEntity(kind, id);
-			} else {
-				const entity = arr[0];
-				entity.count = entity.count + 1;
-				await this.update(entity);
-				return entity;
-			}
-		} catch(err: any){
-			console.log(err)
-			throw new BadRequestException()
-		}
-	}
-
+	 
 	// Content methods
 	async createContentEntity(data: CreateContentDto, opt: ContentOpt){
 		const contentKey = this.key('Content');
@@ -667,13 +786,13 @@ export class DatabaseService extends Datastore{
 				lastUpdated:this.dateToBigInt(data.lastUpdated)
 			}
 			// await this.algolia.initIndex('content').saveObject(searchRecord).wait();
-			await this.search.client.collections('content').documents().create(searchRecord);
+			await this.search.collections('content').documents().create(searchRecord);
 
 			return {entity, history}
 		} catch(err: any) {
 			throw new NotFoundException(err.message);
 		}
-	}
+	} 
 
 	async updateContentEntity(data: UpdateContentDto, opt: ContentOpt, entity: any){
 		const contentKey = this.key(['Content', +opt.contentId]);
@@ -729,13 +848,13 @@ export class DatabaseService extends Datastore{
 				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
 			// await this.algolia.initIndex('content').partialUpdateObject(searchRecord).wait();
-			await this.search.client.collections('content').documents(entity[this.KEY]['id']).update(searchRecord);
+			await this.search.collections('content').documents(entity[this.KEY]['id']).update(searchRecord);
 
 			return {entity, history}
 		} catch (err){
 			throw new BadRequestException(err.message);
 		}
-	}
+	} 
 
 	// ContentPhoto methods
 	async createContentPhotoEntity(data: CreateContentPhotoDto, opt: ImageOpt){
@@ -877,7 +996,7 @@ export class DatabaseService extends Datastore{
 				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
 			// await this.algolia.initIndex('users').saveObject(searchRecord).wait();
-			await this.search.client.collections('users').documents().create(searchRecord);
+			await this.search.collections('users').documents().create(searchRecord);
 
 			return {entity, history: await this.createHistory(historyObj)}
 		} catch (err: any) {
@@ -991,7 +1110,7 @@ export class DatabaseService extends Datastore{
 				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
 			// await this.algolia.initIndex('users').partialUpdateObject(searchRecord).wait();
-			await this .search.client.collections('users').documents(entity[this.KEY]['name']).update(searchRecord);
+			await this .search.collections('users').documents(entity[this.KEY]['name']).update(searchRecord);
 
 			// update the mail list, only if it wasn't just created	
 			if(entity.hasOwnProperty('mailId') && performUpdate === true){
@@ -1059,7 +1178,7 @@ export class DatabaseService extends Datastore{
 			const searchRecord = {
 				photoUrl: data.hdUrl
 			}
-			await this.search.client.collections('users').documents(opt.parentId).update(searchRecord);
+			await this.search.collections('users').documents(opt.parentId).update(searchRecord);
 
 			return {entity, history}
 		} catch (err: any) {
@@ -1175,46 +1294,7 @@ export class DatabaseService extends Datastore{
 		} catch(err: any){
 			throw new BadRequestException(err.message);
 		}
-	}
-
-	// List Rating Methods
-	async calculateRatingScore(results: any[]){
-		const criticsQuery = this.createQuery('User').filter('role', '=', 'journalist');
-		try{
-			// 33% ratings total + 33% critic sample + 33% total critic reputation
-
-			const [critics] = await this.runQuery(criticsQuery);
-			const sampleCap = critics.length;
-			const totalRatings = results.length;
-			const totalCriticsScore = critics.reduce((sumSoFar, critic) => sumSoFar + critic.criticScore ? critic.criticScore : 0 , 0)
-
-			const upLists = results.filter((val) => val.listRating == 'u').length;
-			const neutralLists = results.filter((val) => val.listRating == 'n').length;
-			const downLists = results.filter((val) => val.listRating == 'd').length;
-			
-			const upPoints = upLists*1;
-			const neutralPoints = neutralLists*0.5;
-			const downPoints = downLists*0.1;
-
-			const averageRatingsPercentage = ((upPoints+neutralPoints+downPoints)/totalRatings)*100;
-			const criticsSamplePercentage = (totalRatings/sampleCap)*100;
-			const criticScorePercentage = (totalCriticsScore/sampleCap*100)*100;
-			
-			const listScore = ((averageRatingsPercentage+criticsSamplePercentage+criticScorePercentage)/300)*100;
-
-			const info = {
-				up: upLists,
-				neutral: neutralLists,
-				down: downLists,
-				totalRatings: totalRatings,
-				listScore: listScore
-			}
-
-			return info
-		} catch(err: any){
-			throw new BadRequestException(err.message);
-		}
-	}
+	} 
 
 	async createListRatingEntity(data: CreateListRatingDto, opt: RatingOpt){
 		const ratingKey = this.key([opt.parentKind, +opt.parentId, 'Rating']);
@@ -1326,7 +1406,7 @@ export class DatabaseService extends Datastore{
 		} catch (err: any) {
 			throw new BadRequestException(err.message)
 		}
-	}
+	} 
 
 	// Still methods
 	async createStillEntity(data: CreateStillDto, opt: ImageOpt){
@@ -1470,7 +1550,7 @@ export class DatabaseService extends Datastore{
 				posterUrl: data.hdUrl
 			}
 			// await this.algolia.initIndex('films').partialUpdateObject(searchRecord, {}).wait();
-			await this.search.client.collections('films').documents(opt.parentId).update(searchRecord);
+			await this.search.collections('films').documents(opt.parentId).update(searchRecord);
 
 			return {entity, history};
 		} catch (err: any) {
@@ -1570,7 +1650,7 @@ export class DatabaseService extends Datastore{
 				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
 			// await this.algolia.initIndex('people').saveObject(searchRecord).wait();
-			await this.search.client.collections('people').documents().create(searchRecord);
+			await this.search.collections('people').documents().create(searchRecord);
 
 			return { entity, history }
 		} catch (err: any) {
@@ -1662,7 +1742,7 @@ export class DatabaseService extends Datastore{
 				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
 			// await this.algolia.initIndex('people').partialUpdateObject(searchRecord).wait();
-			await this.search.client.collections('people').documents(personKey.id).update(searchRecord);
+			await this.search.collections('people').documents(personKey.id).update(searchRecord);
 
 			return {entity, history}
 		} catch(err: any){
@@ -1725,7 +1805,7 @@ export class DatabaseService extends Datastore{
 				photoUrl: data.hdUrl
 			}
 			// await this.algolia.initIndex('people').partialUpdateObject(searchRecord).wait();
-			await this.search.client.collections('people').documents(opt.parentId).update(searchRecord);
+			await this.search.collections('people').documents(opt.parentId).update(searchRecord);
 
 			const history = await this.createHistory(historyObj);
 			return {entity, history}
@@ -1819,6 +1899,19 @@ export class DatabaseService extends Datastore{
 			film.lastUpdated = opt.time;
 			await this.update(film);
 
+			// Update search
+			if(data.title === 'Director'){
+				const [directors] = await this.createQuery('PersonRole').filter('ownerKind', '=', opt.parentKind).filter('ownerId', '=', opt.parentId).filter('title', '=', 'Director').run()
+				const directorNames = directors.map(val => val.personName);
+
+				const searchRecord = {
+					directors: directorNames
+				}
+
+				await this.search.collections('films').documents(opt.parentId).update(searchRecord);
+			}
+			
+
 			// Create history
 			const historyObj: HistoryOpt = {
 				dataObject: data,
@@ -1871,6 +1964,19 @@ export class DatabaseService extends Datastore{
 			film.lastUpdated = opt.time;
 			await this.update(film);
 
+			// Update search
+			if(data.title === 'Director'){
+				const [directors] = await this.createQuery('PersonRole').filter('ownerKind', '=', opt.parentKind).filter('ownerId', '=', opt.parentId).filter('title', '=', 'Director').run()
+				const directorNames = directors.map(val => val.personName);
+				console.log(directorNames)
+				const searchRecord = {
+					directors: directorNames
+				}
+
+				await this.search.collections('films').documents(opt.parentId).update(searchRecord);
+			}
+
+			// Create history
 			const historyObj: HistoryOpt = {
 				dataObject: dataAfter,
 				prevDataObject: dataBefore,
@@ -1929,7 +2035,7 @@ export class DatabaseService extends Datastore{
 				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
 			// await this.algolia.initIndex('companies').saveObject(searchRecord).wait();
-			await this.search.client.collections('companies').documents().create(searchRecord);
+			await this.search.collections('companies').documents().create(searchRecord);
 
 			return {entity, history}
 		} catch (err: any) {
@@ -2017,7 +2123,7 @@ export class DatabaseService extends Datastore{
 				lastUpdated: this.dateToBigInt(data.lastUpdated)
 			}
 			// await this.algolia.initIndex('companies').partialUpdateObject(searchRecord).wait();
-			await this.search.client.collections('companies').documents(companyKey.id).update(searchRecord);
+			await this.search.collections('companies').documents(companyKey.id).update(searchRecord);
 
 			return {entity, history}
 		} catch(err: any){
@@ -2072,7 +2178,7 @@ export class DatabaseService extends Datastore{
 				photoUrl: data.hdUrl
 			}
 			// await this.algolia.initIndex('companies').partialUpdateObject(searchRecord).wait();
-			await this.search.client.collections('companies').documents(opt.parentId).update(searchRecord);
+			await this.search.collections('companies').documents(opt.parentId).update(searchRecord);
 
 			return {entity, history}
 		} catch (err: any) {
@@ -2225,5 +2331,5 @@ export class DatabaseService extends Datastore{
 		} catch(err: any){
 			throw new BadRequestException(err.message);
 		}
-	}
+	} */
 }

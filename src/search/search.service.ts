@@ -2,15 +2,24 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { DatabaseService } from '../database/database.service';
 import { ConfigService } from '@nestjs/config';
 import Typesense from 'typesense'
-import { StorageService } from '../storage/storage.service';
-import * as moment from 'moment';
+import { Collection } from 'src/database/database.types';
+import { WithId } from 'mongodb';
+import { Film, Photo } from 'src/films/films.types';
+import { CompanySchema, ContentSchema, FilmSchema, PersonSchema, UserSchema } from './search.types.';
+import { Company, Role } from 'src/companies/companies.types';
+import { Person } from 'src/people/people.types';
+import { Content } from 'src/content/content.types';
+import { UserExt } from 'src/users/users.types';
 
 @Injectable()
 export class SearchService {
 	constructor(
 		private config: ConfigService,
-		private storage: StorageService
-	){}
+		private mongo: DatabaseService
+	){
+		this.createCollections()
+		this.indexAll()
+	}
 
 	// private compute = async () => await this.createCollections(); //Sets up Search Collections
 
@@ -34,13 +43,15 @@ export class SearchService {
 				{ 'name': 'name',	'type': 'string',	'facet': false },
 				{ 'name': 'year', 'type': 'int32', 'facet': true, 'optional': true  },
 				{ 'name': 'genres',	'type': 'string[]',	'facet': true },
+				{ 'name': 'directors',	'type': 'string[]',	'facet': true },
 				{ 'name': 'type',	'type': 'string',	'facet': true },
 				{ 'name': 'format',	'type': 'string',	'facet': true },
 				{ 'name': 'productionStage',	'type': 'string',	'facet': true },
 				{ 'name': 'releaseDate',	'type': 'int64',	'facet': true, 'optional': true  },
 				{ 'name': 'listRatings',	'type': 'int32',	'facet': true, 'optional': true  },
-				{ 'name': 'listScore',	'type': 'float',	'facet': true, 'optional': true  },
+				{ 'name': 'listScore',	'type': 'int32',	'facet': true, 'optional': true  },
 				{ 'name': 'posterUrl',	'type': 'string',	'facet': false, 'index': false, 'optional': true },
+				{ 'name': 'logline',	'type': 'string',	'facet': false, 'index': false, 'optional': true },
 				{ 'name': 'initialPlatform',	'type': 'string',	'facet': true, 'optional': true  },
 				{ 'name': 'created',	'type': 'int64',	'facet': true },
 				{ 'name': 'lastUpdated',	'type': 'int64',	'facet': true }
@@ -89,9 +100,8 @@ export class SearchService {
 			'name': 'users',
 			'fields': [
 				{ 'name': 'id',	'type': 'string',	'facet': false },
-				{ 'name': 'userName',	'type': 'string',	'facet': false },
-				{ 'name': 'displayName',	'type': 'string',	'facet': false, 'optional': true  },
-				{ 'name': 'bio',	'type': 'string',	'facet': false, 'optional': true  },
+				{ 'name': 'username',	'type': 'string',	'facet': false },
+				{ 'name': 'fullName',	'type': 'string',	'facet': false, 'optional': true  },
 				{ 'name': 'role',	'type': 'string',	'facet': true, 'optional': true  },
 				{ 'name': 'reputation',	'type': 'int32',	'facet': true, 'optional': true  },
 				{ 'name': 'publication',	'type': 'string',	'facet': true, 'optional': true  },
@@ -106,7 +116,8 @@ export class SearchService {
 			'name': 'content',
 			'fields': [
 				{ 'name': 'id',	'type': 'string',	'facet': false },
-				{ 'name': 'author',	'type': 'string',	'facet': true },
+				{ 'name': 'authorName',	'type': 'string',	'facet': true },
+				{ 'name': 'authorId',	'type': 'string',	'facet': true },
 				{ 'name': 'headline',	'type': 'string',	'facet': false, 'optional': true  },
 				{ 'name': 'summary',	'type': 'string',	'facet': false, 'optional': true  },
 				{ 'name': 'slug',	'type': 'string',	'facet': false },
@@ -166,6 +177,187 @@ export class SearchService {
 		try {
 			return	await this.client.collections().retrieve()
 		} catch (err: any){
+			throw new BadRequestException(err.message)
+		}
+	}
+
+	async indexAll(){;
+
+		try {
+			// Films
+			let filmsResults = await this.drillThrough<Film>('films')
+			const films = await Promise.all(
+				filmsResults.map(async (item): Promise<FilmSchema> => {
+					const photo = await this.mongo.db.collection<Photo>('photos').findOne({
+						parentCollection: 'films',
+						parentId: item.id,
+						type: 'poster',
+						photoIndex: 0
+					})
+					const directors = await this.mongo.db.collection<Role>('roles').find({
+						ownerCollection: 'films',
+						parentCollection: 'people',
+						ownerId: item.id,
+						role: 'Director'
+					}).toArray()
+
+					const directorNames = directors.map(val => val.parentName)
+
+					return {
+						id: item.id,
+						name: item.name,
+						year: item.year,
+						genres: item.genres,
+						type: item.type,
+						format: item.format,
+						productionStage: item.productionStage,
+						releaseDate: this.mongo.dateToBigInt(item.releaseDate),
+						initialPlatform: item.initialPlatform,
+						created: this.mongo.dateToBigInt(item.created),
+						lastUpdated: this.mongo.dateToBigInt(item.lastUpdated),
+						posterUrl: photo?.optimisedUrl,
+						logline: item.logline,
+						directors: directorNames,
+						listRatings: item.listRatings,
+						listScore: item.listScore
+					}
+				})
+			)
+
+			// People
+			const peopleResults = await this.drillThrough<Person>('people')
+			const people = await Promise.all(
+				peopleResults.map(async (item): Promise<PersonSchema> => {
+					const photo = await this.mongo.db.collection<Photo>('photos').findOne({
+						parentCollection: 'people',
+						parentId: item.id,
+						type: 'image',
+						photoIndex: 0
+					})
+
+					return {
+						id: item.id,
+						name: item.name,
+						occupation: item.occupation,
+						yearOfBirth: item.yearOfBirth,
+						cityOfOrigin: item.cityOfOrigin,
+						provinceOfOrigin: item.provinceOfOrigin,
+						gender: item.gender,
+						pronouns: item.pronouns,
+						description: item.description,
+						countryOfOrigin: item.countryOfOrigin,
+						nationality: item.nationality,
+						deathDate: this.mongo.dateToBigInt(item.deathDate),
+						created: this.mongo.dateToBigInt(item.created),
+						lastUpdated: this.mongo.dateToBigInt(item.lastUpdated),
+						photoUrl: photo?.optimisedUrl
+					}
+				})
+			)
+
+			// Companies
+			const companiesResults = await this.drillThrough<Company>('companies');
+			const companies = await Promise.all(
+				companiesResults.map(async (item): Promise<CompanySchema> => {
+					const photo = await this.mongo.db.collection<Photo>('photos').findOne({
+						parentCollection: 'companies',
+						parentId: item.id,
+						type: 'image',
+						photoIndex: 0
+					})
+
+					return {
+						id: item.id,
+						name: item.name,
+						founder: item.founder,
+						director: item.director,
+						founded: item.founded,
+						description: item.description,
+						country: item.country,
+						city: item.city,
+						created: this.mongo.dateToBigInt(item.created),
+						lastUpdated: this.mongo.dateToBigInt(item.lastUpdated),
+						photoUrl: photo?.optimisedUrl
+					}
+				})
+			)
+
+			// Content
+			const contentResults = await this.drillThrough<Content>('content');
+			const content = await Promise.all(
+				contentResults.map(async (item): Promise<ContentSchema> => {
+					const photo = await this.mongo.db.collection<Photo>('photos').findOne({
+						parentCollection: 'content',
+						parentId: item.id,
+						type: 'image',
+						photoIndex: 0
+					})
+
+					return {
+						id: item.id,
+						authorName: item.authorName,
+						authorId: item.authorId,
+						headline: item.headline,
+						slug: item.slug,
+						created: this.mongo.dateToBigInt(item.created),
+						lastUpdated:this.mongo.dateToBigInt(item.lastUpdated),
+						photoUrl: photo?.optimisedUrl
+					}
+				})
+			)
+
+			// Users
+			const usersResults = await this.drillThrough<UserExt>('users');
+			const users = usersResults.map((item): UserSchema => {
+				return {
+					id: item.id,
+					username: item.username,
+					fullName: item.fullName,
+					role: item.role,
+					reputation: item.reputation,
+					publication: item.publication,
+					criticScore: item.criticScore,
+					created: this.mongo.dateToBigInt(item.created),
+					lastUpdated: this.mongo.dateToBigInt(item.lastUpdated)
+				}
+			})
+
+			const filmsJSONlines = films.map((item) => JSON.stringify(item)).join('\n');
+			const peopleJSONlines = people.map((item) => JSON.stringify(item)).join('\n');
+			const companiesJSONlines = companies.map((item) => JSON.stringify(item)).join('\n');
+			const contentJSONlines = content.map((item) => JSON.stringify(item)).join('\n');
+			const usersJSONlines = users.map((item) => JSON.stringify(item)).join('\n');
+
+			const filmsRes = await this.client.collections('films').documents().import(filmsJSONlines, {action: 'upsert'});
+			const peopleRes = await this.client.collections('people').documents().import(peopleJSONlines, {action: 'upsert'});
+			const companiesRes = await this.client.collections('companies').documents().import(companiesJSONlines, {action: 'upsert'});
+			const contentRes = await this.client.collections('content').documents().import(contentJSONlines, {action: 'upsert'});
+			const usersRes = await this.client.collections('users').documents().import(usersJSONlines, {action: 'upsert'});
+			// console.log(filmsRes, peopleRes, companiesRes, contentRes, usersRes)
+			return {status: 'success'}
+		} catch(err: any) {
+			throw new BadRequestException(err.message)
+		}
+	}
+
+	async drillThrough<T>(collection: Collection, limit?: number, page?: number): Promise<WithId<T>[]> {
+		const	size = limit ? +limit : 500
+		const skip = ( (page ? +page : 1) - 1 ) * size
+		let documents: WithId<T>[]
+		const query = this.mongo.db.collection<T>(collection).find({}).sort({created: 1}).skip(skip).limit(limit)
+		try {
+			const results = await query.toArray();
+			documents.push(...results)
+			const hasNext = await query.hasNext()
+			if(hasNext === true){ 
+				const nextSize = size+500;
+				const nextPage = page ? page++ : 2;
+				const nextResults = await this.drillThrough<T>(collection, nextSize, nextPage)
+				documents.push(...nextResults)
+			} else {
+				return documents
+			}			
+		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
 	}

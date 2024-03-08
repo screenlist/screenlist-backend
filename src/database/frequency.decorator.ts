@@ -1,3 +1,4 @@
 import { SetMetadata } from '@nestjs/common';
+import { Collection } from './database.types';
 
-export const Frequency = (kind: string) => SetMetadata('frequency', kind);
+export const Frequency = (kind: Collection) => SetMetadata('hit', kind);

@@ -1,27 +1,17 @@
-export interface User {
-	uid: string,
-	userName: string,
-	bio: string,
-	role: string,
-	url: string,
-	lastUpdated: Date,
-	created: Date
+export interface UserExt {
+	id: string;
+	username: string;
+	fullName: string;
+	role: UserRoles;
+	reputation: number; // min 0
+	favouriteFilms: string[]
+	publication?: string;
+	criticScore?: number; // min 0; max 100
+	created: Date;
+	lastUpdated: Date;
 }
 
 export type UserRoles = 'admin' | 'curator' | 'moderator' | 'journalist' | 'member';
-
-export interface Votes {
-	id: string,
-	roleToAttain: string,
-	userSuggested: string,
-	success: boolean,
-	totalPointsNeeded: number,
-	adminsTotalPoints: number,
-	curatorsTotalPoints: number,
-	moderatorsTotalPoints: number,
-	lastUpdated: Date,
-	created: Date
-}
 
 export interface Request {
 	id: string,
@@ -29,17 +19,10 @@ export interface Request {
 	requestSubject: string,
 	notes: string,
 	approved: boolean,
+	acknowledged: boolean,
 	createdBy: string,
 	created: Date,
 	lastUpdated: Date,
-}
-
-export interface JournalistInfo {
-	id: string,
-	description: string,
-	url: string,
-	created: Date,
-	lastUpdated: Date
 }
 
 // Util
@@ -48,14 +31,6 @@ export interface UserOpt {
 	user: string,
 	userName?: string,
 	objectId?: string
-}
-
-export interface VoteOpt {
-	time: Date,
-	user: string,
-	userToVoteFor?: string,
-	userName?: string,
-	votesId?: string
 }
 
 export interface RequestOpt {

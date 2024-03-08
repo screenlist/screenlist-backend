@@ -1,3 +1,4 @@
 import { SetMetadata } from '@nestjs/common';
+import { EditFor } from './films.types';
 
-export const EditLock = (lock: boolean) => SetMetadata('lock', lock);
+export const EditLock = (lock: EditFor) => SetMetadata('lock', lock);

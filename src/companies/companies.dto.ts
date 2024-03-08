@@ -50,31 +50,6 @@ export class CreateCompanyDto {
 	@IsOptional()
 	@IsFQDN()
 	website: string;
-
-	@IsOptional()
-	@IsEmpty()
-	editVerified?: boolean;
-
-	@IsOptional()
-	@IsEmpty()
-	isHidden?: boolean;
-
-	@IsOptional()
-	@IsEmpty()
-	editLocked?: boolean;
-
-	@IsOptional()
-	@IsEmpty()
-	@IsDate()
-	lastVerified?: Date;
-
-	@IsOptional()
-	@IsDate()
-	created: Date;
-
-	@IsOptional()
-	@IsDate()
-	lastUpdated: Date;
 }
 
 export class UpdateCompanyDto {
@@ -119,31 +94,6 @@ export class UpdateCompanyDto {
 	@IsOptional()
 	@IsFQDN()
 	website?: string;
-
-	@IsOptional()
-	@IsEmpty()
-	editVerified?: boolean;
-
-	@IsOptional()
-	@IsEmpty()
-	isHidden?: boolean;
-
-	@IsOptional()
-	@IsEmpty()
-	editLocked?: boolean;
-
-	@IsOptional()
-	@IsEmpty()
-	@IsDate()
-	lastVerified?: Date;
-
-	@IsOptional()
-	@IsDate()
-	created?: Date;
-
-	@IsOptional()
-	@IsDate()
-	lastUpdated?: Date;
 }
 
 
@@ -166,37 +116,14 @@ export class CreateCompanyRoleDto {
 	@IsString()
 	ownerId: string;
 
-	@IsOptional()
-	@IsNotEmpty()
-	@IsString()
-	type: string;
-
-
 	@IsNotEmpty()
 	@IsString()
 	capacity: string;
-
-	@IsOptional()
-	@IsDate()
-	lastUpdated?: Date;
-
-	@IsOptional()
-	@IsDate()
-	created?: Date;
 }
 
 export class UpdateCompanyRoleDto {
 	@IsOptional()
 	@IsNotEmpty()
 	@IsString()
-	type?: string;
-
-	@IsOptional()
-	@IsNotEmpty()
-	@IsString()
 	capacity?: string;
-
-	@IsOptional()
-	@IsDate()
-	lastUpdated?: Date;
 }

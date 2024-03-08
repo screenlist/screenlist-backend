@@ -13,12 +13,12 @@ export class CreateContentDto {
 	@IsOptional()
 	@IsEmpty()
 	@MaxLength(60)
-	author: string;
+	authorName: string;
 
 	@IsOptional()
 	@IsEmpty()
 	@IsString()
-	authorUid: string;
+	authorId: string;
 
 	@IsNotEmpty()
 	@IsString()
@@ -36,7 +36,7 @@ export class CreateContentDto {
 
 	@IsOptional()
 	@IsString()
-	tags: string;
+	tags: string[];
 
 	@IsOptional()
 	@IsEmpty()
@@ -45,14 +45,6 @@ export class CreateContentDto {
 	@IsOptional()
 	@IsEmpty()
 	type: string;
-	
-	@IsOptional()
-	@IsDate()
-	created: Date;
-
-	@IsOptional()
-	@IsDate()
-	lastUpdated: Date;
 }
 
 export class UpdateContentDto {
@@ -80,8 +72,4 @@ export class UpdateContentDto {
 	@IsOptional()
 	@IsEmpty()
 	slug: string;
-
-	@IsOptional()
-	@IsDate()
-	lastUpdated: Date;
 }

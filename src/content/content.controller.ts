@@ -3,7 +3,6 @@ import {
 	UseGuards,
 	Get,
 	Post,
-	Put,
 	Delete,
 	Patch,
 	Body,
@@ -20,8 +19,7 @@ import { AuthService } from '../auth/auth.service';
 import { CreateContentDto, UpdateContentDto } from './content.dto';
 import { ContentOpt } from './content.types';
 import {
-	CreateContentPhotoDto,
-	UpdateContentPhotoDto
+	PhotoDto
 } from '../films/films.dto';
 import { ImageOpt } from '../films/films.types';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -45,16 +43,16 @@ export class ContentController {
 	@UseInterceptors(FileInterceptor('photo'))
 	async uploadPhoto(
 		@Query('id') id: string,
-		@Query('index') index: string,
-		@Headers('AuthorizationToken') idToken: string,
+		@Query('index') index: number,
+		@Headers('x-user-id') userId: string,
 		@UploadedFile() photo: Express.Multer.File
 	){
 		const imageOptions: ImageOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			parentId: id,
-			parentKind: 'Content',
-			imageId: index
+			parentKind: 'content',
+			index: index
 		}
 		return await this.contentService.uploadPhoto(imageOptions, photo);
 	}
@@ -63,16 +61,16 @@ export class ContentController {
 	@Roles('curator')
 	async updatePhoto(
 		@Query('id') id: string,
-		@Query('index') index: string,
-		@Body() updatePhoto : UpdateContentPhotoDto,
-		@Headers('AuthorizationToken') idToken: string,
+		@Query('index') index: number,
+		@Body() updatePhoto : PhotoDto,
+		@Headers('x-user-id') userId: string,
 	){
 		const imageOptions: ImageOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			parentId: id,
-			parentKind: 'Content',
-			imageId: index
+			parentKind: 'content',
+			index: index
 		}
 		return await this.contentService.updatePhoto(updatePhoto, imageOptions);
 	}
@@ -81,33 +79,36 @@ export class ContentController {
 	@Roles('member')
 	async removePhoto(
 		@Query('id') id: string,
-		@Query('index') index: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Query('index') index: number,
+		@Headers('x-user-id') userId: string
 	){
 		const imageOptions: ImageOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			parentId: id,
-			parentKind: 'Content',
-			imageId: index
+			parentKind: 'content',
+			index: index
 		}
 		return await this.contentService.removePhoto(imageOptions)
 	}
 
 	/* BLOG METHODS */
 	@Get('blog')
-	async findAllBlogs(){
-		return await this.contentService.findBlogArticles();
+	async findAllBlogs(
+		@Query('page') page: number,
+		@Query('limit') limit: number
+	){
+		return await this.contentService.findBlogArticles(page, limit);
 	}
 
 	@Post('blog')
 	@Roles('curator')
 	async createBlog(
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Body() createContent: CreateContentDto
 	){
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.createBlogArticle(createContent, contentOptions);
@@ -122,11 +123,11 @@ export class ContentController {
 	@Roles('curator')
 	async updateOneBlog(
 		@Param('slug') slug: string,
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Body() updateContent: UpdateContentDto
 	) {
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.updateOne(updateContent, contentOptions, slug, 'blog');
@@ -136,10 +137,10 @@ export class ContentController {
 	@Roles('curator')
 	async deleteOneBlog(
 		@Param('slug') slug: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	) {
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.deleteOne(contentOptions, slug, 'blog');
@@ -149,11 +150,11 @@ export class ContentController {
 	@Post('about')
 	@Roles('admin')
 	async createAbout(
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Body() createContent: CreateContentDto
 	){
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.createAbout(createContent, contentOptions);
@@ -167,11 +168,11 @@ export class ContentController {
 	@Patch('about')
 	@Roles('admin')
 	async updateOneAbout(
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Body() updateContent: UpdateContentDto
 	) {
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.updateOne(updateContent, contentOptions, 'about', 'about');
@@ -180,10 +181,10 @@ export class ContentController {
 	@Delete('about')
 	@Roles('admin')
 	async deleteOneAbout(
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	) {
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.deleteOne(contentOptions, 'about', 'about');
@@ -193,11 +194,11 @@ export class ContentController {
 	@Post('privacy')
 	@Roles('admin')
 	async createPrivacy(
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Body() createContent: CreateContentDto
 	){
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.createPrivacyPolicy(createContent, contentOptions);
@@ -211,11 +212,11 @@ export class ContentController {
 	@Patch('privacy')
 	@Roles('admin')
 	async updateOnePrivacy(
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Body() updateContent: UpdateContentDto
 	) {
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.updateOne(updateContent, contentOptions, 'privacy', 'privacy');
@@ -225,10 +226,10 @@ export class ContentController {
 	@Roles('admin')
 	async deleteOnePrivacy(
 		@Param('id') id: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	) {
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.deleteOne(contentOptions, 'privacy', 'privacy');
@@ -238,11 +239,11 @@ export class ContentController {
 	@Post('tos')
 	@Roles('admin')
 	async createTos(
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Body() createContent: CreateContentDto
 	){
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.createTermsOfService(createContent, contentOptions);
@@ -256,11 +257,11 @@ export class ContentController {
 	@Patch('tos')
 	@Roles('admin')
 	async updateOneTos(
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Body() updateContent: UpdateContentDto
 	) {
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.updateOne(updateContent, contentOptions, 'tos', 'tos');
@@ -269,10 +270,10 @@ export class ContentController {
 	@Delete('tos')
 	@Roles('admin')
 	async deleteOneTos(
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	) {
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.deleteOne(contentOptions, 'tos', 'tos');
@@ -282,11 +283,11 @@ export class ContentController {
 	@Post('contributions')
 	@Roles('admin')
 	async createContributionsGuide(
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Body() createContent: CreateContentDto
 	){
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.createContributionsGuide(createContent, contentOptions);
@@ -300,11 +301,11 @@ export class ContentController {
 	@Patch('contributions')
 	@Roles('admin')
 	async updateOneContributionsGuide(
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Body() updateContent: UpdateContentDto
 	) {
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.updateOne(updateContent, contentOptions, 'contributions', 'contributions');
@@ -313,131 +314,12 @@ export class ContentController {
 	@Delete('contributions')
 	@Roles('admin')
 	async deleteOneContributionsGuide(
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	) {
 		const contentOptions: ContentOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.contentService.deleteOne(contentOptions, 'contributions', 'contributions');
-	}
-
-	/* MARGINAL METHODS */
-
-	@Get('marginal/articles')
-	async getArticles(
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('page') page: number
-	) {
-		let user: any;
-		if(idToken){
-			user = await this.authService.getUserUid(idToken);
-		}
-		
-		const index = page ? page : 0
-		return await this.contentService.getArticles(index, user);
-	}
-
-	@Get('marginal/articles/:slug')
-	async getArticle(
-		@Headers('AuthorizationToken') idToken: string,
-		@Param('slug') slug: string
-	) {
-		let user: any;
-		if(idToken){
-			user = await this.authService.getUserUid(idToken);
-		}
-
-		return await this.contentService.getArticle(slug, user);
-	}
-
-	@Get('marginal/lifetime')
-	@Roles('member')
-	async getLifetimeArticles(
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('page') page: number
-	) {
-		let user = await this.authService.getUserUid(idToken);
-		return await this.contentService.getBoughtArticles(user);
-	}
-	
-	@Get('marginal/newsletters')
-	async getNewsletters(
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('page') page: number
-	) {
-		let user: any;
-		if(idToken){
-			user = await this.authService.getUserUid(idToken);
-		}
-
-		const index = page ? page : 0
-		return await this.contentService.getNewsletters(index, user);
-	}
-
-	@Get('marginal/newsletters/:slug')
-	async getNewsletter(
-		@Headers('AuthorizationToken') idToken: string,
-		@Param('slug') slug: string
-	) {
-		let user: any;
-		if(idToken){
-			user = await this.authService.getUserUid(idToken);
-		}
-
-		return await this.contentService.getNewsletter(slug, user);
-	}
-
-	@Get('marginal/authors')
-	async getAuthors(
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('page') page: number
-	) {
-		let user: any;
-		if(idToken){
-			user = await this.authService.getUserUid(idToken);
-		}
-
-		const index = page ? page : 0
-		return await this.contentService.getAuthors(index, user);
-	}
-
-	@Get('marginal/authors/:slug')
-	async getAuthor(
-		@Param('slug') slug: string
-	) {
-		return await this.contentService.getAuthor(slug);
-	}
-
-	@Get('marginal/podcasts')
-	async getPodcasts(
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('page') page: number
-	) {
-		let user: any;
-		if(idToken){
-			user = await this.authService.getUserUid(idToken);
-		}
-
-		const index = page ? page : 0
-		return await this.contentService.getPodcasts(index, user);
-	}
-
-	@Get('marginal/podcasts/:slug')
-	async getPodcast(
-		@Headers('AuthorizationToken') idToken: string,
-		@Param('slug') slug: string
-	) {
-		let user: any;
-		if(idToken){
-			user = await this.authService.getUserUid(idToken);
-		}
-
-		return await this.contentService.getPodcast(slug);
-	}
-
-	@Get('marginal/about')
-	async getAbout() {
-		return await this.contentService.getAbout();
 	}
 }
