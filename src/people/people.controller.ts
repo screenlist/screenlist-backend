@@ -3,7 +3,6 @@ import {
 	UseGuards,
 	Get,
 	Post,
-	Put,
 	Delete,
 	Patch,
 	Body,
@@ -17,24 +16,22 @@ import { RolesGuard } from '../users/roles.guard';
 import { Roles } from '../users/roles.decorator';
 import { FrequencyGuard } from '../database/frequency.guard';
 import { Frequency } from '../database/frequency.decorator';
-import { HistoryOpt } from '../database/database.types';
+import { CollectionFields } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
 import {
 	CreatePersonDto,
-	UpdatePersonDto,
-	CreatePersonRoleDto,
-	UpdatePersonRoleDto
+	UpdatePersonDto
 } from './people.dto';
 import {
 	Person,
-	PersonRole,
-	PersonOpt,
-	PersonRoleOpt
+	PersonOpt
 } from './people.types';
 import { PeopleService } from './people.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { CreateDisplayPhotoDto, UpdateDisplayPhotoDto } from '../films/films.dto';
+import { PhotoDto } from '../films/films.dto';
 import { ImageOpt } from  '../films/films.types';
+import { EditGuard } from 'src/users/edit.guard';
+import { EditLock } from 'src/users/edit.decorator';
 
 @Controller('people')
 @UseGuards(RolesGuard)
@@ -45,18 +42,23 @@ export class PeopleController {
 	){}
 
 	@Get()
-	async findAll(){
-		return await this.peopleService.findAll();
+	async findAll(
+		@Query('page') page: number,
+		@Query('limit') limit: number
+	){
+		return await this.peopleService.findAll(page, limit);
 	}
 
 	@Post()
 	@Roles('member')
+	@UseGuards(EditGuard)
+	@EditLock('people')
 	async createOne(
 		@Body() createPersonDto: CreatePersonDto,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		const personOptions: PersonOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.peopleService.createOne(createPersonDto, personOptions);
@@ -64,34 +66,39 @@ export class PeopleController {
 
 	@Get(':id')
 	@UseGuards(FrequencyGuard)
-	@Frequency('Person')
+	@Frequency('people')
 	async findOne(@Param('id') id: string){
 		return await this.peopleService.findOne(id);
 	}
 
 	@Patch(':id')
 	@Roles('member')
+	@UseGuards(EditGuard)
+	@EditLock('people')
 	async updateOne(
 		@Param('id') id: string,
-		@Body() updatePersonDto: UpdatePersonDto,
-		@Headers('AuthorizationToken') idToken: string
+		@Body('update') updatePersonDto: UpdatePersonDto,
+		@Body('remove') toRemove: CollectionFields<Person>,
+		@Headers('x-user-id') userId: string
 	){
 		const personOptions: PersonOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			personId: id
 		}
-		return await this.peopleService.updateOne(updatePersonDto, personOptions);
+		return await this.peopleService.updateOne(updatePersonDto, personOptions, toRemove);
 	}
 
 	@Delete(':id')
 	@Roles('member')
+	@UseGuards(EditGuard)
+	@EditLock('people')
 	async deleteOne(
 		@Param('id') id: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		const personOptions: PersonOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			personId: id
 		}
@@ -106,70 +113,104 @@ export class PeopleController {
 		return await this.peopleService.findHistory(personId);
 	}
 
+	// Settings routes
 	@Patch(':id/settings/verify')
 	@Roles('member')
 	async verifyEdit(
-		@Param('id') id: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Param('id') id: string
 	){
-		const personOptions: PersonOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date(),
-			personId: id
-		}
-		return await this.peopleService.verifyEdit(personOptions.user, id);
+		return await this.peopleService.verifyEdit(id);
 	}
 
+	@Patch(':id/settings/hide')
+	@Roles('moderator')
+	async hideFilm(
+		@Param('id') id: string
+	){
+		return await this.peopleService.hideFilm(id);
+	}
+
+	@Patch(':id/settings/unhide')
+	@Roles('moderator')
+	async unhideFilm(
+		@Param('id') id: string
+	){
+		return await this.peopleService.unhideFilm(id);
+	}
+
+	@Patch(':id/settings/lock')
+	@Roles('moderator')
+	async lockFilmEdit(
+		@Param('id') id: string
+	){
+		return await this.peopleService.lockFilmEdit(id);
+	}
+
+	@Patch(':id/settings/unlock')
+	@Roles('moderator')
+	async unlockFilmEdit(
+		@Param('id') id: string
+	){
+		return await this.peopleService.unlockFilmEdit(id);
+	}
+
+	// Photos routes
 	@Post(':id/photo')
 	@Roles('member')
+	@UseGuards(EditGuard)
+	@EditLock('people')
 	@UseInterceptors(FileInterceptor('profile'))
 	async uploadPhoto(
 		@Param('id') id: string,
-		@Query('index') index: string,
-		@Headers('AuthorizationToken') idToken: string,
+		@Query('index') index: number,
+		@Headers('x-user-id') userId: string,
 		@UploadedFile() profile: Express.Multer.File
 	){
 		const imageOptions: ImageOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			parentId: id,
-			parentKind: 'Person',
-			imageId: index
+			parentKind: 'people',
+			index: index
 		}
 		return await this.peopleService.uploadPhoto(imageOptions, profile);
 	}
 
 	@Patch(':id/photo')
 	@Roles('member')
+	@UseGuards(EditGuard)
+	@EditLock('people')
 	async updatePhoto(
 		@Param('id') id: string,
-		@Query('index') index: string,
-		@Body() updatePhoto : UpdateDisplayPhotoDto,
-		@Headers('AuthorizationToken') idToken: string,
+		@Query('index') index: number,
+		@Body() updatePhoto : PhotoDto,
+		@Headers('x-user-id') userId: string,
 	){
 		const imageOptions: ImageOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			parentId: id,
-			parentKind: 'Person',
-			imageId: index
+			parentKind: 'people',
+			index: index
 		}
 		return await this.peopleService.updatePhoto(updatePhoto, imageOptions);
 	}
 
 	@Delete(':id/photo')
 	@Roles('member')
+	@UseGuards(EditGuard)
+	@EditLock('people')
 	async removePhoto(
 		@Param('id') id: string,
-		@Query('index') index: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Query('index') index: number,
+		@Headers('x-user-id') userId: string
 	){
 		const imageOptions: ImageOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			parentId: id,
-			parentKind: 'Person',
-			imageId: index
+			parentKind: 'people',
+			index: index
 		}
 		return await this.peopleService.removePhoto(imageOptions)
 	}

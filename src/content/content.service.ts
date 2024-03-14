@@ -2,55 +2,95 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { parseString, Parser } from 'xml2js'
 import axios from 'axios';
 import { ConfigService } from '@nestjs/config';
-import {createClient, type ClientConfig} from '@sanity/client'
 import { HistoryOpt } from '../database/database.types';
 import { StorageService } from '../storage/storage.service';
 import { DatabaseService } from '../database/database.service';
 import { SearchService } from 'src/search/search.service';
 import { CreateContentDto, UpdateContentDto } from './content.dto';
-import { ContentOpt } from './content.types';
+import { Content, ContentOpt } from './content.types';
 import {
-	CreateContentPhotoDto,
-	UpdateContentPhotoDto
+	PhotoDto
 } from '../films/films.dto';
-import { ImageOpt } from '../films/films.types';
+import { ImageOpt, Photo } from '../films/films.types';
+import { ContentSchema } from 'src/search/search.types.';
 
 @Injectable()
 export class ContentService {
 	constructor(
 		private storage: StorageService,
-		private db: DatabaseService,
+		private mongo: DatabaseService,
 		private search: SearchService,
 		private config: ConfigService
 	){}
 
-	private sanity = createClient({
-		projectId: this.config.get('SANITY_PROJECT'),
-		dataset: this.config.get('SANITY_DATASET'),
-		useCdn: true,
-		apiVersion: '2023-05-03',
-		perspective: 'published',
-	})
-
 	async findOne(slug: string, type: 'blog'|'tos'|'about'|'contributions'|'privacy'){
-		const query = this.db.createQuery('Content').filter('type', '=', type).filter('slug', '=', slug).limit(1);
 		try {
-			const [results] = await this.db.runQuery(query);
+			const results = await this.mongo.db.collection<Content>('content').findOne({
+				type: type,
+				slug: slug
+			});
 
-			if(results.length < 1){ throw new NotFoundException('Resource not found') };
+			if(!results){ throw new NotFoundException('Resource not found') };
 
-			const content = results[0]; 
-
-			// Validate if the type of content being accessed is
-			// being done from the correct endpoint
-			if(content.type != type){ throw new BadRequestException('Action not allowed') };
+			if(results.type != type){ throw new BadRequestException('Action not allowed') };
 			
-			return {
-				id: content[this.db.KEY]['id'],
-				...content
-			}
+			return results
 		} catch (err: any) {
 			throw new NotFoundException()
+		}
+	}
+
+	async createOne(data: CreateContentDto, opt: ContentOpt){
+		data.slug = data.type == 'blog' ? data.headline.toLowerCase().concat(`-${new Date(opt.time).toISOString()}`).replace(/[^0-9a-z]/gi, '-') : data.type;
+		try {
+			if(data.type == 'blog'){
+				const results = await this.mongo.db.collection<Content>('content').countDocuments({slug: data.slug});
+				if(results > 0){
+					throw new BadRequestException('Slug already exists')
+				}
+			}
+
+			const entity: Content = {
+				id: await this.mongo.generateUniqueId('content', 12),
+				authorName: data.authorName,
+				authorId: data.authorId,
+				created: opt.time,
+				lastUpdated: opt.time,
+				slug: data.slug,
+				type: data.type as Content['type'],
+				headline: data.headline,
+				body: data.body,
+				tags: data.tags,
+				summary: data.summary
+			}
+
+			await this.mongo.insertOne(entity, 'content')
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'content',
+				id: entity.id,
+				action: 'create',
+				time: opt.time,
+			}
+			await this.mongo.createHistory(historyObj);
+
+			const searchRecord: ContentSchema = {
+				id: entity.id,
+				authorName: entity.authorName,
+				headline: entity.headline,
+				authorId: entity.authorId,
+				slug: entity.slug,
+				created: this.mongo.dateToBigInt(entity.created),
+				lastUpdated:this.mongo.dateToBigInt(entity.lastUpdated)
+			}
+			
+			await this.search.client.collections('content').documents().create(searchRecord);
+
+			return entity
+		} catch(err: any) {
+			throw new NotFoundException(err.message);
 		}
 	}
 
@@ -60,52 +100,88 @@ export class ContentService {
 		slug: string, 
 		type: 'blog'|'tos'|'about'|'contributions'|'privacy'
 	){
-		const query = this.db.createQuery('Content').filter('type', '=', type).filter('slug', '=', slug).limit(1);
 		try {
-			const [results] = await this.db.runQuery(query);
+			const results = await this.mongo.db.collection<Content>('content').findOne({type: type, slug: slug});
 
-			if(results.length < 1){ throw new NotFoundException('Resource not found') };
-
-			const content = results[0]; 
+			if(!results){ throw new NotFoundException('Resource not found') };
 
 			// Validate if the type of content being updated is
 			// being done from the correct endpoint
-			if(content.type != type){ throw new BadRequestException('Action not allowed') };
+			if(results.type != type){ throw new BadRequestException('Action not allowed') };
 
-			opt.contentId = content[this.db.KEY]['id'];
+			const dataBefore = {...results};
 
-			const { entity } = await this.db.updateContentEntity(data, opt, content);
-			return { id: entity[this.db.KEY]['id'], ...entity }
+			if(data.headline) {
+				data.slug = results.type == 'blog' ? data.headline.toLowerCase().concat(`-${new Date(opt.time).toISOString()}`).replace(/[^0-9a-z]/gi, '-') : results.type;
+			}
+
+			if(results.type == 'blog'){
+				// To avaoid duplicate slugs
+				const results = await this.mongo.db.collection<Content>('content').countDocuments({type: 'blog', slug: data.slug})
+				if(results > 0){
+					throw new BadRequestException('Slug already exists')
+				}
+			}
+
+			for (const key in data) {
+				results[key] = data[key]
+			}
+
+			results.lastUpdated = opt.time
+
+			const dataAfter = {...results};
+
+			await this.mongo.updateOne(results, 'content');
+			
+			const historyObj: HistoryOpt = {
+				dataObject: dataAfter,
+				prevDataObject: dataBefore,
+				user: opt.user,
+				kind: 'content',
+				id: results.id,
+				action: 'update',
+				time: opt.time,
+			}
+			await this.mongo.createHistory(historyObj);
+
+			const searchRecord: Partial<ContentSchema> = {
+				authorName: results.authorName,
+				headline: results.headline,
+				authorId: results.authorId,
+				slug: results.slug,
+				lastUpdated: this.mongo.dateToBigInt(results.lastUpdated)
+			}
+			// await this.algolia.initIndex('content').partialUpdateObject(searchRecord).wait();
+			await this.search.client.collections('content').documents(results.id).update(searchRecord);
+
+			return results
 		} catch (err: any) {
 			throw new BadRequestException(err.message);
 		}
 	}
 
 	async deleteOne(opt: ContentOpt, slug: string, type: 'blog'|'tos'|'about'|'contributions'|'privacy'){
-		const query = this.db.createQuery('Content').filter('type', '=', type).filter('slug', '=', slug).limit(1);
 		try {
-			const [results] = await this.db.runQuery(query);
+			const results = await this.mongo.db.collection<Content>('content').findOne({type: type, slug: slug});
 
-			if(results.length < 1){ throw new NotFoundException('Resource not found') };
-
-			const article = results[0];
+			if(!results){ throw new NotFoundException('Resource not found') };
 
 			// Validate if the type of content being deleted is
 			// being done from the correct endpoint
-			if(article.type != type){ throw new BadRequestException('Action not allowed') };
+			if(results.type != type){ throw new BadRequestException('Action not allowed') };
 
 			const historyObj: HistoryOpt = {
-				dataObject: article,
-				kind: 'Content',
-				id: article[this.db.KEY]['id'],
+				dataObject: results,
+				kind: 'content',
+				id: results.id,
 				time: opt.time,
 				action: 'delete',
 				user: opt.user
 			}
 
-			await this.search.client.collections('content').documents(article[this.db.KEY]['id']).delete();
-			await this.db.createHistory(historyObj);
-			await this.db.delete(article[this.db.KEY]['id']);
+			await this.search.client.collections('content').documents(results.id).delete();
+			await this.mongo.createHistory(historyObj);
+			await this.mongo.db.collection<Content>('content').deleteOne({id: results.id});
 			return { 'status': 'deleted' }
 		} catch (err: any) {
 			throw new BadRequestException(err.message)
@@ -115,57 +191,129 @@ export class ContentService {
 	async uploadPhoto(opt: ImageOpt, image: Express.Multer.File){
 		try {
 			const data = await this.storage.uploadContentPhoto(image)
-			const dto: CreateContentPhotoDto = { ...data }
-			const {entity, history} = await this.db.createContentPhotoEntity(dto, opt);
-			return { id: entity.key.name, ...entity.data }
+			const photo: Photo = { 
+				...data, 
+				id: await this.mongo.generateUniqueId('photos', 12),
+				photoIndex: opt.index,
+				lastUpdated: opt.time,
+				created: opt.time,
+				parentCollection: 'content',
+				parentId: opt.parentId,
+				type: 'image',
+				uploadedByUser: opt.user
+			}
+
+			const existing = await this.mongo.db.collection<Photo>('photos').countDocuments({parentCollection: 'content', parentId: opt.parentId})
+
+			if(existing > 0) {
+				throw new BadRequestException("Too many photos for a single resource");
+			}
+			
+			await this.mongo.insertOne(photo, 'photos');
+
+			const historyObj: HistoryOpt = {
+				dataObject: data,
+				user: opt.user,
+				kind: 'photos',
+				pKind: 'content',
+				id: photo.id,
+				pId: opt.parentId,
+				action: 'create',
+				time: opt.time,
+			}
+
+			await this.mongo.createHistory(historyObj);
+			return photo
 		} catch {
 			throw new BadRequestException()
 		}
 	}
 
-	async updatePhoto(data: UpdateContentPhotoDto , opt: ImageOpt){
+	async updatePhoto(data: PhotoDto , opt: ImageOpt){
 		try {
-			const {entity, history} = await this.db.updateContentPhotoEntity(data, opt);
-			return { id: entity[this.db.KEY]['id'], ...entity }
-		} catch {
-			throw new BadRequestException()
+			const entity = await this.mongo.db.collection<Photo>('photos').findOne({
+				parentCollection: 'content',
+				parentId: opt.parentId,
+				photoIndex: opt.index,
+				type: 'image'
+			})
+
+			const dataBefore = {...entity};
+
+			if(!entity){
+				throw new BadRequestException("Action not allowed");
+			}
+
+			for (const key in data) {
+				entity[key] = data[key]
+			}
+
+			entity.lastUpdated = opt.time
+
+			const dataAfter = {...entity};
+			await this.mongo.updateOne(entity, 'photos');
+
+			const historyObj: HistoryOpt = {
+				dataObject: dataAfter,
+				prevDataObject: dataBefore,
+				user: opt.user,
+				kind: 'photos',
+				pKind: 'content',
+				id: entity.id,
+				pId: opt.parentId,
+				action: 'update',
+				time: opt.time,
+			}
+			await this.mongo.createHistory(historyObj);
+			return entity
+		} catch(err: any){
+			throw new BadRequestException(err.message)
 		}
 	}
 
 	async removePhoto(opt: ImageOpt){
 		try{
-			const photoKey = this.db.key([opt.parentKind, +opt.parentId, 'ContentPhoto', opt.imageId]);
-			const [photo] = await this.db.get(photoKey);
+			const photo = await this.mongo.db.collection<Photo>('photos').findOne({
+				parentCollection: 'content',
+				parentId: opt.parentId,
+				photoIndex: opt.index,
+				type: 'image'
+			})
 			const historyObj: HistoryOpt = {
 				dataObject: photo,
 				user: opt.user,
-				kind: 'ContentPhoto',
-				id: photoKey.id,
+				kind: 'photos',
+				pKind: 'content',
+				id: photo.id,
+				pId: opt.parentId,
 				action: 'delete',
 				time: opt.time,
 			}
-			await this.storage.deleteStill(photo.originalName);
-			await this.storage.deleteStill(photo.hdName);
-			await this.storage.deleteStill(photo.sdName);
-			await this.db.createHistory(historyObj);
-			await this.db.delete(photoKey)
+			await this.storage.deletePhoto(photo.originalName);
+			await this.storage.deletePhoto(photo.optimisedName);
+			await this.mongo.createHistory(historyObj);
+			await this.mongo.db.collection<Photo>('photos').deleteOne({
+				parentCollection: 'content',
+				parentId: opt.parentId,
+				photoIndex: opt.index,
+				type: 'image'
+			})
 			return {'status': 'deleted'}
 		} catch(err: any) {
 			throw new BadRequestException(err.message)
 		}
 	}
 
-	async findBlogArticles(){
-		const query = this.db.createQuery('Content').filter('type', '=', 'blog')
-		try {
-			const [blog] = await this.db.runQuery(query);
-			const results = await Promise.all(blog.map((article) => {
-				return {
-					id: article[this.db.KEY]['id'],
-					...article
-				}
-			}))
-			return results
+	async findBlogArticles(page?: number, limit?: number){
+		const	size = limit ? +limit : 50
+		const skip = ( (page ? +page : 1) - 1 ) * size
+
+		const query = this.mongo.db.collection<Content>('content').find({type: 'blog'}).sort({created: -1}).skip(skip).limit(size)
+		try { 
+			return {
+				data: await query.toArray(),
+				hasNextPage: await query.hasNext()
+			}
 		} catch (err: any) {
 			throw new NotFoundException()
 		}
@@ -173,12 +321,10 @@ export class ContentService {
 
 	async createAbout(data: CreateContentDto, opt: ContentOpt){
 		data.type = 'about';
-		const query = this.db.createQuery('Content').filter('type', '=', 'about');
 		try {
-			const [article] = await this.db.runQuery(query);
-			if(article.length > 0) { throw new BadRequestException('Action not allowed') };
-			const {entity} = await this.db.createContentEntity(data, opt);
-			return { id: entity.key.id, ...entity.data };
+			const article = await this.mongo.db.collection<Content>('content').countDocuments({type: 'about'})
+			if(article > 0) { throw new BadRequestException('Action not allowed') };
+			return await this.createOne(data, opt);
 		} catch (err: any) {
 			throw new BadRequestException(err.message);
 		}
@@ -186,12 +332,10 @@ export class ContentService {
 
 	async createContributionsGuide(data: CreateContentDto, opt: ContentOpt){
 		data.type = 'contributions';
-		const query = this.db.createQuery('Content').filter('type', '=', 'contributions');
 		try {
-			const [article] = await this.db.runQuery(query);
-			if(article.length > 0) { throw new BadRequestException('Action not allowed') };
-			const {entity} = await this.db.createContentEntity(data, opt);
-			return { id: entity.key.id, ...entity.data };
+			const article = await this.mongo.db.collection<Content>('content').countDocuments({type: 'contributions'})
+			if(article > 0) { throw new BadRequestException('Action not allowed') };
+			return await this.createOne(data, opt);
 		} catch (err: any) {
 			throw new BadRequestException(err.message);
 		}
@@ -200,8 +344,7 @@ export class ContentService {
 	async createBlogArticle(data: CreateContentDto, opt: ContentOpt){
 		data.type = 'blog';
 		try {
-			const {entity} = await this.db.createContentEntity(data, opt);
-			return { id: entity.key.id, ...entity.data };
+			return await this.createOne(data, opt);
 		} catch (err: any) {
 			throw new BadRequestException(err.message);
 		}
@@ -209,12 +352,10 @@ export class ContentService {
 
 	async createPrivacyPolicy(data: CreateContentDto, opt: ContentOpt){
 		data.type = 'privacy';
-		const query = this.db.createQuery('Content').filter('type', '=', 'privacy');
 		try {
-			const [article] = await this.db.runQuery(query);
-			if(article.length > 0) { throw new BadRequestException('Action not allowed') };
-			const {entity} = await this.db.createContentEntity(data, opt);
-			return { id: entity.key.id, ...entity.data };
+			const article = await this.mongo.db.collection<Content>('content').countDocuments({type: data.type})
+			if(article > 0) { throw new BadRequestException('Action not allowed') };
+			return await this.createOne(data, opt);
 		} catch (err: any) {
 			throw new BadRequestException(err.message);
 		}
@@ -222,12 +363,10 @@ export class ContentService {
 
 	async createTermsOfService(data: CreateContentDto, opt: ContentOpt){
 		data.type = 'tos';
-		const query = this.db.createQuery('Content').filter('type', '=', 'tos');
 		try {
-			const [article] = await this.db.runQuery(query);
-			if(article.length > 0) { throw new BadRequestException('Action not allowed') };
-			const {entity} = await this.db.createContentEntity(data, opt);
-			return { id: entity.key.id, ...entity.data };
+			const article = await this.mongo.db.collection<Content>('content').countDocuments({type: data.type})
+			if(article > 0) { throw new BadRequestException('Action not allowed') };
+			return await this.createOne(data, opt);
 		} catch (err: any) {
 			throw new BadRequestException(err.message);
 		}
@@ -240,7 +379,7 @@ export class ContentService {
 			// console.log(xml.data)
 			const parser = new Parser()
 			const data = await  parser.parseStringPromise(xml.data)
-			const episodes = data.rss.channel[0].item.slice(0, 10).map((item) => {
+			const episodes = data.rss.channel[0].item.slice(0, 10).map((item: any) => {
 				return {
 					title: item.title[0],
 					url: item.enclosure[0].$.url,
@@ -249,376 +388,10 @@ export class ContentService {
 					duration: item['itunes:duration'][0]
 				}
 			})
-			console.log(episodes)
+			// console.log(episodes)
 			return episodes
 		} catch (err: any){
 			throw new NotFoundException()
-		}
-	}
-
-	// Marginal Content
-
-	async getArticles(page: number, userUid?: string){
-		const now = new Date().toISOString();
-		const firstIndex = page > 0 ? page*10 : 0;
-		const lastIndex = firstIndex+10;
-		const filter = `_type=="article"`
-		try {	
-			if(userUid){
-				const [user] = await this.db.get(this.db.key(['User', userUid]));
-				if(user.role === "member"){
-					filter.concat(` && publishAt < ${now}`)
-				}
-			}	else {
-				filter.concat(` && publishAt < ${now}`)
-			}
-
-			const articles = await this.sanity.fetch(`*[${filter}][${firstIndex}..${lastIndex}] | order(publishAt desc) {
-				heading, "slug": slug.current, summary,
-				"author": {
-					"name": authorReference->name,
-					"image": authorReference->image.asset->url,
-					"slug": authorReference->slug.current
-				},
-				"image": image.asset->url,
-				publishAt,
-				"updatedAt": _updatedAt,
-				tags
-			}`)
-			
-			return {
-				data: articles,
-				meta: {
-					more: articles.length > 10 ? true : false,
-					nextPage: articles.length > 10 ? page++ : page
-				}
-			}
-		} catch(err: any) {
-			// console.log(err)
-			throw new NotFoundException(err.message)
-		}
-	}
-
-	async getArticle(slug: string, userUid?: string){
-		try {			
-			const data = await this.sanity.fetch(`*[_type=="article" && slug.current=="${slug}"] {
-				heading, "slug": slug.current, summary,
-				"author": {
-					"name": authorReference->name,
-					"image": authorReference->image.asset->url,
-					"slug": authorReference->slug.current
-				},
-				"image": image.asset->url,
-				publishAt,
-				"updatedAt": _updatedAt,
-				tags, preview, body, "id": _id
-			}`)
-
-			if(data.length === 0){ throw new NotFoundException() }
-			const article = data[0];
-
-			const now = Date.now()
-			const pubDate = Number(new Date(article.publishAt))
-
-			if(userUid){
-				const [user] = await this.db.get(this.db.key(['User', userUid]));
-				const [subscription] = await this.db.get(this.db.key(['Subscription', userUid]));
-				const [products] = await this.db.createQuery('Product').filter('user', '=', userUid).filter('type', '=', 'article').filter('verified', '=', true).filter('articleId', '=', article.id).run();
-				
-				if(user.role === "member" && pubDate > now) {
-					throw new NotFoundException()
-				} if(user.role === "admin" || user.role === "curator" || user.role === "moderator") {
-					return article
-				} else if(products.length > 0){
-					return article
-				} else if(subscription){
-					if(subscription.status === 'active'){
-						return article
-					} else {
-						delete article.body;
-						return article;
-					}
-				} else {
-					delete article.body;
-					return article
-				}
-			} if(pubDate > now) {
-				throw new NotFoundException()
-			} else {
-				delete article.body;
-				return article
-			}
-		} catch(err: any) {
-			// console.log(err)
-			throw new NotFoundException(err.message)
-		}
-	}
-
-	async getBoughtArticles(userUid: string){
-		const now = new Date().toISOString();
-		const filter = `_type=="article"`
-		try {
-			const [user] = await this.db.get(this.db.key(['User', userUid]));
-			if(user.role === "member"){
-				filter.concat(` && publishAt < ${now}`)
-			}
-
-			const [products] = await this.db.createQuery('Product').filter('user', '=', userUid).filter('type', '=', 'article').filter('verified', '=', true).run();
-			const articles = await Promise.all(
-				products.map(async (item) => {
-					const results = await this.sanity.fetch(`*[${filter} && _id==${item.articleId}] | order(publishAt desc) {
-						heading, "slug": slug.current, summary,
-						"author": {
-							"name": authorReference->name,
-							"image": authorReference->image.asset->url,
-							"slug": authorReference->slug.current
-						},
-						"image": image.asset->url,
-						publishAt,
-						"updatedAt": _updatedAt,
-						tags
-					}`)
-
-					if(results.length > 0){
-						return results[0]
-					}
-				})
-			)
-
-			return articles.sort((a, b) => {
-				if(Number(new Date(a.publishAt)) > Number(new Date(b.publishAt))) {
-					return -1
-				} else if (Number(new Date(a.publishAt)) < Number(new Date(b.publishAt))) {
-					return 1;
-				} else {
-					return 0
-				}
-			})
-		} catch (err: any){
-			throw new NotFoundException()
-		}
-	}
-
-	async getNewsletters(page: number, userUid?: string){
-		const now = new Date().toISOString();
-		const firstIndex = page > 0 ? page*10 : 0;
-		const lastIndex = firstIndex+10;
-		const filter = `_type=="newsletter"`
-		try {
-			if(userUid){
-				const [user] = await this.db.get(this.db.key(['User', userUid]));
-				if(user.role === "member"){
-					filter.concat(` && publishAt < ${now}`)
-				}
-			}	else {
-				filter.concat(` && publishAt < ${now}`)
-			}
-
-			const articles = await this.sanity.fetch(`*[${filter}][${firstIndex}..${lastIndex}] | order(publishAt desc) {
-				heading, "slug": slug.current, summary,
-				"author": {
-					"name": authorReference->name,
-					"image": authorReference->image.asset->url,
-					"slug": authorReference->slug.current
-				},
-				"image": image.asset->url,
-				publishAt,
-				"updatedAt": _updatedAt,
-				tags
-			}`)
-
-			return {
-				data: articles,
-				meta: {
-					more: articles.length > 10 ? true : false,
-					nextPage: articles.length > 10 ? page++ : page
-				}
-			}
-		} catch(err: any) {
-			throw new NotFoundException(err.message)
-		}
-	}
-
-	async getNewsletter(slug: string, userUid?: string){
-		try {			
-			const data = await this.sanity.fetch(`*[_type=="newsletter" && slug.current=="${slug}"] {
-				heading, "slug": slug.current, summary,
-				"author": {
-					"name": authorReference->name,
-					"image": authorReference->image.asset->url,
-					"slug": authorReference->slug.current
-				},
-				"image": image.asset->url,
-				publishAt,
-				"updatedAt": _updatedAt,
-				tags, preview, body, "id": _id
-			}`)
-
-			if(data.length === 0){ throw new NotFoundException() }
-			const article = data[0];
-
-			const now = Date.now()
-			const pubDate = Number(new Date(article.publishAt))
-			if(now > pubDate){
-				return article
-			}
-
-			if(userUid){
-				const [user] = await this.db.get(this.db.key(['User', userUid]));
-				const [subscription] = await this.db.get(this.db.key(['Subscription', userUid]));
-				if(user.role === "admin" || user.role === "curator" || user.role === "moderator") {
-					return article
-				} else if(subscription){
-					if(subscription.status === 'active'){
-						return article
-					} else {
-						delete article.body;
-						return article;
-					}
-				} else {
-					delete article.body;
-					return article
-				}
-			} else {
-				delete article.body;
-				return article
-			}
-		} catch(err: any) {
-			throw new NotFoundException(err.message)
-		}
-	}
-
-	async getAuthors(page: number, userUid?: string){
-		const now = new Date().toISOString();
-		const firstIndex = page > 0 ? page*10 : 0;
-		const lastIndex = firstIndex+10;
-		const filter = `_type=="author"`
-		try {
-			if(userUid){
-				const [user] = await this.db.get(this.db.key(['User', userUid]));
-				if(user.role === "member"){
-					filter.concat(` && publishAt < ${now}`)
-				}
-			}	else {
-				filter.concat(` && publishAt < ${now}`)
-			}
-
-			const authors = await this.sanity.fetch(`
-				*[${filter}][${firstIndex}..${lastIndex}] | order(name) {
-					"id": _id, publishAt, "updatedAt": _updatedAt,
-					name, "slug": slug.current, instagram, twitter,
-					shortBio, "image": image.asset->url,
-					biography, occupation
-				}
-			`)
-			
-			return {
-				data: authors,
-				meta: {
-					more: authors.length > 10 ? true : false,
-					nextPage: authors.length > 10 ? page++ : page
-				}
-			}
-		} catch(err: any){
-			throw new NotFoundException(err.message)
-		}
-	}
-
-	async getAuthor(slug: string){
-		try {
-			const data = await this.sanity.fetch(`
-				*[_type=="author" && slug.current=="${slug}"] {
-					"id": _id, publishAt, "updatedAt": _updatedAt,
-					name, "slug": slug.current, instagram, twitter,
-					shortBio, "image": image.asset->url,
-					biography, occupation
-				}
-			`)
-			if(data.length === 0){ throw new NotFoundException() }
-			return data[0];
-		} catch(err: any){
-			throw new NotFoundException(err.message)
-		}
-	}
-
-	async getPodcasts(page: number, userUid?: string){
-		const now = new Date().toISOString();
-		const firstIndex = page > 0 ? page*10 : 0;
-		const lastIndex = firstIndex+10;
-		const filter = `_type=="podcast"`
-		try {
-			if(userUid){
-				const [user] = await this.db.get(this.db.key(['User', userUid]));
-				if(user.role === "member"){
-					filter.concat(` && publishAt < ${now}`)
-				}
-			}	else {
-				filter.concat(` && publishAt < ${now}`)
-			}
-
-			const podcasts = await this.sanity.fetch(`
-				*[${filter}][${firstIndex}..${lastIndex}] | order(publishAt desc) {
-					summary, heading, publishAt,
-					"updatedAt": _updatedAt, "image": image.asset->url,
-					"slug": slug.current, tags, spotifyUrl, body
-				}
-			`)
-
-			return {
-				data: podcasts,
-				meta: {
-					more: podcasts.length > 10 ? true : false,
-					nextPage: podcasts.length > 10 ? page++ : page
-				}
-			}
-		} catch(err: any){
-			throw new NotFoundException(err.message)
-		}
-	}
-
-	async getPodcast(slug: string){
-		try {
-			const data = await this.sanity.fetch(`
-				*[_type=="podcast" && slug.current=="${slug}"]{
-					summary, heading, publishAt,
-					"updatedAt": _updatedAt, "image": image.asset->url,
-					"slug": slug.current, tags, spotifyUrl, body
-				}
-			`)
-			if(data.length === 0){ throw new NotFoundException() }		
-			const article = data[0];
-			
-			const now = Date.now()
-			const pubDate = Number(new Date(article.publishAt))
-			if(now > pubDate){
-				return article
-			} else {
-				throw new NotFoundException()
-			}
-		} catch(err: any){
-			throw new NotFoundException(err.message)
-		}
-	}
-
-	async getAbout(){
-		try {
-			const data: any[] = await this.sanity.fetch(`
-				*[_type=="about"] | order(_createdAt){
-					"updatedAt": _updatedAt, "slug": slug.current,
-					"image": image.asset->url, publishAt,
-					body, summary, heading, "id":_id
-				}
-			`)
-			if(data.length === 0){ throw new NotFoundException() }
-			const focus = data.find((val) => val.slug === "focus");
-			const datas = data.find((val) => val.slug === "data");
-			const about = data.find((val) => val.slug === "about");
-			
-			return {
-				focus, methods: datas, about
-			};
-		} catch(err: any){
-			throw new NotFoundException(err.message)
 		}
 	}
 }

@@ -1,25 +1,28 @@
-export interface Person {
-	id: string,
-	name: string,
-	profilePhotoUrl: string,
-	profilePhotoOriginalName: string,
-	description: string,
-	lastUpdated: Date,
-	created: Date
-}
+import { Collection } from "src/database/database.types";
 
-export interface PersonRole {
-	id: string,
-	personName: string,
-	personId?: string,
-	ownerKind: string,
-	title: string,
-	subtitle: string,
-	category: string,
-	characterName?: string,
-	characterDescription?: string,
-	lastUpdated: Date,
-	created: Date
+export interface Person {
+	id: string;
+	name: string;
+	occupation: string;
+	cityOfOrigin?: string;
+	provinceOfOrigin?: string;
+	countryOfOrigin?: string;
+	yearOfBirth?: number;
+	dateMonthOfBirth?: string;
+	deathDate?: Date;
+	nationality?: string[];
+	gender?: string;
+	pronouns?: string;
+	twitterUsername?: string;
+	instagramUsername?: string;
+	description?: string;
+	website?: string;
+	editVerified: boolean;
+	isHidden: boolean;
+	editLocked: boolean;
+	lastVerified: Date;
+	created: Date;
+	lastUpdated: Date;
 }
 
 // Utility
@@ -28,7 +31,7 @@ export interface PersonRoleOpt {
 	roleId?: string,
 	time: Date,
 	parentId: string,
-	parentKind: string,
+	parentKind: Collection,
 	user: string
 }
 

@@ -3,7 +3,6 @@ import {
 	UseGuards,
 	Get,
 	Post,
-	Put,
 	Delete,
 	Patch,
 	Body,
@@ -14,33 +13,24 @@ import {
 	UseInterceptors 
 } from '@nestjs/common';
 import { RolesGuard } from '../users/roles.guard';
-import { FilmsEditGuard } from './films.edit.guard';
+import { EditGuard } from '../users/edit.guard';
 import { FrequencyGuard } from '../database/frequency.guard';
 import { Roles } from '../users/roles.decorator';
-import { EditLock } from './films.edit.decorator';
+import { EditLock } from '../users/edit.decorator';
 import { Frequency } from '../database/frequency.decorator';
-import { HistoryOpt } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
 import { FilmsService } from './films.service';
 import {
-	CreatePosterDto,
-	UpdatePosterDto,
-	CreateStillDto,
-	UpdateStillDto,
 	CreateFilmDto, 
 	UpdateFilmDto,
 	CreateListRatingDto, 
-	UpdateListRatingDto
+	UpdateListRatingDto,
+	PhotoDto
 } from './films.dto';
 import { 
-	Film, 
-	Poster, 
-	Still,
-	FilmType,
 	ImageOpt,
 	RatingOpt
 } from './films.types';
-import { CompaniesService } from '../companies/companies.service';
 import {
 	CreateCompanyRoleDto,
 	UpdateCompanyRoleDto
@@ -51,7 +41,6 @@ import {
 	UpdatePersonRoleDto
 } from '../people/people.dto';
 import { PersonRoleOpt } from '../people/people.types';
-import { PeopleService } from '../people/people.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('films')
@@ -59,9 +48,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 export class FilmsController {
 	constructor(
 		private filmsService: FilmsService,
-		private companiesService: CompaniesService,
-		private authService: AuthService,
-		private peopleService: PeopleService
+		private authService: AuthService
 	){}
 
 	// Data methods
@@ -105,23 +92,27 @@ export class FilmsController {
 
 	// Core film methods
 	@Get()
-	async findAll(){
-		return await this.filmsService.findAll()
+	async findAll(
+		@Query('page') page: number,
+		@Query('limit') limit: number
+	){
+		return await this.filmsService.findAll(page, limit)
 	}	
 
 	@Post()
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	async createOne(
 		@Body() createFilmDto: CreateFilmDto, 
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
-		const user = await this.authService.getUserUid(idToken);
-		return await this.filmsService.createOne(createFilmDto, user)
+		return await this.filmsService.createOne(createFilmDto, userId)
 	}
 
 	@Get(':id')
 	@UseGuards(FrequencyGuard)
-	@Frequency('Film')
+	@Frequency('films')
 	async findOne(
 		@Param('id') id: string,
 		@Query('minimal') style: boolean
@@ -134,30 +125,31 @@ export class FilmsController {
 	}
 
 	@Patch(':id')
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	async updateOne(
 		@Param('id') id: string, 
 		@Body() updateFilmDto: UpdateFilmDto,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
-		const user = await this.authService.getUserUid(idToken);
-		return await this.filmsService.updateOne(updateFilmDto, user, id)
+		return await this.filmsService.updateOne(updateFilmDto, userId, id)
 	}
 
 	@Delete(':id')
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	async deleteOne(
 		@Param('id') id: string, 
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
-		const user = await this.authService.getUserUid(idToken);
-		return await this.filmsService.deleteOne(id, user);
+		return await this.filmsService.deleteOne(id, userId);
 	}
 
 	@Get(':id/history')
 	async findHistory(
 		@Param('id') filmId: string,
-		@Headers('x-page-cursor') cursor: string
 	){
 		return await this.filmsService.findHistory(filmId);
 	}
@@ -166,51 +158,41 @@ export class FilmsController {
 	@Patch(':id/settings/hide')
 	@Roles('moderator')
 	async hideFilm(
-		@Param('id') id: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Param('id') id: string
 	){
-		const user = await this.authService.getUserUid(idToken);
-		return await this.filmsService.hideFilm(user, id);
+		return await this.filmsService.hideFilm(id);
 	}
 
 	@Patch(':id/settings/unhide')
 	@Roles('moderator')
 	async unhideFilm(
-		@Param('id') id: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Param('id') id: string
 	){
-		const user = await this.authService.getUserUid(idToken);
-		return await this.filmsService.unhideFilm(user, id);
+		return await this.filmsService.unhideFilm(id);
 	}
 
 	@Patch(':id/settings/verify')
 	@Roles('moderator')
 	async verifyFilmEdit(
-		@Param('id') id: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Param('id') id: string
 	){
-		const user = await this.authService.getUserUid(idToken);
-		return await this.filmsService.verifyFilmEdit(user, id);
+		return await this.filmsService.verifyFilmEdit(id);
 	}
 
 	@Patch(':id/settings/lock')
 	@Roles('moderator')
 	async lockFilmEdit(
-		@Param('id') id: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Param('id') id: string
 	){
-		const user = await this.authService.getUserUid(idToken);
-		return await this.filmsService.lockFilmEdit(user, id);
+		return await this.filmsService.lockFilmEdit(id);
 	}
 
 	@Patch(':id/settings/unlock')
 	@Roles('moderator')
 	async unlockFilmEdit(
-		@Param('id') id: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Param('id') id: string
 	){
-		const user = await this.authService.getUserUid(idToken);
-		return await this.filmsService.unlockFilmEdit(user, id);
+		return await this.filmsService.unlockFilmEdit(id);
 	}
 
 	// Ratings methods
@@ -218,14 +200,14 @@ export class FilmsController {
 	@Roles('journalist')
 	async createReview(
 		@Param('filmId') filmId: string,
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Body() createListRatingDto: CreateListRatingDto
 	){
 		const imageOptions: RatingOpt = {
 			time: new Date(),
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			parentId: filmId,
-			parentKind: 'Film'
+			parentKind: 'films'
 		}
 		return await this.filmsService.createOneRating(createListRatingDto, imageOptions);
 	}
@@ -235,14 +217,14 @@ export class FilmsController {
 	async updateReview(
 		@Param('filmId') filmId: string,
 		@Param('reviewId') reviewId: string,
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Body() updateListRatingDto: UpdateListRatingDto
 	){
 		const imageOptions: RatingOpt = {
 			time: new Date(),
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			parentId: filmId,
-			parentKind: 'Film',
+			parentKind: 'films',
 			ratingId: reviewId
 		}
 		return await this.filmsService.updateOneRating(updateListRatingDto, imageOptions);
@@ -253,13 +235,13 @@ export class FilmsController {
 	async deleteReview(
 		@Param('filmId') filmId: string,
 		@Param('reviewId') reviewId: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		const imageOptions: RatingOpt = {
 			time: new Date(),
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			parentId: filmId,
-			parentKind: 'Film',
+			parentKind: 'films',
 			ratingId: reviewId
 		}
 		return await this.filmsService.deleteOneRating(imageOptions);
@@ -270,13 +252,13 @@ export class FilmsController {
 	async verifyReview(
 		@Param('filmId') filmId: string,
 		@Param('reviewId') reviewId: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		const imageOptions: RatingOpt = {
 			time: new Date(),
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			parentId: filmId,
-			parentKind: 'Film',
+			parentKind: 'films',
 			ratingId: reviewId
 		}
 		return await this.filmsService.verifyRating(imageOptions);
@@ -284,252 +266,252 @@ export class FilmsController {
 
 	// Still methods
 	@Post(':filmId/stills')
-	@UseGuards(FilmsEditGuard)
-	@EditLock(true)
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	@UseInterceptors(FileInterceptor('still'))
 	async uploadStill(
 		@Param('filmId') filmId: string,
 		@UploadedFile() still: Express.Multer.File,
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('index') index: '0'|'1'|'2'
+		@Headers('x-user-id') userId: string,
+		@Query('index') index: number
 	){
 		const imageOptions: ImageOpt = {
 			time: new Date(),
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			parentId: filmId,
-			parentKind: 'Film',
-			imageId: index
+			parentKind: 'films',
+			index: index
 		}
 		return await this.filmsService.uploadStill(imageOptions, still);
 	}
 
 	@Patch(':filmId/stills')
-	@UseGuards(FilmsEditGuard)
-	@EditLock(true)
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	async updateStillDescription(
 		@Param('filmId') filmId: string,
-		@Body() updateStillDto: UpdateStillDto,
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('index') index: string
+		@Body() updateStillDto: PhotoDto,
+		@Headers('x-user-id') userId: string,
+		@Query('index') index: number
 	){
 		const imageOptions: ImageOpt = {
 			time: new Date(),
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			parentId: filmId,
-			parentKind: 'Film',
-			imageId: index
+			parentKind: 'films',
+			index: index
 		}
 		return await this.filmsService.updateStill(updateStillDto, imageOptions);
 	}
 
 	@Delete(':filmId/stills')
-	@UseGuards(FilmsEditGuard)
-	@EditLock(true)
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	async deleteStill(
 		@Param('filmId') filmId: string,
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('index') index: string
+		@Headers('x-user-id') userId: string,
+		@Query('index') index: number
 	){
 		console.log("deletes still")
 		const imageOptions: ImageOpt = {
 			time: new Date(),
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			parentId: filmId,
-			parentKind: 'Film',
-			imageId: index
+			parentKind: 'films',
+			index: index
 		}
 		return await this.filmsService.deleteStill(imageOptions);
 	}
 
 	// Poster methods
 	@Post(':filmId/posters')
-	@UseGuards(FilmsEditGuard)
-	@EditLock(true)
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	@UseInterceptors(FileInterceptor('poster'))
 	async uploadPoster(
 		@Param('filmId') filmId: string,
 		@UploadedFile() poster: Express.Multer.File,
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('index') index: '0'
+		@Headers('x-user-id') userId: string,
+		@Query('index') index: number
 	){
 		const imageOptions: ImageOpt = {
 			time: new Date(),
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			parentId: filmId,
-			parentKind: 'Film',
-			imageId: index
+			parentKind: 'films',
+			index: index
 		}
 		console.log(poster)
 		return await this.filmsService.uploadPoster(imageOptions, poster);
 	}
 
 	@Patch(':filmId/posters')
-	@UseGuards(FilmsEditGuard)
-	@EditLock(true)
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	async updatePosterDescription(
 		@Param('filmId') filmId: string,
-		@Body() updatePosterDto: UpdatePosterDto,
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('index') index: string
+		@Body() updatePosterDto: PhotoDto,
+		@Headers('x-user-id') userId: string,
+		@Query('index') index: number
 	){
 		const imageOptions: ImageOpt = {
 			time: new Date(),
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			parentId: filmId,
-			parentKind: 'Film',
-			imageId: index
+			parentKind: 'films',
+			index: index
 		}
 		return await this.filmsService.updatePoster(updatePosterDto, imageOptions);
 	}
 
 	@Delete(':filmId/posters')
-	@UseGuards(FilmsEditGuard)
-	@EditLock(true)
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	async deletePoster(
 		@Param('filmId') filmId: string,
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('index') index: string
+		@Headers('x-user-id') userId: string,
+		@Query('index') index: number
 	){
 		const imageOptions: ImageOpt = {
 			time: new Date(),
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			parentId: filmId,
-			parentKind: 'Film',
-			imageId: index
+			parentKind: 'films',
+			index: index
 		}
 		return await this.filmsService.deletePoster(imageOptions);
 	}
 
 	// CompanyRole methods
 	@Post(':filmId/companies/:companyId/roles')
-	@UseGuards(FilmsEditGuard)
-	@EditLock(true)
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	async createOneCompanyRole(
 		@Param('filmId') filmId: string,
 		@Param('companyId') companyId: string,
 		@Body() createCompanyRoleDto: CreateCompanyRoleDto, 
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		const roleOptions: CompanyRoleOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			companyId: companyId,
 			parentId: filmId,
-			parentKind: 'Film'
+			parentKind: 'films'
 		}
 		return await this.filmsService.createCompanyRole(createCompanyRoleDto, roleOptions);
 	}
 
 	@Patch(':filmId/companies/:companyId/roles/:roleId')
-	@UseGuards(FilmsEditGuard)
-	@EditLock(true)
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	async updateOneCompanyRole(
 		@Param('filmId') filmId: string,
 		@Param('companyId') companyId: string,
 		@Param('roleId') roleId: string,
 		@Body() updateCompanyRoleDto: UpdateCompanyRoleDto, 
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		const roleOptions: CompanyRoleOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			companyId: companyId,
 			parentId: filmId,
 			roleId: roleId,
-			parentKind: 'Film'
+			parentKind: 'films'
 		}
 		return await this.filmsService.updateCompanyRole(updateCompanyRoleDto, roleOptions);
 	}
 
 	@Delete(':filmId/companies/:companyId/roles/:roleId')
-	@UseGuards(FilmsEditGuard)
-	@EditLock(true)
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	async deleteOneCompanyRole(
 		@Param('filmId') filmId: string,
 		@Param('companyId') companyId: string,
 		@Param('roleId') roleId: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		const roleOptions: CompanyRoleOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			companyId: companyId,
 			parentId: filmId,
 			roleId: roleId,
-			parentKind: 'Film'
+			parentKind: 'films'
 		}
 		return await this.filmsService.deleteCompanyRole(roleOptions);
 	}
 
 	// PersonRole methods
 	@Post(':filmId/people/:personId/roles')
-	@UseGuards(FilmsEditGuard)
-	@EditLock(true)
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	async createOnePersonRole(
 		@Param('filmId') filmId: string,
 		@Param('personId') personId: string,
 		@Body() createPersonRoleDto: CreatePersonRoleDto, 
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		const roleOptions: PersonRoleOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			personId: personId,
 			parentId: filmId,
-			parentKind: 'Film'
+			parentKind: 'films'
 		}
 		return await this.filmsService.createPersonRole(createPersonRoleDto, roleOptions);
 	}
 
 	@Patch(':filmId/people/:personId/roles/:roleId')
-	@UseGuards(FilmsEditGuard)
-	@EditLock(true)
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	async updateOnePersonRole(
 		@Param('filmId') filmId: string,
 		@Param('personId') personId: string,
 		@Param('roleId') roleId: string,
 		@Body() updatePersonRoleDto: UpdatePersonRoleDto, 
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		const roleOptions: PersonRoleOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			personId: personId,
 			parentId: filmId,
 			roleId: roleId,
-			parentKind: 'Film'
+			parentKind: 'films'
 		}
 		return await this.filmsService.updatePersonRole(updatePersonRoleDto, roleOptions);
 	}
 
 	@Delete(':filmId/people/:personId/roles/:roleId')
-	@UseGuards(FilmsEditGuard)
-	@EditLock(true)
+	@UseGuards(EditGuard)
+	@EditLock('films')
 	@Roles('member')
 	async deleteOnePersonRole(
 		@Param('filmId') filmId: string,
 		@Param('personId') personId: string,
 		@Param('roleId') roleId: string, 
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		const roleOptions: PersonRoleOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			personId: personId,
 			parentId: filmId,
 			roleId: roleId,
-			parentKind: 'Film'
+			parentKind: 'films'
 		}
 		return await this.filmsService.deletePersonRole(roleOptions);
 	}

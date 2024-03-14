@@ -2,12 +2,31 @@ import { ConfigService } from '@nestjs/config';
 import { Injectable, BadRequestException, StreamableFile } from '@nestjs/common';
 import axios from 'axios';
 import fetch from 'cross-fetch';
-import { createReadStream } from 'fs';
-import { join } from 'path';
+import { DatabaseService } from './database/database.service';
+import { SearchService } from './search/search.service';
+import { HistoryService } from './history/history.service';
 
 @Injectable()
 export class AppService {
-	constructor(private configService: ConfigService) {}
+	constructor(
+		private configService: ConfigService,
+		private mongo: DatabaseService,
+		private search: SearchService,
+		private history: HistoryService
+	) {
+		this.onStartUp()
+	}
+
+	async onStartUp(){
+		try {
+			await this.mongo.connectDB()
+			await this.search.indexAll()
+			// await this.history.mega()
+			// await this.history.transferImages()
+		} catch(err: any){
+			console.log(err)
+		}
+	}
 
 	getHello(): string {
 		return 'Copyright 2023, Makamuta Pty Ltd.';

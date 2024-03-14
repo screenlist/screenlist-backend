@@ -1,29 +1,25 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core'
 import { DatabaseService } from './database.service'
+import { Collection } from './database.types';
 
 @Injectable()
 export class FrequencyGuard implements CanActivate {
 	constructor(
 		private reflector: Reflector,
-		private db: DatabaseService
+		private mongo: DatabaseService
 	){}
 
 	async canActivate(
 		ctx: ExecutionContext
 	): Promise<boolean>{
-		const kind = this.reflector.get<string>('frequency', ctx.getHandler());
+		const kind = this.reflector.get<Collection>('hit', ctx.getHandler());
 		const request =  ctx.switchToHttp().getRequest();
 		const path: string = request.url
 
-		if(!kind){ return true }
-
-		const kinds = ['Film', 'Person', 'Company']
-		if(kinds.indexOf(kind) < 0){
-			return true;
-		} else {
+		if(!kind){ return true } else {
 			const id = path.split('/')[2];
-			await this.db.updateFrequencyEntity(kind, id);
+			await this.mongo.addHit(kind, id);
 			return true;
 		}
 	}

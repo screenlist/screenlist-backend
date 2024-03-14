@@ -2,36 +2,29 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import * as admin from 'firebase-admin';
 import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
-import { UserOpt, User } from '../users/users.types';
+import { UserOpt } from '../users/users.types';
 import { HistoryOpt } from '../database/database.types';
 import { SESClient, SendRawEmailCommand } from "@aws-sdk/client-ses";
+import { DatabaseService } from 'src/database/database.service';
+import clerkClient, { User } from '@clerk/clerk-sdk-node';
  
 @Injectable()
 export class AuthService {
-	constructor(private configService: ConfigService){}
- 
-	private app = admin.initializeApp()
+	constructor(private config: ConfigService, private mongo: DatabaseService){}
 
-	public getAuth = this.app.auth;
+	public client = clerkClient;
 
-	private emailClient = new SESClient();
-
-	async verifyRequest(idToken: string){
-		try {
-			const token = await this.getAuth().verifyIdToken(idToken, true);
-			token ? true : false;
-		} catch{
-			return false
-		}
-	}
-
-	async emailVerified(idToken: string){
-		try {
-			const currentUser = await this.getAuth().verifyIdToken(idToken, true)
-			return currentUser.email_verified
-		} catch {
-			return false
-		}
+	// async verifyRequest(idToken: string){
+	// 	try {
+	// 		const token = await this.getAuth().verifyIdToken(idToken, true);
+	// 		token ? true : false;
+	// 	} catch{
+	// 		return false
+	// 	}
+	// }
+	
+	public getUserEmail(user: User){
+		return user.emailAddresses.find((val) => val.id === user.primaryEmailAddressId).emailAddress;
 	}
 
 	matchRoles(userRole: string, thresholdRole: string, verified: boolean, path: string){
@@ -42,7 +35,7 @@ export class AuthService {
 		}
 		// All the roles any user can have
 		// sorted according to their hierarchy
-		const allRoles = ['member', 'journalist', 'backer', 'moderator', 'curator', 'admin'];
+		const allRoles = ['member', 'journalist', 'moderator', 'curator', 'admin'];
 		const thresholdRoleIndex = allRoles.indexOf(thresholdRole);
 		const userRoleIndex = allRoles.indexOf(userRole);
 		// Allow access to users who meet the specified
@@ -61,31 +54,44 @@ export class AuthService {
 		}
 	}
 
-	async getUserUid(idToken: string){
-		try {
-			const {uid} = await this.getAuth().verifyIdToken(idToken, true);
-			return uid;
-		} catch(err: any) {
-			throw new BadRequestException(err.message);
-		}
-	}
+	// async getUserUid(idToken: string){
+	// 	try {
+	// 		const {uid} = await this.getAuth().verifyIdToken(idToken, true);
+	// 		return uid;
+	// 	} catch(err: any) {
+	// 		throw new BadRequestException(err.message);
+	// 	}
+	// }
 
-	async getUserInfo(uid: string){
-		try {
-			const user = await this.getAuth().getUser(uid);
-			return user;
-		} catch (err: any){
-			throw new BadRequestException(err.message)
-		}
-	}
+	// async getUserFromToken(idToken: string){
+	// 	try {
+	// 		const {uid, email, email_verified} = await this.getAuth().verifyIdToken(idToken, true);
+	// 		return {
+	// 			uid: uid,
+	// 			email: email,
+	// 			emailVerified: email_verified
+	// 		}
+	// 	} catch(err: any) {
+	// 		throw new BadRequestException(err.message);
+	// 	}
+	// }
 
-	async generatePasswordResetLink(email: string){
-		try {
-			const user = await this.getAuth().getUserByEmail(email);
-			if(!user){ throw new BadRequestException('Email not found') }
-			return await this.getAuth().generatePasswordResetLink(user.email)
-		} catch(err: any){
-			throw new BadRequestException(err.message)
-		}
-	}
+	// async getUserInfo(uid: string){
+	// 	try {
+	// 		const user = await this.getAuth().getUser(uid);
+	// 		return user;
+	// 	} catch (err: any){
+	// 		throw new BadRequestException(err.message)
+	// 	}
+	// }
+
+	// async generatePasswordResetLink(email: string){
+	// 	try {
+	// 		const user = await this.getAuth().getUserByEmail(email);
+	// 		if(!user){ throw new BadRequestException('Email not found') }
+	// 		return await this.getAuth().generatePasswordResetLink(user.email)
+	// 	} catch(err: any){
+	// 		throw new BadRequestException(err.message)
+	// 	}
+	// }
 }

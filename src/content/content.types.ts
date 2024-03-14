@@ -1,14 +1,13 @@
 export interface Content {
-	author: string,
-	headline: string,
-	summary: string,
-	headerImageUrl: string,
+	id: string;
+	authorName: string;
+	authorId: string;
+	headline: string;
+	summary: string;
 	body: string,
-	tags: [{
-		kind: string,
-		id: string,
-		displayName: string
-	}];
+	tags: string[];
+	slug: string;
+	type: 'blog' | 'tos' | 'about' | 'contributions' | 'privacy';
 	created: Date,
 	lastUpdated: Date
 }

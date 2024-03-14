@@ -3,37 +3,22 @@ import {
 	UseGuards,
 	Get,
 	Post,
-	Put,
-	Delete,
 	Patch,
 	Body,
 	Param,
 	Query,
-	Headers,
-	UploadedFile,
-	UseInterceptors,
-	BadRequestException,
-	NotFoundException
+	Headers
 } from '@nestjs/common';
 import { RolesGuard } from './roles.guard';
 import { Roles } from './roles.decorator';
-import { HistoryOpt } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
-import { UserOpt, VoteOpt, RequestOpt} from './users.types';
+import { UserOpt, RequestOpt} from './users.types';
 import { 
-	CreateUserDto,  
 	UpdateUserDto,
-	CreateVotesDto,
-	UpdateVotesDto,
 	CreateRequestDto,
-	UpdateRequestDto,
-	CreateJournalistInfoDto,
-	UpdateJournalistInfoDto,
 } from '../users/users.dto';
 import { UsersService } from './users.service';
-import { ImageOpt } from '../films/films.types';
-import { CreateDisplayPhotoDto, UpdateDisplayPhotoDto } from '../films/films.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { WebhookEvent } from '@clerk/clerk-sdk-node';
 
 @Controller('users')
 @UseGuards(RolesGuard)
@@ -44,114 +29,40 @@ export class UsersController {
 	){}
 
 	@Get()
+	@Roles('admin')
 	async findAllUsers(){
 		return await this.usersService.findAllUsers()
 	}
 
-	@Get('search')
-	async searchUsername(@Query('q') username: string){
-		console.log('searchUsername')
-		return await this.usersService.checkUserName(username)
-	}
-
-	// First users gets the chance to claim admin role
-	@Get('premiere')
-	@Roles('member')
-	async firstUser(@Headers('AuthorizationToken') idToken: string){
-		console.log('firstUser')
-		const userOptions: UserOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date()
-		}
-		return await this.usersService.checkEmptyThrone(userOptions);
-	}
-
-	@Post('premiere')
-	@Roles('member')
-	async claimAdminRole(
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('id') id: string
-	){
-		console.log('claimAdminRole')
-		const userOptions: UserOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date(),
-			objectId: id
-		}
-		return await this.usersService.setAdmin(userOptions);
-	}
-
-	// Check for existing userName
-	@Get('check')
-	async checkExisitingUser(
-		@Query('username') userName: string
-	){
-		console.log('checkExisitingUser')
-		return await this.usersService.checkUserName(userName);
-	}
-
 	@Get('admins')
+	@Roles('admin')
 	async findAdmins(){
 		console.log('findAdmins')
 		return await this.usersService.findAllAdmins();
 	}
 
 	@Get('curators')
+	@Roles('admin')
 	async findCurators(){
 		console.log('findCurators')
 		return await this.usersService.findAllCurators();
 	}
 
 	@Get('moderators')
+	@Roles('admin')
 	async findModerators(){
 		console.log('findModerators')
 		return await this.usersService.findAllModerators();
 	}
 
 	@Get('journalists')
+	@Roles('admin')
 	async findJournalists(){
 		console.log('findJournalists')
 		return await this.usersService.findAllJournalists();
-	}	
-
-	// Every user uses this route to get register more profile infomation
-	@Post('register')
-	async setupUser(
-		@Body() createUserDto: CreateUserDto,
-		@Headers('AuthorizationToken') idToken: string
-	){
-		console.log('setupUser')
-		try{
-			const userOptions: UserOpt = {
-				user: await this.authService.getUserUid(idToken),
-				time: new Date()
-			}
-			const create = await this.usersService.createUser(createUserDto, userOptions);
-			return create
-		} catch(err: any){
-			throw new BadRequestException(err.message)
-		}
-	}
-
-
-	@Post('auth')
-	async authenticateOne(
-		@Headers('AuthorizationToken') idToken: string
-	){
-		console.log('authenticateOne')
-		const user = await this.authService.getUserUid(idToken);
-		return await this.usersService.getUserName(user);
-	}
-
-	@Post('password')
-	async resetPasswordEmail(@Body('email') email: string){
-		return await this.usersService.passwordReset(email);
 	}
 
 	// Routes for updating user information
-
-	// Similar the authenticateOne method except for the http verb and the latter
-	// returns only a userName
 	@Get('u/:userName')
 	async findOne(@Param('userName') userName: string){
 		console.log('findOne')
@@ -163,105 +74,27 @@ export class UsersController {
 	async updateUser(
 		@Param('userName') userName: string,
 		@Body() updateUserDto: UpdateUserDto,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		console.log('updateUser')
 		const userOptions: UserOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			userName: userName
 		}
 		return await this.usersService.updateUser(updateUserDto, userOptions);
 	}
 
-	@Delete('u/:userName/delete')
+	@Get('details')
 	@Roles('member')
-	async deleteAcount(
-		@Param('userName') userName: string,
-		@Headers('AuthorizationToken') idToken: string
-	){
-		const userOptions: UserOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date(),
-			userName: userName
-		}
-		return await this.usersService.deleteUser(userOptions);
+	async userDetailsOnly(@Headers('x-user-id') userId: string){
+		return await this.usersService.findDetailsOnly(userId)
 	}
 
-	@Patch('u/:userName/email')
+	@Get('quota')
 	@Roles('member')
-	async handleEmail(
-		@Param('userName') userName: string,
-		@Headers('AuthorizationToken') idToken: string
-	){
-		const userOptions: UserOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date(),
-			userName: userName
-		}
-		return await this.usersService.updateUserEmail(userOptions)
-	}
-
-	@Post('u/:userName/photo')
-	@Roles('member')
-	@UseInterceptors(FileInterceptor('profile'))
-	async updateUserPhoto(
-		@Param('userName') userName: string,
-		@Query('index') index: string,
-		@Headers('AuthorizationToken') idToken: string,
-		@UploadedFile() profile: Express.Multer.File
-	){
-		console.log('updateUserPhoto')
-		const imageOptions: ImageOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date(),
-			parentId: await this.authService.getUserUid(idToken),
-			parentKind: 'User',
-			imageId: index
-		}
-		if(index === '0'){
-		 	return await this.usersService.uploadProfilePhoto(imageOptions, profile);
-		} else if(index === '1'){
-			return await this.usersService.uploadCoverPhoto(imageOptions, profile);
-		} else {
-			throw new BadRequestException('Unrecognised index')
-		}
-	}
-
-	@Patch('u/:userName/photo')
-	@Roles('member')
-	async updatePhoto(
-		@Param('userName') userName: string,
-		@Query('index') index: string,
-		@Body() updatePhoto : UpdateDisplayPhotoDto,
-		@Headers('AuthorizationToken') idToken: string,
-	){
-		const imageOptions: ImageOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date(),
-			parentId: await this.authService.getUserUid(idToken),
-			parentKind: 'User',
-			imageId: index
-		}
-		return await this.usersService.updateProfilePhoto(updatePhoto, imageOptions);
-	}
-
-	@Delete('u/:userName/photo')
-	@Roles('member')
-	async deleteUserPhoto(
-		@Headers('AuthorizationToken') idToken: string,
-		@Query('index') index: string,
-		@Query('image_name') imageName: string
-	){
-		console.log('deleteUserPhoto')
-		const imageOptions: ImageOpt = {
-			user: await this.authService.getUserUid(idToken),
-			time: new Date(),
-			parentId: await this.authService.getUserUid(idToken),
-			parentKind: 'User',
-			imageId: index
-		}
-		return await this.usersService.removeProfilePhoto(imageOptions);
+	async getQuota(@Headers('x-user-id') userId: string){
+		return await this.usersService.getMemberQuotaUsage(userId)
 	}
 
 	// Admins use this route to view all requests for the journalism role
@@ -278,12 +111,12 @@ export class UsersController {
 	async approveJournalist(
 		@Param('username') userName: string,
 		@Param('requestId') requestId: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		console.log('approveJournalist')
 		const requestOptions: RequestOpt = {
 			userName: userName,
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			requestId: requestId
 		}
@@ -295,21 +128,16 @@ export class UsersController {
 	async rejectJournalist(
 		@Param('username') userName: string,
 		@Param('requestId') requestId: string,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		console.log('rejectJournalist')
 		const requestOptions: RequestOpt = {
 			userName: userName,
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date(),
 			requestId: requestId
 		}
 		return await this.usersService.rejectToSetJournalist(requestOptions);
-	}
-
-	@Get('admin/index')
-	async indexDatabase(){
-		return await this.usersService.indexDatabase()
 	}
 
 	// Users use this route to request the journalist role
@@ -318,12 +146,12 @@ export class UsersController {
 	async requestJournalistRole(
 		@Query('username') userName: string,
 		@Body() createRequestDto: CreateRequestDto,
-		@Headers('AuthorizationToken') idToken: string
+		@Headers('x-user-id') userId: string
 	){
 		console.log('requestJournalistRole')
 		const requestOptions: RequestOpt = {
 			userName: userName,
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.usersService.applyForJournalistRole(createRequestDto, requestOptions);
@@ -333,25 +161,25 @@ export class UsersController {
 	@Post('super/remove')
 	@Roles('admin')
 	async revokeSuperRole(
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Query('username') subjectUid: string
 	){
 		console.log('revokeSuperRole')
 		const userOptions: UserOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
-		return await this.usersService.revokePrivilegedRole(subjectUid, userOptions);
+		return await this.usersService.revokePrivilegedRole(subjectUid);
 	}
 
 	@Post('super/admin')
 	@Roles('admin')
 	async makeAdmin(
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Query('username') uid: string
 	){
 		const userOptions: UserOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.usersService.makeAdmin(uid, userOptions);
@@ -360,11 +188,11 @@ export class UsersController {
 	@Post('super/curator')
 	@Roles('admin')
 	async makeCurator(
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Query('username') uid: string
 	){
 		const userOptions: UserOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.usersService.makeCurator(uid, userOptions);
@@ -373,13 +201,18 @@ export class UsersController {
 	@Post('super/moderator')
 	@Roles('admin')
 	async makeModerator(
-		@Headers('AuthorizationToken') idToken: string,
+		@Headers('x-user-id') userId: string,
 		@Query('username') uid: string
 	){
 		const userOptions: UserOpt = {
-			user: await this.authService.getUserUid(idToken),
+			user: userId,
 			time: new Date()
 		}
 		return await this.usersService.makeModerator(uid, userOptions);
+	}
+
+	@Post('webhooks')
+	async processWebhooks(@Body() event: WebhookEvent){
+		return await this.processWebhooks(event)
 	}
 }
