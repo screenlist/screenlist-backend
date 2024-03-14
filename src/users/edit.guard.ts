@@ -1,17 +1,15 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core'
-import { FilmsService } from './films.service'
-import { EditFor } from './films.types';
-import { CompaniesService } from 'src/companies/companies.service';
-import { PeopleService } from 'src/people/people.service';
+import { EditFor, Film } from 'src/films/films.types';
+import { DatabaseService } from 'src/database/database.service';
+import { Company } from 'src/companies/companies.types';
+import { Person } from 'src/people/people.types';
 
 @Injectable()
 export class EditGuard implements CanActivate {
 	constructor(
 		private reflector: Reflector,
-		private filmsService: FilmsService,
-		private companiesService: CompaniesService,
-		private peopleService: PeopleService
+		private mongo: DatabaseService
 	){}
 
 	async canActivate(
@@ -29,7 +27,7 @@ export class EditGuard implements CanActivate {
 		
 		if(restricted === 'films' ){
 
-			const document = await this.filmsService.findOneDetailsOnly(id);
+			const document = await this.mongo.db.collection<Film>('films').findOne({id: id})
 			if(!document){ return false; }
 
 			switch(document.editLocked){
@@ -41,7 +39,7 @@ export class EditGuard implements CanActivate {
 
 		} else if(restricted === 'companies'){
 
-			const document = await this.companiesService.findOneDetailsOnly(id);
+			const document = await this.mongo.db.collection<Company>('companies').findOne({id: id})
 			if(!document){ return false; }
 
 			switch(document.editLocked){
@@ -53,7 +51,7 @@ export class EditGuard implements CanActivate {
 
 		} else if(restricted === 'people'){
 
-			const document = await this.peopleService.findOneDetailsOnly(id);
+			const document = await this.mongo.db.collection<Person>('people').findOne({id: id})
 			if(!document){ return false; }
 
 			switch(document.editLocked){
