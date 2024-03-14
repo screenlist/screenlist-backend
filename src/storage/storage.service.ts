@@ -18,6 +18,28 @@ export class StorageService {
 
 	private bucket: string = this.config.get('BB_BUCKET')
 	private readonly photoBaseUrl: string = this.config.get('HOST_URL');
+	
+	public async plainUpload(buffer: Buffer, mimetype: string, name: string){
+		try {
+			const file: PutObjectCommandInput = {
+				Bucket: this.bucket,
+				Body: buffer,
+				Key: name,
+				ContentType: mimetype
+			}
+
+			const command = new PutObjectCommand(file);
+			await this.client.send(command);
+
+			return {
+				name: name,
+				url: this.photoBaseUrl?.substring(0, 5) === 'https' ? `${this.photoBaseUrl}/storage/${name}` : `https://f003.backblazeb2.com/file/${this.bucket}/${name}`
+			}
+		} catch(err: any){
+			console.log(err)
+			throw new BadRequestException(err.message)
+		}
+	}
 
 	private async fileUploader(
 		width: number, 
@@ -46,7 +68,7 @@ export class StorageService {
 
 				return {
 					name: name,
-					url: this.photoBaseUrl?.substring(0, 5) === 'https' ? `${this.photoBaseUrl}/storage/${name}` : `https://f003.backblazeb2.com/file/file/${this.bucket}/${name}`,
+					url: this.photoBaseUrl?.substring(0, 5) === 'https' ? `${this.photoBaseUrl}/storage/${name}` : `https://f003.backblazeb2.com/file/${this.bucket}/${name}`,
 					dimensions: `${info.width}x${info.height}`,
 					size: info.size
 				}
