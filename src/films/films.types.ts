@@ -45,6 +45,7 @@ export interface Photo {
 	optimisedDimensions: string;
 	optimisedSize: number;
 	uploadedByUser: string;
+	source?: string | 'direct';
 	attribution?: string;
 	description?: string;
 	lastUpdated?: Date;

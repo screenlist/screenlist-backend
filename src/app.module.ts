@@ -11,7 +11,6 @@ import { CompaniesModule } from './companies/companies.module';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { ContentModule } from './content/content.module';
-import { PaymentsModule } from './payments/payments.module';
 import { HistoryModule } from './history/history.module';
 
 
@@ -29,7 +28,6 @@ import { HistoryModule } from './history/history.module';
     DatabaseModule,
     AuthModule,
     ContentModule,
-    PaymentsModule,
     HistoryModule
   ],
   controllers: [AppController],

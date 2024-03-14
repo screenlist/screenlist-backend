@@ -287,6 +287,14 @@ export class UsersService {
 		}
 	}
 
+	async findDetailsOnly(userId: string){
+		try {
+			return await this.mongo.db.collection<UserExt>('users').findOne({id: userId})
+		} catch(err: any){
+			throw new NotFoundException()
+		}
+	}
+
 	async getMemberQuotaUsage(userId: string){
 		try {
 			const user = await this.mongo.db.collection<UserExt>('users').findOne({id: userId})

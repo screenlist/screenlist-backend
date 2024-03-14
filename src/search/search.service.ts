@@ -18,7 +18,7 @@ export class SearchService {
 		private mongo: DatabaseService
 	){
 		this.createCollections()
-		this.indexAll()
+		
 	}
 
 	// private compute = async () => await this.createCollections(); //Sets up Search Collections
@@ -336,6 +336,7 @@ export class SearchService {
 			// console.log(filmsRes, peopleRes, companiesRes, contentRes, usersRes)
 			return {status: 'success'}
 		} catch(err: any) {
+			console.log(err)
 			throw new BadRequestException(err.message)
 		}
 	}

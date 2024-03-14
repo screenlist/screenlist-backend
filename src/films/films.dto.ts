@@ -168,6 +168,10 @@ export class PhotoDto {
 	@IsNotEmpty()
 	@IsString()
 	description: string;
+
+	@IsNotEmpty()
+	@IsString()
+	source: string | 'direct';
 }
 
 // Ratings

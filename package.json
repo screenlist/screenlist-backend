@@ -1,7 +1,7 @@
 {
   "name": "screenlist",
-  "version": "0.0.1",
-  "description": "",
+  "version": "2.0.0",
+  "description": "The backend server behind the Screen List project",
   "author": "Alex Kokobane",
   "private": true,
   "license": "AGPL-3.0",

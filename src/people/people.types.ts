@@ -3,7 +3,7 @@ import { Collection } from "src/database/database.types";
 export interface Person {
 	id: string;
 	name: string;
-	occupation?: string;
+	occupation: string;
 	cityOfOrigin?: string;
 	provinceOfOrigin?: string;
 	countryOfOrigin?: string;

@@ -4,7 +4,7 @@ export interface Company {
 	id: string;
 	name: string;
 	founded?: number;
-	dateMonthFounded?: string;
+	dateMonthFounded?: Date;
 	city?: string;
 	country?: string;
 	director?: string;

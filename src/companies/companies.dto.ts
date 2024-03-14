@@ -6,7 +6,8 @@ import {
 	IsEmpty,
 	MaxLength,
 	IsFQDN,
-	IsNumber
+	IsNumber,
+	IsDateString
 } from 'class-validator';
 
 export class CreateCompanyDto {
@@ -21,7 +22,7 @@ export class CreateCompanyDto {
 
 	@IsOptional()
 	@IsString()
-	dateMonthFounded?: string;
+	dateMonthFounded?: Date;
 
 	@IsOptional()
 	@IsString()
@@ -64,8 +65,8 @@ export class UpdateCompanyDto {
 	founded?: number;
 
 	@IsOptional()
-	@IsString()
-	dateMonthFounded?: string;
+	@IsDateString()
+	dateMonthFounded?: Date;
 
 	@IsOptional()
 	@IsString()

@@ -9,15 +9,13 @@ import { MongoClient, Db, OptionalUnlessRequiredId, Filter } from 'mongodb';
 
 @Injectable()
 export class DatabaseService {
-	constructor(private config: ConfigService){
-		this.connectDB()
-	}
+	constructor(private config: ConfigService){}
 
 	// Mongo
 	private client: MongoClient
 	public db: Db
 
-	private async connectDB(){              
+	public async connectDB(){              
 		try {
 			this.client = await new MongoClient(this.config.get('ATLAS_URI')).connect();
 			this.db = this.client.db(this.config.get('MONGO_DATABASE'));
@@ -83,7 +81,7 @@ export class DatabaseService {
 	public async updateOne<T extends ImmutableFields>(data: T, collection: Collection, unset?: CollectionFields<T>){
 		let filteredUnsetValues: (keyof T)[];
 		if(unset){ filteredUnsetValues = unset.filter(val => val !== 'id') }
-		let valuesToRemove: any
+		let valuesToRemove: any = {}
 		if(filteredUnsetValues){
 			for( const val of filteredUnsetValues){
 				delete data[val]
@@ -100,9 +98,9 @@ export class DatabaseService {
 	}
 
 	formatTitle(title: string){
+		const specialWords = ["a", "A", "an", "An", "the", "The", "of", "Of", 'by', 'By', 'and', 'And']
 		const workingSentence = title.split(" ")
-		const final = workingSentence.map((word, index) => {
-			const specialWords = ["a", "A", "an", "An", "the", "The", "of", "Of"]
+		const final = workingSentence.map((word, index) => {			
 			// If these words are in the middle of a sentence
 			if(index !== 0 && specialWords.indexOf(word) != -1){
 				console.log("gate 1", "index no "+index, word)
