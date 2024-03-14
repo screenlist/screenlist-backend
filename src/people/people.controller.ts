@@ -30,8 +30,8 @@ import { PeopleService } from './people.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PhotoDto } from '../films/films.dto';
 import { ImageOpt } from  '../films/films.types';
-import { EditGuard } from 'src/films/films.edit.guard';
-import { EditLock } from 'src/films/films.edit.decorator';
+import { EditGuard } from 'src/users/edit.guard';
+import { EditLock } from 'src/users/edit.decorator';
 
 @Controller('people')
 @UseGuards(RolesGuard)

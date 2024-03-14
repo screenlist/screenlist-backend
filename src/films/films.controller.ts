@@ -13,10 +13,10 @@ import {
 	UseInterceptors 
 } from '@nestjs/common';
 import { RolesGuard } from '../users/roles.guard';
-import { EditGuard } from './films.edit.guard';
+import { EditGuard } from '../users/edit.guard';
 import { FrequencyGuard } from '../database/frequency.guard';
 import { Roles } from '../users/roles.decorator';
-import { EditLock } from './films.edit.decorator';
+import { EditLock } from '../users/edit.decorator';
 import { Frequency } from '../database/frequency.decorator';
 import { AuthService } from '../auth/auth.service';
 import { FilmsService } from './films.service';

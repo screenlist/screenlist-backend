@@ -29,8 +29,8 @@ import { CollectionFields } from '../database/database.types';
 import { ImageOpt } from '../films/films.types';
 import { PhotoDto } from '../films/films.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { EditGuard } from 'src/films/films.edit.guard';
-import { EditLock } from 'src/films/films.edit.decorator';
+import { EditGuard } from 'src/users/edit.guard';
+import { EditLock } from 'src/users/edit.decorator';
 
 @Controller('companies')
 @UseGuards(RolesGuard)
