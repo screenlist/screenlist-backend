@@ -344,23 +344,23 @@ export class SearchService {
 	async drillThrough<T>(collection: Collection, limit?: number, page?: number): Promise<WithId<T>[]> {
 		const	size = limit ? +limit : 500
 		const skip = ( (page ? +page : 1) - 1 ) * size
-		let documents: WithId<T>[]
-		const query = this.mongo.db.collection<T>(collection).find({}).sort({created: 1}).skip(skip).limit(limit)
+		let documents: WithId<T>[] = []
+		const query = this.mongo.db.collection<T>(collection).find({}).sort({created: 1}).skip(skip).limit(size)
 		try {
-			const results = await query.toArray();
-			documents.push(...results)
 			const hasNext = await query.hasNext()
+			const results = await query.toArray();
+			documents = documents
+			
 			if(hasNext === true){ 
-				const nextSize = size+500;
-				const nextPage = page ? page++ : 2;
-				const nextResults = await this.drillThrough<T>(collection, nextSize, nextPage)
-				documents.push(...nextResults)
-			} else {
-				return documents
-			}			
+				const nextPage = page ? ++page : 2;
+				const nextResults = await this.drillThrough<T>(collection, 500, nextPage)
+				documents = documents.concat(nextResults)
+			}	
 		} catch(err: any){
 			throw new BadRequestException(err.message)
 		}
+
+		return documents
 	}
 
 }
