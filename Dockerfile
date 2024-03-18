@@ -5,10 +5,10 @@ FROM node:16-alpine
 WORKDIR /usr/src/app
 
 # Copy package.json and package-lock.json (or yarn.lock)
-# COPY package*.json ./
+COPY package*.json ./
 
 # Install dependencies
-# RUN npm install
+RUN npm install
 
 # Copy the rest of the application code
 COPY . .
@@ -20,4 +20,4 @@ COPY . .
 EXPOSE 8080
 
 # Command to run the application
-CMD ["nest", "start", "--watch"]
+CMD ["npm", "run", "start:dev"]
