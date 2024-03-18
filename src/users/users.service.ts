@@ -87,7 +87,11 @@ export class UsersService {
 				reputation: 0,
 				favouriteFilms: [],
 				created:time,
-				lastUpdated: time
+				lastUpdated: time,
+			}
+
+			if(user.hasImage){
+				extendedUser.photoUrl = user.imageUrl
 			}
 
 			await this.mongo.insertOne(extendedUser, 'users')
@@ -103,6 +107,11 @@ export class UsersService {
 				created: this.mongo.dateToBigInt(extendedUser.created),
 				lastUpdated: this.mongo.dateToBigInt(extendedUser.lastUpdated)
 			}
+
+			if(user.hasImage){
+				searchRecord.photoUrl = user.imageUrl
+			}
+
 			await this.search.client.collections('users').documents().create(searchRecord);
 
 			return extendedUser
@@ -115,22 +124,26 @@ export class UsersService {
 		const allowed = ['favouriteFIlms', 'bio', 'publication']
 		try {
 			const entity = await this.mongo.db.collection<UserExt>('users').findOne({id: opt.user})
-
+			
 			if(!entity) {
 				throw new BadRequestException("Action not allowed")
 			}
+
+			const user = await this.auth.client.users.getUser(entity.id)
 
 			// Modify existing data
 			for (const key in data) {
 				entity[key] = data[key]
 			}
 
+			if(user.hasImage){ entity.photoUrl = user.imageUrl }
+
 			entity.lastUpdated = new Date()
 
 			const unsetter = remove ? remove.filter(item => allowed.includes(item)) : []
 			await this.mongo.updateOne(entity, 'films')
 			const updated = await this.mongo.db.collection<UserExt>('users').findOne({id: opt.user})
-			const user = await this.auth.client.users.getUser(updated.id)
+			
 			const searchRecord: Partial<UserSchema> = {
 				username: updated.username,
 				fullName: user.firstName+' '+user.lastName,
@@ -140,6 +153,7 @@ export class UsersService {
 				criticScore: updated.criticScore,
 				lastUpdated: this.mongo.dateToBigInt(updated.lastUpdated)
 			}
+			if(user.hasImage){ searchRecord.photoUrl = user.imageUrl }
 			await this.search.client.collections('users').documents(user.id).update(searchRecord);
 
 			return updated
@@ -582,6 +596,7 @@ export class UsersService {
 				const extendedUser = await this.mongo.db.collection<UserExt>('users').findOne({id: user.id})
 				extendedUser.username = user.username
 				extendedUser.fullName = `${user.first_name} ${user.last_name}`
+				if(user.has_image){ extendedUser.photoUrl = user.image_url }
 				await this.mongo.updateOne(extendedUser, 'users')
 
 				return { status: 'processed' }

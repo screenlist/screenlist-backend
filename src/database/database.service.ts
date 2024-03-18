@@ -6,6 +6,7 @@ import {
 } from '../films/films.types';
 import { UserExt } from '../users/users.types';
 import { MongoClient, Db, OptionalUnlessRequiredId, Filter } from 'mongodb';
+import { randomInt } from 'crypto'
 
 @Injectable()
 export class DatabaseService {
@@ -46,7 +47,7 @@ export class DatabaseService {
 		let randomString = '';
 
 		for (let i = 0; i < length; i++) {
-			const randomIndex = Math.floor(Math.random() * charset.length);
+			const randomIndex = Math.floor(randomInt(0, charset.length));
 			randomString += charset.charAt(randomIndex);
 		}
 
