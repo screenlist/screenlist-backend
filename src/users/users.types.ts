@@ -2,6 +2,7 @@ export interface UserExt {
 	id: string;
 	username: string;
 	fullName: string;
+	photoUrl?: string;
 	role: UserRoles;
 	reputation: number; // min 0
 	favouriteFilms: string[]
