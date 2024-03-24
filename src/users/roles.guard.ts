@@ -23,6 +23,8 @@ export class RolesGuard implements CanActivate {
 		const request =  ctx.switchToHttp().getRequest();
 		const path = request.url
 		const method = request.method
+		// console.log(path)
+		// console.log(request.headers['authorization'])
 		
 		if(path === '/users/webhooks'){
 			const webhookSecret = this.config.get('CLERK_WEBHOOK_SECRET')
@@ -46,28 +48,41 @@ export class RolesGuard implements CanActivate {
 		if(!roleAllowed){
 			return true;
 		}
+		console.log('role found')
 
+		try {
+			const jwt = await this.authService.client.verifyToken(request.headers['authorization'].split(' ')[1])
+			const unixTimestamp = Math.floor(Date.now()/1000)
+			const clientHost = this.config.get('CLIENT_URL')
+			// console.log(unixTimestamp > jwt.exp)
+			// console.log(jwt.nbf > unixTimestamp)
+			// console.log(jwt.azp !== clientHost)
+			// Check if the current time is before jwt expiry but after the not before value and if 
+			// the orign of the jwt matches the clent host
+			if( unixTimestamp > jwt.exp || jwt.nbf > unixTimestamp || jwt.azp !== clientHost){ return false }
 
-		const { isSignedIn, toAuth } = await this.authService.client.authenticateRequest(request)
-		if(isSignedIn === false) { return false }
+			const user = 	await this.authService.client.users.getUser(jwt.sub)
+			
+			const userExt = await this.mongo.db.collection<UserExt>('users').findOne({id: user.id})
+			request.headers['x-user-id'] = user.id
+			
+			const role = userExt.role
+			const emailVerified = user.emailAddresses.find((val) => val.id === user.primaryEmailAddressId).verification.status === 'verified' ? true : false
 
-		const user = toAuth().user
-		const userExt = await this.mongo.db.collection<UserExt>('users').findOne({id: user.id})
-		request.headers['x-user-id'] = user.id
-		
-		const role = userExt.role
-		const emailVerified = user.emailAddresses.find((val) => val.id === user.primaryEmailAddressId).verification.status === 'verified' ? true : false
+			const match = this.authService.matchRoles(role, roleAllowed, emailVerified, path);
+			console.log('The match returned', match)
 
-		const match = this.authService.matchRoles(role, roleAllowed, emailVerified, path);
-		console.log('The match returned', match)
+			// Member contribution quota check before verdict
+			const isEvaluatedPath = (/^\/films/).test(path) || (/^\/people/).test(path) || (/^\/companies/).test(path)
+			const isPostOrPatch = method === 'POST' || method === 'PATCH';
+			if(match === true && role === 'member' && isEvaluatedPath && isPostOrPatch){
+				return await this.mongo.validateEditsQuota(user.id)
+			}
 
-		// Member contribution quota check before verdict
-		const isEvaluatedPath = (/^\/films/).test(path) || (/^\/people/).test(path) || (/^\/companies/).test(path)
-		const isPostOrPatch = method === 'POST' || method === 'PATCH';
-		if(match === true && role === 'member' && isEvaluatedPath && isPostOrPatch){
-			return await this.mongo.validateEditsQuota(user.id)
+			return match
+		} catch (err: any){
+			console.log(err.message)
+			return false
 		}
-
-		return match
 	}
 }

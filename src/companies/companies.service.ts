@@ -38,6 +38,11 @@ export class CompaniesService {
 		}).sort({'lastUpdated': -1}).skip(skip).limit(size)
 
 		try {
+			const total = await this.mongo.db.collection<Company>('companies').countDocuments({
+				editVerified: true,
+				isHidden: false
+			})
+			const totalPages = Math.ceil(total/size)
 			const companies = await query.toArray()
 
 			const data = await Promise.all(
@@ -58,7 +63,8 @@ export class CompaniesService {
 
 			return {
 				data: data,
-				hasNextPage: await query.hasNext()
+				hasNextPage: page < totalPages,
+				hasPrevPage: page > 1 
 			}
 		} catch(err: any) {
 			throw new NotFoundException('Could not retrieve companies');

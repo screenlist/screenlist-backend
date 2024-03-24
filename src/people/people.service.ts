@@ -28,7 +28,7 @@ export class PeopleService {
 		private search: SearchService
 	){}
 
-	async findAll(page?: number, limit?: number): Promise<Person[]>{
+	async findAll(page?: number, limit?: number) {
 		const	size = limit ? +limit : 50
 		const skip = ( (page ? +page : 1) - 1 ) * size
 
@@ -37,6 +37,11 @@ export class PeopleService {
 		}).sort({'lastUpdated': -1}).skip(skip).limit(size)
 
 		try {
+			const total = await this.mongo.db.collection<Person>('people').countDocuments({
+				editVerified: true,
+				isHidden: false
+			})
+			const totalPages = Math.ceil(total/size)
 			const people = await query.toArray()
 
 			const data = await Promise.all(
@@ -59,7 +64,11 @@ export class PeopleService {
 					}
 				})
 			)
-			return people
+			return {
+				data,
+				hasNextPage: page < totalPages,
+				hasPrevPage: page > 1 
+			}
 		} catch(err: any) {
 			// console.log(err)
 			throw new NotFoundException('Could not find people')

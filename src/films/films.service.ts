@@ -62,6 +62,11 @@ export class FilmsService {
 		}).sort({'lastUpdated': -1}).skip(skip).limit(size)
 
 		try {
+			const total = await this.mongo.db.collection<Film>('films').countDocuments({
+				editVerified: true,
+				isHidden: false
+			})
+			const totalPages = Math.ceil(total/size)
 			const films = await query.toArray()
 			// Loop through each film to retrieve its poster
 			const results = await Promise.all(films.map(async (film) => {
@@ -85,7 +90,11 @@ export class FilmsService {
 					throw new BadRequestException()
 				}
 			}))
-			return results
+			return {
+				data: results,
+				hasNextPage: page < totalPages,
+				hasPrevPage: page > 1 
+			}
 		} catch (err: any) {
 			throw new NotFoundException('Encountered trouble while trying to retrieve');
 		}
