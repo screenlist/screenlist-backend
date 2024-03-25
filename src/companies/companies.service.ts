@@ -53,7 +53,7 @@ export class CompaniesService {
 						...item,
 						photo: photo ? {
 							url: photo.optimisedDimensions,
-							id: photo.id,
+							index: photo.photoIndex,
 							credit: photo.attribution,
 							altText: photo.description
 						} : null
@@ -92,7 +92,7 @@ export class CompaniesService {
 				...company, 
 				photo: photo ? {
 					url: photo.optimisedUrl,
-					id: photo.id,
+					index: photo.photoIndex,
 					credit: photo.attribution,
 					altText: photo.description
 				} : null
@@ -237,7 +237,7 @@ export class CompaniesService {
 				action: 'update',
 				time: opt.time,
 			}
-			const history = await this.mongo.createHistory(historyObj);
+			await this.mongo.createHistory(historyObj);
 
 			const searchRecord: Partial<CompanySchema> = {
 				name: updated.name,

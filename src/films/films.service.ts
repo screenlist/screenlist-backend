@@ -130,7 +130,7 @@ export class FilmsService {
 
 			const stills = stillsResults.map((item) => {
 				return {
-					id: item.id,
+					index: item.photoIndex,
 					url: item.optimisedUrl,
 					credit: item.attribution,
 					altText: item.description
@@ -186,7 +186,7 @@ export class FilmsService {
 				...film,
 				poster: poster ? {
 					url: poster.optimisedUrl,
-					id: poster.id,
+					index: poster.photoIndex,
 					credit: poster.attribution,
 					altText: poster.description
 				} : null,

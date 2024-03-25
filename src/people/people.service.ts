@@ -57,7 +57,7 @@ export class PeopleService {
 						...item,
 						photo: photo ? {
 							url: photo.optimisedUrl,
-							id: photo.id,
+							index: photo.photoIndex,
 							credit: photo.attribution,
 							altText: photo.description
 						} : null
@@ -96,7 +96,7 @@ export class PeopleService {
 				...person,
 				photo: photo ? {
 					url: photo.optimisedUrl,
-					id: photo.id,
+					index: photo.photoIndex,
 					credit: photo.attribution,
 					altText: photo.description
 				} : null
