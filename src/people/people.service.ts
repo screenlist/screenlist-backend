@@ -120,7 +120,7 @@ export class PeopleService {
 							work.roles.push(role)
 						} else {
 							const parentObject = {
-								name: owner.name,
+								name: item.ownerName,
 								id: item.ownerId,
 								type: item.ownerCollection,
 								year: owner.year,

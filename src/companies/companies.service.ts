@@ -107,7 +107,7 @@ export class CompaniesService {
 						const owner = await this.mongo.db.collection<Film>('films').findOne({id: item.ownerId})
 						const poster = await this.mongo.db.collection<Photo>('photos').findOne({type: 'poster', parentId: item.ownerId, photoIndex: 0, parentCollection: 'films'})
 
-						const path = `/${item.ownerCollection == 'films' ? 'films' : 'series'}/${item.ownerId}/companies/${item.parentId}/roles/${item.id}`;
+						const path = `/${item.ownerCollection}/${item.ownerId}/companies/${item.parentId}/roles/${item.id}`;
 						return {
 							...item,
 							ownerName: owner.name,

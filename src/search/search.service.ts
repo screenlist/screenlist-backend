@@ -333,7 +333,9 @@ export class SearchService {
 			const companiesRes = await this.client.collections('companies').documents().import(companiesJSONlines, {action: 'upsert'});
 			const contentRes = await this.client.collections('content').documents().import(contentJSONlines, {action: 'upsert'});
 			const usersRes = await this.client.collections('users').documents().import(usersJSONlines, {action: 'upsert'});
+			// console.log(filmsResults.length, peopleResults.length, contentResults.length, contentResults.length, usersResults.length)
 			// console.log(filmsRes, peopleRes, companiesRes, contentRes, usersRes)
+			// console.log('Does it log')
 			return {status: 'success'}
 		} catch(err: any) {
 			console.log(err)
@@ -345,11 +347,12 @@ export class SearchService {
 		const	size = limit ? +limit : 500
 		const skip = ( (page ? +page : 1) - 1 ) * size
 		let documents: WithId<T>[] = []
-		const query = this.mongo.db.collection<T>(collection).find({}).sort({created: 1}).skip(skip).limit(size)
 		try {
-			const hasNext = await query.hasNext()
-			const results = await query.toArray();
-			documents = documents
+			const total = await this.mongo.db.collection<T>(collection).estimatedDocumentCount()
+			const totalPages = Math.ceil(total/size)
+			const hasNext = (page ? +page : 1) < totalPages
+			const results = await this.mongo.db.collection<T>(collection).find({}).sort({created: 1}).skip(skip).limit(size).toArray();
+			documents = results
 			
 			if(hasNext === true){ 
 				const nextPage = page ? ++page : 2;
