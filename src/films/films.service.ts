@@ -178,7 +178,7 @@ export class FilmsService {
 			const mainCrew = people.filter((value) => value.department == 'Above Line');
 			const productionCrew = people.filter((value) => value.department == 'Production');
 			const everyoneElse = people.filter((value) => {
-				const aboveElse = value.department == 'main cast' || value.department == 'additional cast' || value.department == 'above line' || value.department == 'production';
+				const aboveElse = value.department === 'Leading Cast' || value.department === 'Supporting Cast' || value.department === 'Above Line' || value.department === 'Production';
 				return !aboveElse;
 			})
 
