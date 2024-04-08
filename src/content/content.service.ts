@@ -12,7 +12,7 @@ import {
 	PhotoDto
 } from '../films/films.dto';
 import { ImageOpt, Photo } from '../films/films.types';
-import { ContentSchema } from 'src/search/search.types.';
+import { ContentSchema } from 'src/search/search.types';
 
 @Injectable()
 export class ContentService {

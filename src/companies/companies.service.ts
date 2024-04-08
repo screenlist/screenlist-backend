@@ -17,7 +17,7 @@ import { Film, ImageOpt, Photo } from  '../films/films.types';
 import { CollectionFields, HistoryOpt, HistoryX } from '../database/database.types';
 import { StorageService } from '../storage/storage.service';
 import { SearchService } from 'src/search/search.service';
-import { CompanySchema} from 'src/search/search.types.';
+import { CompanySchema} from 'src/search/search.types';
 import { UserExt } from 'src/users/users.types';
 
 @Injectable()

@@ -37,7 +37,7 @@ import { CollectionFields, HistoryOpt, HistoryX, Hit } from '../database/databas
 import { AuthService } from '../auth/auth.service';
 import { SearchService } from '../search/search.service';
 import { UserExt } from 'src/users/users.types';
-import { FilmSchema } from 'src/search/search.types.';
+import { FilmSchema } from 'src/search/search.types';
 
 
 

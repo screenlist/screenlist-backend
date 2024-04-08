@@ -40,7 +40,7 @@ export class CreatePersonDto {
 
 	@IsOptional()
 	@IsString()
-	dateMonthOfBirth?: string;
+	dateMonthOfBirth?: Date;
 
 	@IsOptional()
 	@IsDate()
@@ -108,7 +108,7 @@ export class UpdatePersonDto {
 
 	@IsOptional()
 	@IsString()
-	dateMonthOfBirth?: string;
+	dateMonthOfBirth?: Date;
 
 	@IsOptional()
 	@IsDate()

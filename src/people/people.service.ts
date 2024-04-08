@@ -17,7 +17,7 @@ import { PhotoDto } from '../films/films.dto';
 import { Film, ImageOpt, Photo } from  '../films/films.types';
 import { SearchService } from 'src/search/search.service';
 import { Role } from 'src/companies/companies.types';
-import { FilmSchema, PersonSchema } from 'src/search/search.types.';
+import { FilmSchema, PersonSchema } from 'src/search/search.types';
 import { UserExt } from 'src/users/users.types';
 
 @Injectable()
@@ -207,7 +207,8 @@ export class PeopleService {
 				nationality: entity.nationality,
 				deathDate: this.mongo.dateToBigInt(entity.deathDate),
 				created: this.mongo.dateToBigInt(entity.created),
-				lastUpdated: this.mongo.dateToBigInt(entity.lastUpdated)
+				lastUpdated: this.mongo.dateToBigInt(entity.lastUpdated),
+				dateMonthOfBirth: this.mongo.dateToBigInt(entity.dateMonthOfBirth)
 			}
 			await this.search.client.collections('people').documents().create(searchRecord);
 

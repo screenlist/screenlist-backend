@@ -5,7 +5,7 @@ import Typesense from 'typesense'
 import { Collection } from 'src/database/database.types';
 import { WithId } from 'mongodb';
 import { Film, Photo } from 'src/films/films.types';
-import { CompanySchema, ContentSchema, FilmSchema, PersonSchema, UserSchema } from './search.types.';
+import { CompanySchema, ContentSchema, FilmSchema, PersonSchema, UserSchema } from './search.types';
 import { Company, Role } from 'src/companies/companies.types';
 import { Person } from 'src/people/people.types';
 import { Content } from 'src/content/content.types';
@@ -90,6 +90,7 @@ export class SearchService {
 				{ 'name': 'provinceOfOrigin',	'type': 'string',	'facet': true, 'optional': true  },
 				{ 'name': 'countryOfOrigin',	'type': 'string',	'facet': true, 'optional': true  },
 				{ 'name': 'deathDate',	'type': 'int64',	'facet': true, 'optional': true  },
+				{ 'name': 'dateMonthOfBirth',	'type': 'int64',	'facet': true, 'optional': true  },
 				{ 'name': 'created',	'type': 'int64',	'facet': true, 'optional': true  },
 				{ 'name': 'lastUpdated',	'type': 'int64',	'facet': true, 'optional': true  },
 				{ 'name': 'photoUrl',	'type': 'string',	'facet': false, 'index': false, 'optional': true }
@@ -250,7 +251,8 @@ export class SearchService {
 						deathDate: this.mongo.dateToBigInt(item.deathDate),
 						created: this.mongo.dateToBigInt(item.created),
 						lastUpdated: this.mongo.dateToBigInt(item.lastUpdated),
-						photoUrl: photo?.optimisedUrl
+						photoUrl: photo?.optimisedUrl,
+						dateMonthOfBirth: this.mongo.dateToBigInt(item.dateMonthOfBirth)
 					}
 				})
 			)
