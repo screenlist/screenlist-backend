@@ -74,9 +74,14 @@ export class RolesGuard implements CanActivate {
 
 			// Member contribution quota check before verdict
 			const isEvaluatedPath = (/^\/films/).test(path) || (/^\/people/).test(path) || (/^\/companies/).test(path)
-			const isPostOrPatch = method === 'POST' || method === 'PATCH';
-			if(match === true && role === 'member' && isEvaluatedPath && isPostOrPatch){
+			const isPostOrPatchOrDelete = method === 'POST' || method === 'PATCH' || method === 'DELETE';
+			if(match === true && role === 'member' && isEvaluatedPath && isPostOrPatchOrDelete){
 				return await this.mongo.validateEditsQuota(user.id)
+			}
+
+			// Prevent low reputation members from creating new contributions or delete existing knowledge
+			if( ( method === 'POST' || method === 'DELETE' ) && role === 'member' && userExt.reputation < 100 ){
+				return false
 			}
 
 			return match

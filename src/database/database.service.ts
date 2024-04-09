@@ -300,32 +300,40 @@ export class DatabaseService {
 	}	
 
 	determineUserReputation(history: HistoryX[]){
-		const userScore: {[key: string]: number} = {}
-		const modifications: {[key: string]: {
+		const userScore: {
+			[key: string]: number
+		} = {}
+
+		// This holds original document IDs that contain the property names 
+		// of the document's edited properties and the property names hold the edit version 
+		// history of themselves in an array.
+		const modifications: {
 			[key: string]: {
-				before: any;
-				after: any;
-				property: string;
-				message: 'update' |'create' | 'delete';
-				userUid: string;
-				time: Date;
-				id: string;
-				oid: string;
-			}[]
-		}} = {}
+				[key: string]: {
+					before: any;
+					after: any;
+					property: string;
+					message: 'update' |'create' | 'delete';
+					userUid: string;
+					time: Date;
+					id: string;
+					oid: string;
+				}[]
+			}
+		} = {}
 
 		// Get individual property edits
-		const edits = history.map(item => this.historyFiltration(item)).flat().sort((a, b) => a.time > b.time ? 1 : -1)
+		const edits = history.map(item => this.historyFiltration(item)).flat().sort((a, b) => Number(a.time) - Number(b.time))
 
 		// Map the properties
 		for(const edit of edits){
 			userScore[edit.userUid] = userScore[edit.userUid] || 2;
 
 			// Add document to modifications if it doesn't exist
-			if(!modifications[edit.oid]){ modifications[edit.oid] }
+			if(!modifications[edit.oid]){ modifications[edit.oid] = {} }
 
 			// Add a property to the document on the modifications if it doesn't exist
-			if(!modifications[edit.oid][edit.property]){ modifications[edit.oid][edit.property] }
+			if(!modifications[edit.oid][edit.property]){ modifications[edit.oid][edit.property] = [] }
 
 			// Add the edit of the specific property to the appropitate document
 			modifications[edit.oid][edit.property].push(edit)
@@ -333,7 +341,7 @@ export class DatabaseService {
 
 		// Function for point assignment
 		const assignPoints = (userId: string, points: number) => {
-			if(!userScore[userId]){ userScore[userId] = 2 }
+			if(!userScore[userId]){ userScore[userId] = 0 }
 			userScore[userId] += points
 		}
 
@@ -342,21 +350,41 @@ export class DatabaseService {
 			const properties = modifications[documentId]
 
 			for (const propertyName in properties){
-				 const modification = properties[propertyName]
+				const modification = properties[propertyName]
+
+				if(modification.length - 1 < 1){
+					assignPoints(modification[0].userUid, 3)
+				}
 
 				for(let i = 0; i < modification.length - 1; i++){
 					const currentState = modification[i]
-					const nextState = modification[i]
+					const nextState = modification[i+1]
 
 					if(currentState.userUid !== nextState.userUid){
 
-						if(nextState.message === 'update'){
-							assignPoints(currentState.userUid, -1)
-							assignPoints(nextState.userUid, 1)
-						} else if(nextState.message === 'delete'){
-							assignPoints(nextState.userUid, -2)
-						} else if(nextState.message === 'create'){
-							assignPoints(nextState.userUid, 2)
+						if( currentState.message === 'create' && nextState.message === 'update' ){
+							assignPoints(currentState.userUid, -3);
+							assignPoints(nextState.userUid, 1);
+						}
+
+						if( currentState.message === 'create' && nextState.message === 'delete' ){
+							assignPoints(currentState.userUid, -1);
+							assignPoints(nextState.userUid, -3);
+						}
+
+						if( currentState.message === 'update' && nextState.message === 'update' ){
+							assignPoints(currentState.userUid, -1);
+							assignPoints(nextState.userUid, 1);
+						}
+
+						if( currentState.message === 'update' && nextState.message === 'delete' ){
+							assignPoints(currentState.userUid, 0);
+							assignPoints(nextState.userUid, -4);
+						}
+
+						if( currentState.message === 'delete' && nextState.message === 'create' ){
+							assignPoints(currentState.userUid, -4);
+							assignPoints(nextState.userUid, 3);
 						}
 
 					}
@@ -412,7 +440,7 @@ export class DatabaseService {
 	// List Rating Methods
 	async calculateRatingScore(results: Rating[]){
 		try{
-			// 33% ratings total + 33% critics sample + 33% total critics reputation
+			// 33% ratings total + 33% critics sample + 33% total critics sample reputations
 			
 
 			const critics = await this.db.collection<UserExt>('users').find({role: 'journalist'}).toArray()
