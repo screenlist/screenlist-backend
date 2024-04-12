@@ -49,8 +49,6 @@ export class CompaniesController {
 
 	@Post()
 	@Roles('member')
-	@UseGuards(EditGuard)
-	@EditLock('companies')
 	async createOne(
 		@Body() createCompanyDto: CreateCompanyDto,
 		@Headers('x-user-id') userId: string

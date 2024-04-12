@@ -151,18 +151,6 @@ export class CreatePersonRoleDto {
 	@MaxLength(60)
 	personName: string;
 
-	@IsOptional()
-	@IsString()
-	personId?: string;
-
-	@IsOptional()
-	@IsString()
-	ownerKind?: string;
-
-	@IsOptional()
-	@IsString()
-	ownerId: string;
-
 	@IsNotEmpty()
 	@MaxLength(30)
 	title: string;
@@ -179,10 +167,6 @@ export class CreatePersonRoleDto {
 	@IsString()
 	@MaxLength(60)
 	characterName?: string;
-
-	@IsOptional()
-	@MaxLength(150)
-	characterDescription?: string;
 }
 
 export class UpdatePersonRoleDto {
@@ -201,8 +185,4 @@ export class UpdatePersonRoleDto {
 	@IsOptional()
 	@MaxLength(60)
 	characterName?: string;
-
-	@IsOptional()
-	@MaxLength(150)
-	characterDescription?: string;
 }

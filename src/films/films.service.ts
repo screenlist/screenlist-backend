@@ -285,7 +285,7 @@ export class FilmsService {
 			film.releaseDate = new Date(film.releaseDate);
 		}
 
-		if(remove && typeof remove === 'object'){ throw new BadRequestException('Provide an array for properties to remove') }
+		if(!Array.isArray(remove)){ throw new BadRequestException('Provide an array for properties to remove') }
 		
 		try{
 			const entity = await this.mongo.db.collection<Film>('films').findOne({id: id})
@@ -318,6 +318,13 @@ export class FilmsService {
 				id: id
 			}
 			await this.mongo.createHistory(historyObj);
+
+			// If the name has been updated, update all its roles
+			if(film.hasOwnProperty('name')){
+				await this.mongo.db.collection<Role>('roles').updateMany({ownerName: dataBefore.name, ownerCollection: 'films', ownerId: updated.id}, {
+					$set: { ownerName: updated.name }
+				})
+			}
 
 			const searchRecord: Partial<FilmSchema> = {
 				name: updated.name,
@@ -814,6 +821,8 @@ export class FilmsService {
 				pId: opt.parentId,
 				pKind: opt.parentKind
 			}
+
+			console.log(poster.originalUrl)
 			await this.storage.deletePhoto(poster.originalName);
 			await this.storage.deletePhoto(poster.optimisedName);
 			await this.mongo.createHistory(historyObj);
@@ -837,7 +846,8 @@ export class FilmsService {
 			await this.search.client.collections('films').documents(opt.parentId).update(searchRecord);
 
 			return {'status': 'deleted'}
-		} catch {
+		} catch(err: any) {
+			console.log(err)
 			throw new BadRequestException()
 		}
 	}

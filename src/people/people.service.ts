@@ -219,7 +219,7 @@ export class PeopleService {
 	}
 
 	async updateOne(data: UpdatePersonDto, opt: PersonOpt, remove?: CollectionFields<Person>){
-		if(remove && typeof remove === 'object'){ throw new BadRequestException('Provide an array for properties to remove') }
+		if(!Array.isArray(remove)){ throw new BadRequestException('Provide an array for properties to remove') }
 
 		try {
 			const entity = await this.mongo.db.collection<Person>('people').findOne({id: opt.personId})
@@ -250,6 +250,13 @@ export class PeopleService {
 				time: opt.time,
 			}
 			await this.mongo.createHistory(historyObj);
+
+			// If the name has been updated, update all its roles
+			if(data.hasOwnProperty('name')){
+				await this.mongo.db.collection<Role>('roles').updateMany({parentName: dataBefore.name, parentCollection: 'people', parentId: updated.id}, {
+					$set: { parentName: updated.name }
+				})
+			}
 
 			const searchRecord: Partial<PersonSchema> = {
 				name: updated.name,

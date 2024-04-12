@@ -23,7 +23,7 @@ export class RolesGuard implements CanActivate {
 		const request =  ctx.switchToHttp().getRequest();
 		const path = request.url
 		const method = request.method
-		// console.log(path)
+		console.log(method, path)
 		// console.log(request.headers['authorization'])
 		
 		if(path === '/users/webhooks'){
@@ -48,7 +48,6 @@ export class RolesGuard implements CanActivate {
 		if(!roleAllowed){
 			return true;
 		}
-		console.log('role found')
 
 		try {
 			const jwt = await this.authService.client.verifyToken(request.headers['authorization'].split(' ')[1])
@@ -86,7 +85,7 @@ export class RolesGuard implements CanActivate {
 
 			return match
 		} catch (err: any){
-			console.log(err.message)
+			console.log(err)
 			return false
 		}
 	}

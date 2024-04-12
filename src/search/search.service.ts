@@ -43,7 +43,7 @@ export class SearchService {
 				{ 'name': 'name',	'type': 'string',	'facet': false },
 				{ 'name': 'year', 'type': 'int32', 'facet': true, 'optional': true  },
 				{ 'name': 'genres',	'type': 'string[]',	'facet': true },
-				{ 'name': 'directors',	'type': 'string[]',	'facet': true },
+				{ 'name': 'directors',	'type': 'string[]',	'facet': true, 'optional': true },
 				{ 'name': 'type',	'type': 'string',	'facet': true },
 				{ 'name': 'format',	'type': 'string',	'facet': true },
 				{ 'name': 'productionStage',	'type': 'string',	'facet': true },

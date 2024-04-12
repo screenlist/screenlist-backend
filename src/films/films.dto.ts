@@ -169,7 +169,7 @@ export class PhotoDto {
 	@IsString()
 	description: string;
 
-	@IsNotEmpty()
+	@IsOptional()
 	@IsString()
 	source: string | 'direct';
 }
