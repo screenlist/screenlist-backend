@@ -8,7 +8,8 @@ import {
 	IsFQDN,
 	IsNumber,
 	IsBoolean,
-	IsArray
+	IsArray,
+	ArrayMinSize
 } from 'class-validator';
 
 export class CreatePersonDto {
@@ -48,6 +49,8 @@ export class CreatePersonDto {
 
 	@IsOptional()
 	@IsArray()
+	@ArrayMinSize(1)
+	@IsString({ each: true }) 
 	nationality?: string[];
 
 	@IsOptional()
@@ -116,6 +119,8 @@ export class UpdatePersonDto {
 
 	@IsOptional()
 	@IsArray()
+	@ArrayMinSize(1)
+	@IsString({ each: true }) 
 	nationality?: string[];
 
 	@IsOptional()

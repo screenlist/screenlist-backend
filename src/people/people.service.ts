@@ -328,7 +328,7 @@ export class PeopleService {
 
 	async uploadPhoto(opt: ImageOpt, image: Express.Multer.File){
 		try {
-			if(opt.imageId !== '0'){ throw new BadRequestException('Unknown index') }
+			if(opt.index !== 0){ throw new BadRequestException('Unknown index') }
 
 			const existing = await this.mongo.db.collection<Photo>('photos').countDocuments({parentCollection: 'people', parentId: opt.parentId, type: 'image', photoIndex: opt.index})
 			if(existing > 0) {
@@ -373,7 +373,7 @@ export class PeopleService {
 			await this.mongo.createHistory(historyObj);
 
 			return photo
-		} catch {
+		} catch(err: any) {
 			throw new BadRequestException()
 		}
 	}
@@ -381,7 +381,7 @@ export class PeopleService {
 	async updatePhoto(data: PhotoDto , opt: ImageOpt){
 		try {
 			const entity = await this.mongo.db.collection<Photo>('photos').findOne({
-				parentCollection: 'companies',
+				parentCollection: 'people',
 				parentId: opt.parentId,
 				photoIndex: opt.index,
 				type: 'image'
@@ -422,7 +422,7 @@ export class PeopleService {
 			await this.mongo.createHistory(historyObj);
 
 			return entity
-		} catch {
+		} catch(err: any) {
 			throw new BadRequestException()
 		}
 	}
@@ -430,7 +430,7 @@ export class PeopleService {
 	async removePhoto(opt: ImageOpt){
 		try{
 			const photo = await this.mongo.db.collection<Photo>('photos').findOne({
-				parentCollection: 'companies',
+				parentCollection: 'people',
 				parentId: opt.parentId,
 				photoIndex: opt.index,
 				type: 'image'
