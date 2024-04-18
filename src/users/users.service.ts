@@ -121,13 +121,15 @@ export class UsersService {
 	}
 
 	async updateUser(data: UpdateUserDto, opt: UserOpt, remove?: CollectionFields<UserExt>) {
-		const allowed = ['favouriteFIlms', 'bio', 'publication']
+		const allowed = ['favouriteFilms', 'bio', 'publication']
 		try {
 			const entity = await this.mongo.db.collection<UserExt>('users').findOne({id: opt.user})
 			
 			if(!entity) {
 				throw new BadRequestException("Action not allowed")
 			}
+
+			if(entity.username !== opt.userName){ throw new ForbiddenException("Action not allowed") }
 
 			const user = await this.auth.client.users.getUser(entity.id)
 
@@ -141,7 +143,7 @@ export class UsersService {
 			entity.lastUpdated = new Date()
 
 			const unsetter = remove ? remove.filter(item => allowed.includes(item)) : []
-			await this.mongo.updateOne(entity, 'films')
+			await this.mongo.updateOne(entity, 'users', unsetter)
 			const updated = await this.mongo.db.collection<UserExt>('users').findOne({id: opt.user})
 			
 			const searchRecord: Partial<UserSchema> = {
