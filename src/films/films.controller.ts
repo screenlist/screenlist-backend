@@ -70,7 +70,7 @@ export class FilmsController {
 		return await this.filmsService.getTrendingFilms(size)
 	}
 
-	@Get('data/recently-added')
+	@Get('data/recent')
 	async getRecentlyAdded(@Query('limit') size: number){
 		return await this.filmsService.getRecentlyAdded(size)
 	}

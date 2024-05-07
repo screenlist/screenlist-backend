@@ -725,12 +725,12 @@ export class PeopleService {
 	async justHistory(personId: string){
 		try {
 			const person = await this.mongo.db.collection<Person>('people').findOne({id: personId})
-			const photo = await this.mongo.db.collection<Photo>('photos').findOne({
-				photoIndex: 0,
-				parentCollection: 'companies',
-				parentId: personId,
-				type: 'image'
-			})
+			// const photo = await this.mongo.db.collection<Photo>('photos').findOne({
+			// 	photoIndex: 0,
+			// 	parentCollection: 'companies',
+			// 	parentId: personId,
+			// 	type: 'image'
+			// })
 
 			const personHistory = await this.mongo.db.collection<HistoryX>('history').find({
 				xKind: 'people',
@@ -740,7 +740,6 @@ export class PeopleService {
 
 			const photoHistory = await this.mongo.db.collection<HistoryX>('history').find({
 				xKind: 'photos',
-				xIdentifier: photo.id,
 				wKind: 'people',
 				wIdentifier: personId,
 				xTimestamp: {$gt: person.lastVerified}

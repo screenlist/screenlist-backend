@@ -1137,7 +1137,8 @@ export class FilmsService {
 		try {
 			const films = await this.mongo.db.collection<Film>('films').find({
 				hasPoster: true,
-				isHidden: false
+				isHidden: false,
+				editVerified: true
 			}).sort({created: -1}).limit(limit ? limit : 10).toArray();
 
 			const results = await Promise.all(films.map(async (film) => {
@@ -1171,6 +1172,7 @@ export class FilmsService {
 				isHidden: false,
 				productionStage: 'finished',
 				releaseDate: {$lte: now},
+				editVerified: true
 			}).sort({releaseDate: -1}).limit(limit ? limit : 10).toArray()
 
 			const results = await Promise.all(films.map(async (film) => {
@@ -1203,7 +1205,7 @@ export class FilmsService {
 		try {
 			const films = await this.mongo.db.collection<Film>('films').find({
 				$and: [
-					{ hasPoster: true, isHidden: false },
+					{ hasPoster: true, isHidden: false, editVerified: true },
 					{
 						$or: [
 							{ releaseDate: {$gt: now} },
@@ -1255,14 +1257,14 @@ export class FilmsService {
 			});
 
 			const totalPairs: [string, number][] = Object.entries(occurrences);
-			const limitedSet = totalPairs.filter((val) => isNaN(+val[0]) === false ).sort((a, b) => b[1] - a[1]).slice(0, limit ? limit+1 : 10);
+			const limitedSet = totalPairs.sort((a, b) => b[1] - a[1]).slice(0, limit ? limit+1 : 10);
 
 			const results = await Promise.all(limitedSet.map(async (pair) => {
 				const id = pair[0];
 
 				try {
 					const film = await this.mongo.db.collection<Film>('films').findOne({id: id})
-					if(film.hasPoster === true){
+					if(film && film.hasPoster === true){
 						const poster = await this.mongo.db.collection<Photo>('photos').findOne({
 							parentCollection: 'films',
 							parentId: id,
@@ -1274,14 +1276,19 @@ export class FilmsService {
 							...film,
 							posterUrl: poster.optimisedUrl
 						}
-					} else {						
+					} else if(film) {						
 						return film
 					}
 				} catch(err) {
-					throw new BadRequestException()
+					throw new BadRequestException(err.message)
 				}
 			}))
-			
+			// console.log(hits.length)
+			// console.log(occurrences)
+			// console.log(totalPairs)
+			// console.log(limitedSet)
+			// console.log(results.length)
+			// console.log(results.filter((val) => typeof val === 'object'))
 			return results.filter((val) => typeof val === 'object');
 		} catch(err: any){
 			throw new NotFoundException()

@@ -525,7 +525,7 @@ export class UsersService {
 			);
 
 			return results;
-		} catch {
+		} catch(err: any) {
 			throw new NotFoundException();
 		}
 	}
