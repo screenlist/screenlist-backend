@@ -150,6 +150,7 @@ export class PeopleService {
 				}
 			});
 
+			// console.log(details)
 			return {
 				details,
 				filmography
@@ -231,11 +232,12 @@ export class PeopleService {
 
 			if(entity.editLocked === true){ throw new BadRequestException("Edit locked") }
 
-			entity.lastUpdated = opt.time
-
 			for (const key in data) {
 				entity[key] = data[key]
 			}
+
+			entity.lastUpdated = opt.time
+			entity.editVerified = false
 
 			const updated = await this.mongo.updateOne<Person>(entity, 'people', remove)
 

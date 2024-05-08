@@ -198,6 +198,7 @@ export class FilmsService {
 				}
 			}
 
+			// console.log(details)
 			return {
 				details: details,
 				stills: stills,
@@ -297,12 +298,12 @@ export class FilmsService {
 
 			if(entity.editLocked === true){ throw new BadRequestException("Edit locked") }
 
-			entity.lastUpdated = time
-			entity.editVerified = false
-
 			for (const key in film) {
 				entity[key] = film[key]
 			}
+
+    	entity.lastUpdated = time
+			entity.editVerified = false
 
 			const updated = await this.mongo.updateOne<Film>(entity, 'films', remove)		
 			const  dataAfter = {...updated}			
@@ -1258,7 +1259,7 @@ export class FilmsService {
 
 			const totalPairs: [string, number][] = Object.entries(occurrences);
 			const limitedSet = totalPairs.sort((a, b) => b[1] - a[1]).slice(0, limit ? limit+1 : 10);
-
+			// console.log(totalPairs.length, limitedSet.length)
 			const results = await Promise.all(limitedSet.map(async (pair) => {
 				const id = pair[0];
 

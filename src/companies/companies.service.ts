@@ -142,6 +142,7 @@ export class CompaniesService {
 				}
 			})
 
+			// console.log(details)
 			return {
 				details,
 				productions
@@ -222,6 +223,7 @@ export class CompaniesService {
 			}
 
 			entity.lastUpdated = opt.time
+			entity.editVerified = false
 
 			await this.mongo.updateOne(entity, 'companies', remove)
 			
