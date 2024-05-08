@@ -71,16 +71,23 @@ export class RolesGuard implements CanActivate {
 			const match = this.authService.matchRoles(role, roleAllowed, emailVerified, path);
 			console.log('The match returned', match)
 
-			// Member contribution quota check before verdict
 			const isEvaluatedPath = (/^\/films/).test(path) || (/^\/people/).test(path) || (/^\/companies/).test(path)
 			const isPostOrPatchOrDelete = method === 'POST' || method === 'PATCH' || method === 'DELETE';
-			if(match === true && role === 'member' && isEvaluatedPath && isPostOrPatchOrDelete){
-				return await this.mongo.validateEditsQuota(user.id)
+			const isPostOrDelete = method === 'POST' || method === 'DELETE'
+
+			// Prevent low reputation members from creating new contributions or delete existing knowledge			
+			if( match === true && isPostOrDelete && role === 'member' && userExt.reputation < 100 ){
+				console.log('Inadequate Reputation')
+				return false
 			}
 
-			// Prevent low reputation members from creating new contributions or delete existing knowledge
-			if( ( method === 'POST' || method === 'DELETE' ) && role === 'member' && userExt.reputation < 100 ){
-				return false
+			// This is spammer territory, it's contributor jail
+			if(match === true && isPostOrPatchOrDelete && role === 'member' && userExt.reputation < -100){ console.log('Jail'); return false }
+
+			// Member contribution quota check before verdict
+			if(match === true && role === 'member' && isEvaluatedPath && isPostOrPatchOrDelete){
+				console.log('Over quota')
+				return await this.mongo.validateEditsQuota(user.id)
 			}
 
 			return match
