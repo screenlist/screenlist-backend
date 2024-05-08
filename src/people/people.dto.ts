@@ -169,6 +169,7 @@ export class CreatePersonRoleDto {
 	category: string;
 
 	@IsOptional()
+	@IsNotEmpty()
 	@IsString()
 	@MaxLength(60)
 	characterName?: string;
@@ -176,18 +177,22 @@ export class CreatePersonRoleDto {
 
 export class UpdatePersonRoleDto {
 	@IsOptional()
+	@IsNotEmpty()
 	@MaxLength(30)
 	title?: string;
 
 	@IsOptional()
+	@IsNotEmpty()
 	@MaxLength(20)
 	department?: string;
 
 	@IsOptional()
+	@IsNotEmpty()
 	@MaxLength(20)
 	category?: string;
 
 	@IsOptional()
+	@IsNotEmpty()
 	@MaxLength(60)
 	characterName?: string;
 }
