@@ -85,13 +85,13 @@ export class UsersController {
 		return await this.usersService.updateUser(updateUserDto, userOptions);
 	}
 
-	@Get('details')
+	@Get('get-details')
 	@Roles('member')
 	async userDetailsOnly(@Headers('x-user-id') userId: string){
 		return await this.usersService.findDetailsOnly(userId)
 	}
 
-	@Get('quota')
+	@Get('get-quota')
 	@Roles('member')
 	async getQuota(@Headers('x-user-id') userId: string){
 		return await this.usersService.getMemberQuotaUsage(userId)

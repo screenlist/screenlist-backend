@@ -8,7 +8,7 @@ export interface Person {
 	provinceOfOrigin?: string;
 	countryOfOrigin?: string;
 	yearOfBirth?: number;
-	dateMonthOfBirth?: string;
+	dateMonthOfBirth?: Date;
 	deathDate?: Date;
 	nationality?: string[];
 	gender?: string;

@@ -17,7 +17,7 @@ import { PhotoDto } from '../films/films.dto';
 import { Film, ImageOpt, Photo } from  '../films/films.types';
 import { SearchService } from 'src/search/search.service';
 import { Role } from 'src/companies/companies.types';
-import { FilmSchema, PersonSchema } from 'src/search/search.types.';
+import { FilmSchema, PersonSchema } from 'src/search/search.types';
 import { UserExt } from 'src/users/users.types';
 
 @Injectable()
@@ -28,7 +28,7 @@ export class PeopleService {
 		private search: SearchService
 	){}
 
-	async findAll(page?: number, limit?: number): Promise<Person[]>{
+	async findAll(page?: number, limit?: number) {
 		const	size = limit ? +limit : 50
 		const skip = ( (page ? +page : 1) - 1 ) * size
 
@@ -37,6 +37,11 @@ export class PeopleService {
 		}).sort({'lastUpdated': -1}).skip(skip).limit(size)
 
 		try {
+			const total = await this.mongo.db.collection<Person>('people').countDocuments({
+				editVerified: true,
+				isHidden: false
+			})
+			const totalPages = Math.ceil(total/size)
 			const people = await query.toArray()
 
 			const data = await Promise.all(
@@ -52,14 +57,18 @@ export class PeopleService {
 						...item,
 						photo: photo ? {
 							url: photo.optimisedUrl,
-							id: photo.id,
+							index: photo.photoIndex,
 							credit: photo.attribution,
 							altText: photo.description
 						} : null
 					}
 				})
 			)
-			return people
+			return {
+				data,
+				hasNextPage: page < totalPages,
+				hasPrevPage: page > 1 
+			}
 		} catch(err: any) {
 			// console.log(err)
 			throw new NotFoundException('Could not find people')
@@ -87,7 +96,7 @@ export class PeopleService {
 				...person,
 				photo: photo ? {
 					url: photo.optimisedUrl,
-					id: photo.id,
+					index: photo.photoIndex,
 					credit: photo.attribution,
 					altText: photo.description
 				} : null
@@ -111,7 +120,7 @@ export class PeopleService {
 							work.roles.push(role)
 						} else {
 							const parentObject = {
-								name: owner.name,
+								name: item.ownerName,
 								id: item.ownerId,
 								type: item.ownerCollection,
 								year: owner.year,
@@ -141,6 +150,7 @@ export class PeopleService {
 				}
 			});
 
+			// console.log(details)
 			return {
 				details,
 				filmography
@@ -198,7 +208,8 @@ export class PeopleService {
 				nationality: entity.nationality,
 				deathDate: this.mongo.dateToBigInt(entity.deathDate),
 				created: this.mongo.dateToBigInt(entity.created),
-				lastUpdated: this.mongo.dateToBigInt(entity.lastUpdated)
+				lastUpdated: this.mongo.dateToBigInt(entity.lastUpdated),
+				dateMonthOfBirth: this.mongo.dateToBigInt(entity.dateMonthOfBirth)
 			}
 			await this.search.client.collections('people').documents().create(searchRecord);
 
@@ -209,7 +220,7 @@ export class PeopleService {
 	}
 
 	async updateOne(data: UpdatePersonDto, opt: PersonOpt, remove?: CollectionFields<Person>){
-		if(remove && typeof remove === 'object'){ throw new BadRequestException('Provide an array for properties to remove') }
+		if(!Array.isArray(remove)){ throw new BadRequestException('Provide an array for properties to remove') }
 
 		try {
 			const entity = await this.mongo.db.collection<Person>('people').findOne({id: opt.personId})
@@ -221,11 +232,12 @@ export class PeopleService {
 
 			if(entity.editLocked === true){ throw new BadRequestException("Edit locked") }
 
-			entity.lastUpdated = opt.time
-
 			for (const key in data) {
 				entity[key] = data[key]
 			}
+
+			entity.lastUpdated = opt.time
+			entity.editVerified = false
 
 			const updated = await this.mongo.updateOne<Person>(entity, 'people', remove)
 
@@ -240,6 +252,13 @@ export class PeopleService {
 				time: opt.time,
 			}
 			await this.mongo.createHistory(historyObj);
+
+			// If the name has been updated, update all its roles
+			if(data.hasOwnProperty('name')){
+				await this.mongo.db.collection<Role>('roles').updateMany({parentName: dataBefore.name, parentCollection: 'people', parentId: updated.id}, {
+					$set: { parentName: updated.name }
+				})
+			}
 
 			const searchRecord: Partial<PersonSchema> = {
 				name: updated.name,
@@ -311,7 +330,7 @@ export class PeopleService {
 
 	async uploadPhoto(opt: ImageOpt, image: Express.Multer.File){
 		try {
-			if(opt.imageId !== '0'){ throw new BadRequestException('Unknown index') }
+			if(opt.index !== 0){ throw new BadRequestException('Unknown index') }
 
 			const existing = await this.mongo.db.collection<Photo>('photos').countDocuments({parentCollection: 'people', parentId: opt.parentId, type: 'image', photoIndex: opt.index})
 			if(existing > 0) {
@@ -356,7 +375,7 @@ export class PeopleService {
 			await this.mongo.createHistory(historyObj);
 
 			return photo
-		} catch {
+		} catch(err: any) {
 			throw new BadRequestException()
 		}
 	}
@@ -364,7 +383,7 @@ export class PeopleService {
 	async updatePhoto(data: PhotoDto , opt: ImageOpt){
 		try {
 			const entity = await this.mongo.db.collection<Photo>('photos').findOne({
-				parentCollection: 'companies',
+				parentCollection: 'people',
 				parentId: opt.parentId,
 				photoIndex: opt.index,
 				type: 'image'
@@ -405,7 +424,7 @@ export class PeopleService {
 			await this.mongo.createHistory(historyObj);
 
 			return entity
-		} catch {
+		} catch(err: any) {
 			throw new BadRequestException()
 		}
 	}
@@ -413,7 +432,7 @@ export class PeopleService {
 	async removePhoto(opt: ImageOpt){
 		try{
 			const photo = await this.mongo.db.collection<Photo>('photos').findOne({
-				parentCollection: 'companies',
+				parentCollection: 'people',
 				parentId: opt.parentId,
 				photoIndex: opt.index,
 				type: 'image'
@@ -708,12 +727,12 @@ export class PeopleService {
 	async justHistory(personId: string){
 		try {
 			const person = await this.mongo.db.collection<Person>('people').findOne({id: personId})
-			const photo = await this.mongo.db.collection<Photo>('photos').findOne({
-				photoIndex: 0,
-				parentCollection: 'companies',
-				parentId: personId,
-				type: 'image'
-			})
+			// const photo = await this.mongo.db.collection<Photo>('photos').findOne({
+			// 	photoIndex: 0,
+			// 	parentCollection: 'companies',
+			// 	parentId: personId,
+			// 	type: 'image'
+			// })
 
 			const personHistory = await this.mongo.db.collection<HistoryX>('history').find({
 				xKind: 'people',
@@ -723,7 +742,6 @@ export class PeopleService {
 
 			const photoHistory = await this.mongo.db.collection<HistoryX>('history').find({
 				xKind: 'photos',
-				xIdentifier: photo.id,
 				wKind: 'people',
 				wIdentifier: personId,
 				xTimestamp: {$gt: person.lastVerified}

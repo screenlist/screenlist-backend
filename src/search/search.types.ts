@@ -44,6 +44,7 @@ export interface PersonSchema {
 	provinceOfOrigin?: string;
 	countryOfOrigin?: string;
 	deathDate?: number;
+	dateMonthOfBirth?: number;
 	created: number;
 	lastUpdated: number;
 	photoUrl?: string;

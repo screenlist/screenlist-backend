@@ -17,7 +17,7 @@ import { Film, ImageOpt, Photo } from  '../films/films.types';
 import { CollectionFields, HistoryOpt, HistoryX } from '../database/database.types';
 import { StorageService } from '../storage/storage.service';
 import { SearchService } from 'src/search/search.service';
-import { CompanySchema} from 'src/search/search.types.';
+import { CompanySchema} from 'src/search/search.types';
 import { UserExt } from 'src/users/users.types';
 
 @Injectable()
@@ -38,6 +38,11 @@ export class CompaniesService {
 		}).sort({'lastUpdated': -1}).skip(skip).limit(size)
 
 		try {
+			const total = await this.mongo.db.collection<Company>('companies').countDocuments({
+				editVerified: true,
+				isHidden: false
+			})
+			const totalPages = Math.ceil(total/size)
 			const companies = await query.toArray()
 
 			const data = await Promise.all(
@@ -48,7 +53,7 @@ export class CompaniesService {
 						...item,
 						photo: photo ? {
 							url: photo.optimisedDimensions,
-							id: photo.id,
+							index: photo.photoIndex,
 							credit: photo.attribution,
 							altText: photo.description
 						} : null
@@ -58,7 +63,8 @@ export class CompaniesService {
 
 			return {
 				data: data,
-				hasNextPage: await query.hasNext()
+				hasNextPage: page < totalPages,
+				hasPrevPage: page > 1 
 			}
 		} catch(err: any) {
 			throw new NotFoundException('Could not retrieve companies');
@@ -86,7 +92,7 @@ export class CompaniesService {
 				...company, 
 				photo: photo ? {
 					url: photo.optimisedUrl,
-					id: photo.id,
+					index: photo.photoIndex,
 					credit: photo.attribution,
 					altText: photo.description
 				} : null
@@ -101,7 +107,7 @@ export class CompaniesService {
 						const owner = await this.mongo.db.collection<Film>('films').findOne({id: item.ownerId})
 						const poster = await this.mongo.db.collection<Photo>('photos').findOne({type: 'poster', parentId: item.ownerId, photoIndex: 0, parentCollection: 'films'})
 
-						const path = `/${item.ownerCollection == 'films' ? 'films' : 'series'}/${item.ownerId}/companies/${item.parentId}/roles/${item.id}`;
+						const path = `/${item.ownerCollection}/${item.ownerId}/companies/${item.parentId}/roles/${item.id}`;
 						return {
 							...item,
 							ownerName: owner.name,
@@ -136,6 +142,7 @@ export class CompaniesService {
 				}
 			})
 
+			// console.log(details)
 			return {
 				details,
 				productions
@@ -199,7 +206,7 @@ export class CompaniesService {
 	}
 
 	async updateOne(data: UpdateCompanyDto, opt: CompanyOpt, remove?: CollectionFields<Company>){
-		if(remove && typeof remove === 'object'){ throw new BadRequestException('Provide an array for properties to remove') }
+		if(!Array.isArray(remove)){ throw new BadRequestException('Provide an array for properties to remove') }
 
 		try {
 			const entity = await this.mongo.db.collection<Company>('companies').findOne({id: opt.companyId})
@@ -216,6 +223,7 @@ export class CompaniesService {
 			}
 
 			entity.lastUpdated = opt.time
+			entity.editVerified = false
 
 			await this.mongo.updateOne(entity, 'companies', remove)
 			
@@ -231,7 +239,14 @@ export class CompaniesService {
 				action: 'update',
 				time: opt.time,
 			}
-			const history = await this.mongo.createHistory(historyObj);
+			await this.mongo.createHistory(historyObj);
+
+			// If the name has been updated, update all its roles
+			if(data.hasOwnProperty('name')){
+				await this.mongo.db.collection<Role>('roles').updateMany({parentName: dataBefore.name, parentCollection: 'companies', parentId: updated.id}, {
+					$set: { parentName: updated.name }
+				})
+			}
 
 			const searchRecord: Partial<CompanySchema> = {
 				name: updated.name,
@@ -646,12 +661,12 @@ export class CompaniesService {
 	async justHistory(companyId: string){
 		try {
 			const company = await this.mongo.db.collection<Company>('companies').findOne({id: companyId})
-			const logo = await this.mongo.db.collection<Photo>('photos').findOne({
-				photoIndex: 0,
-				parentCollection: 'companies',
-				parentId: companyId,
-				type: 'image'
-			})
+			// const logo = await this.mongo.db.collection<Photo>('photos').findOne({
+			// 	photoIndex: 0,
+			// 	parentCollection: 'companies',
+			// 	parentId: companyId,
+			// 	type: 'image'
+			// })
 
 			const companyHistory = await this.mongo.db.collection<HistoryX>('history').find({
 				xKind: 'companies',
@@ -661,7 +676,6 @@ export class CompaniesService {
 
 			const photoHistory = await this.mongo.db.collection<HistoryX>('history').find({
 				xKind: 'photos',
-				xIdentifier: logo.id,
 				wKind: 'companies',
 				wIdentifier: companyId,
 				xTimestamp: {$gt: company.lastVerified} 

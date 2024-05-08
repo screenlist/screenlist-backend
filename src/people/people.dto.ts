@@ -8,7 +8,8 @@ import {
 	IsFQDN,
 	IsNumber,
 	IsBoolean,
-	IsArray
+	IsArray,
+	ArrayMinSize
 } from 'class-validator';
 
 export class CreatePersonDto {
@@ -40,7 +41,7 @@ export class CreatePersonDto {
 
 	@IsOptional()
 	@IsString()
-	dateMonthOfBirth?: string;
+	dateMonthOfBirth?: Date;
 
 	@IsOptional()
 	@IsDate()
@@ -48,6 +49,8 @@ export class CreatePersonDto {
 
 	@IsOptional()
 	@IsArray()
+	@ArrayMinSize(1)
+	@IsString({ each: true }) 
 	nationality?: string[];
 
 	@IsOptional()
@@ -108,7 +111,7 @@ export class UpdatePersonDto {
 
 	@IsOptional()
 	@IsString()
-	dateMonthOfBirth?: string;
+	dateMonthOfBirth?: Date;
 
 	@IsOptional()
 	@IsDate()
@@ -116,6 +119,8 @@ export class UpdatePersonDto {
 
 	@IsOptional()
 	@IsArray()
+	@ArrayMinSize(1)
+	@IsString({ each: true }) 
 	nationality?: string[];
 
 	@IsOptional()
@@ -151,18 +156,6 @@ export class CreatePersonRoleDto {
 	@MaxLength(60)
 	personName: string;
 
-	@IsOptional()
-	@IsString()
-	personId?: string;
-
-	@IsOptional()
-	@IsString()
-	ownerKind?: string;
-
-	@IsOptional()
-	@IsString()
-	ownerId: string;
-
 	@IsNotEmpty()
 	@MaxLength(30)
 	title: string;
@@ -176,33 +169,30 @@ export class CreatePersonRoleDto {
 	category: string;
 
 	@IsOptional()
+	@IsNotEmpty()
 	@IsString()
 	@MaxLength(60)
 	characterName?: string;
-
-	@IsOptional()
-	@MaxLength(150)
-	characterDescription?: string;
 }
 
 export class UpdatePersonRoleDto {
 	@IsOptional()
+	@IsNotEmpty()
 	@MaxLength(30)
 	title?: string;
 
 	@IsOptional()
+	@IsNotEmpty()
 	@MaxLength(20)
 	department?: string;
 
 	@IsOptional()
+	@IsNotEmpty()
 	@MaxLength(20)
 	category?: string;
 
 	@IsOptional()
+	@IsNotEmpty()
 	@MaxLength(60)
 	characterName?: string;
-
-	@IsOptional()
-	@MaxLength(150)
-	characterDescription?: string;
 }

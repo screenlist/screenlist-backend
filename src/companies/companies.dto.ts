@@ -105,18 +105,6 @@ export class CreateCompanyRoleDto {
 	@MaxLength(60)
 	companyName: string;
 
-	@IsOptional()
-	@IsString()
-	companyId?: string;
-
-	@IsOptional()
-	@IsString()
-	ownerKind: string;
-
-	@IsOptional()
-	@IsString()
-	ownerId: string;
-
 	@IsNotEmpty()
 	@IsString()
 	capacity: string;

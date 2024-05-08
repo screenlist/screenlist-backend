@@ -51,8 +51,6 @@ export class PeopleController {
 
 	@Post()
 	@Roles('member')
-	@UseGuards(EditGuard)
-	@EditLock('people')
 	async createOne(
 		@Body() createPersonDto: CreatePersonDto,
 		@Headers('x-user-id') userId: string

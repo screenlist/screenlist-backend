@@ -37,7 +37,7 @@ import { CollectionFields, HistoryOpt, HistoryX, Hit } from '../database/databas
 import { AuthService } from '../auth/auth.service';
 import { SearchService } from '../search/search.service';
 import { UserExt } from 'src/users/users.types';
-import { FilmSchema } from 'src/search/search.types.';
+import { FilmSchema } from 'src/search/search.types';
 
 
 
@@ -62,6 +62,11 @@ export class FilmsService {
 		}).sort({'lastUpdated': -1}).skip(skip).limit(size)
 
 		try {
+			const total = await this.mongo.db.collection<Film>('films').countDocuments({
+				editVerified: true,
+				isHidden: false
+			})
+			const totalPages = Math.ceil(total/size)
 			const films = await query.toArray()
 			// Loop through each film to retrieve its poster
 			const results = await Promise.all(films.map(async (film) => {
@@ -85,7 +90,11 @@ export class FilmsService {
 					throw new BadRequestException()
 				}
 			}))
-			return results
+			return {
+				data: results,
+				hasNextPage: page < totalPages,
+				hasPrevPage: page > 1 
+			}
 		} catch (err: any) {
 			throw new NotFoundException('Encountered trouble while trying to retrieve');
 		}
@@ -121,7 +130,7 @@ export class FilmsService {
 
 			const stills = stillsResults.map((item) => {
 				return {
-					id: item.id,
+					index: item.photoIndex,
 					url: item.optimisedUrl,
 					credit: item.attribution,
 					altText: item.description
@@ -169,7 +178,7 @@ export class FilmsService {
 			const mainCrew = people.filter((value) => value.department == 'Above Line');
 			const productionCrew = people.filter((value) => value.department == 'Production');
 			const everyoneElse = people.filter((value) => {
-				const aboveElse = value.department == 'main cast' || value.department == 'additional cast' || value.department == 'above line' || value.department == 'production';
+				const aboveElse = value.department === 'Leading Cast' || value.department === 'Supporting Cast' || value.department === 'Above Line' || value.department === 'Production';
 				return !aboveElse;
 			})
 
@@ -177,7 +186,7 @@ export class FilmsService {
 				...film,
 				poster: poster ? {
 					url: poster.optimisedUrl,
-					id: poster.id,
+					index: poster.photoIndex,
 					credit: poster.attribution,
 					altText: poster.description
 				} : null,
@@ -189,6 +198,7 @@ export class FilmsService {
 				}
 			}
 
+			// console.log(details)
 			return {
 				details: details,
 				stills: stills,
@@ -276,7 +286,7 @@ export class FilmsService {
 			film.releaseDate = new Date(film.releaseDate);
 		}
 
-		if(remove && typeof remove === 'object'){ throw new BadRequestException('Provide an array for properties to remove') }
+		if(!Array.isArray(remove)){ throw new BadRequestException('Provide an array for properties to remove') }
 		
 		try{
 			const entity = await this.mongo.db.collection<Film>('films').findOne({id: id})
@@ -288,12 +298,12 @@ export class FilmsService {
 
 			if(entity.editLocked === true){ throw new BadRequestException("Edit locked") }
 
-			entity.lastUpdated = time
-			entity.editVerified = false
-
 			for (const key in film) {
 				entity[key] = film[key]
 			}
+
+    	entity.lastUpdated = time
+			entity.editVerified = false
 
 			const updated = await this.mongo.updateOne<Film>(entity, 'films', remove)		
 			const  dataAfter = {...updated}			
@@ -309,6 +319,13 @@ export class FilmsService {
 				id: id
 			}
 			await this.mongo.createHistory(historyObj);
+
+			// If the name has been updated, update all its roles
+			if(film.hasOwnProperty('name')){
+				await this.mongo.db.collection<Role>('roles').updateMany({ownerName: dataBefore.name, ownerCollection: 'films', ownerId: updated.id}, {
+					$set: { ownerName: updated.name }
+				})
+			}
 
 			const searchRecord: Partial<FilmSchema> = {
 				name: updated.name,
@@ -805,6 +822,8 @@ export class FilmsService {
 				pId: opt.parentId,
 				pKind: opt.parentKind
 			}
+
+			console.log(poster.originalUrl)
 			await this.storage.deletePhoto(poster.originalName);
 			await this.storage.deletePhoto(poster.optimisedName);
 			await this.mongo.createHistory(historyObj);
@@ -828,7 +847,8 @@ export class FilmsService {
 			await this.search.client.collections('films').documents(opt.parentId).update(searchRecord);
 
 			return {'status': 'deleted'}
-		} catch {
+		} catch(err: any) {
+			console.log(err)
 			throw new BadRequestException()
 		}
 	}
@@ -1118,7 +1138,8 @@ export class FilmsService {
 		try {
 			const films = await this.mongo.db.collection<Film>('films').find({
 				hasPoster: true,
-				isHidden: false
+				isHidden: false,
+				editVerified: true
 			}).sort({created: -1}).limit(limit ? limit : 10).toArray();
 
 			const results = await Promise.all(films.map(async (film) => {
@@ -1152,6 +1173,7 @@ export class FilmsService {
 				isHidden: false,
 				productionStage: 'finished',
 				releaseDate: {$lte: now},
+				editVerified: true
 			}).sort({releaseDate: -1}).limit(limit ? limit : 10).toArray()
 
 			const results = await Promise.all(films.map(async (film) => {
@@ -1184,7 +1206,7 @@ export class FilmsService {
 		try {
 			const films = await this.mongo.db.collection<Film>('films').find({
 				$and: [
-					{ hasPoster: true, isHidden: false },
+					{ hasPoster: true, isHidden: false, editVerified: true },
 					{
 						$or: [
 							{ releaseDate: {$gt: now} },
@@ -1236,14 +1258,14 @@ export class FilmsService {
 			});
 
 			const totalPairs: [string, number][] = Object.entries(occurrences);
-			const limitedSet = totalPairs.filter((val) => isNaN(+val[0]) === false ).sort((a, b) => b[1] - a[1]).slice(0, limit ? limit+1 : 10);
-
+			const limitedSet = totalPairs.sort((a, b) => b[1] - a[1]).slice(0, limit ? limit+1 : 10);
+			// console.log(totalPairs.length, limitedSet.length)
 			const results = await Promise.all(limitedSet.map(async (pair) => {
 				const id = pair[0];
 
 				try {
 					const film = await this.mongo.db.collection<Film>('films').findOne({id: id})
-					if(film.hasPoster === true){
+					if(film && film.hasPoster === true){
 						const poster = await this.mongo.db.collection<Photo>('photos').findOne({
 							parentCollection: 'films',
 							parentId: id,
@@ -1255,14 +1277,19 @@ export class FilmsService {
 							...film,
 							posterUrl: poster.optimisedUrl
 						}
-					} else {						
+					} else if(film) {						
 						return film
 					}
 				} catch(err) {
-					throw new BadRequestException()
+					throw new BadRequestException(err.message)
 				}
 			}))
-			
+			// console.log(hits.length)
+			// console.log(occurrences)
+			// console.log(totalPairs)
+			// console.log(limitedSet)
+			// console.log(results.length)
+			// console.log(results.filter((val) => typeof val === 'object'))
 			return results.filter((val) => typeof val === 'object');
 		} catch(err: any){
 			throw new NotFoundException()

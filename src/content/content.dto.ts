@@ -10,16 +10,6 @@ import {
 } from 'class-validator';
 
 export class CreateContentDto {
-	@IsOptional()
-	@IsEmpty()
-	@MaxLength(60)
-	authorName: string;
-
-	@IsOptional()
-	@IsEmpty()
-	@IsString()
-	authorId: string;
-
 	@IsNotEmpty()
 	@IsString()
 	@MaxLength(150)
@@ -41,10 +31,6 @@ export class CreateContentDto {
 	@IsOptional()
 	@IsEmpty()
 	slug: string;
-
-	@IsOptional()
-	@IsEmpty()
-	type: string;
 }
 
 export class UpdateContentDto {

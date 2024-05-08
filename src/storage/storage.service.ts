@@ -178,7 +178,7 @@ export class StorageService {
 
 			const originalName = poster.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow);
 			const optimisedName = poster.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('optmsd');
-
+			console.log(optimisedName, originalName)
 			try{
 				const original = await this.fileUploader(0, 0, poster.buffer, poster.mimetype, originalName, true, false)
 				const optimised = await this.fileUploader(1280, 1920, poster.buffer, poster.mimetype, optimisedName, false, false);
@@ -193,6 +193,7 @@ export class StorageService {
 					optimisedSize: optimised.size
 				}
 			} catch(err: any) {
+				console.log(err)
 				throw new BadRequestException(err?.message)
 			}
 		} else { 
@@ -209,6 +210,7 @@ export class StorageService {
 
 			const originalName = still.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow);
 			const optimisedName = still.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('optmsd');
+			console.log(optimisedName, originalName)
 			try{
 				const original = await this.fileUploader(0,0, still.buffer, still.mimetype, originalName, true, false);
 				const optimised = await this.fileUploader(1920, 1080, still.buffer, still.mimetype, optimisedName, false, false);

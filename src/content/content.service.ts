@@ -12,7 +12,8 @@ import {
 	PhotoDto
 } from '../films/films.dto';
 import { ImageOpt, Photo } from '../films/films.types';
-import { ContentSchema } from 'src/search/search.types.';
+import { ContentSchema } from 'src/search/search.types';
+import { UserExt } from 'src/users/users.types';
 
 @Injectable()
 export class ContentService {
@@ -40,24 +41,26 @@ export class ContentService {
 		}
 	}
 
-	async createOne(data: CreateContentDto, opt: ContentOpt){
-		data.slug = data.type == 'blog' ? data.headline.toLowerCase().concat(`-${new Date(opt.time).toISOString()}`).replace(/[^0-9a-z]/gi, '-') : data.type;
+	async createOne(data: CreateContentDto, opt: ContentOpt, type: Content['type']){
+		data.slug = type === 'blog' ? data.headline.toLowerCase().concat(`-${new Date(opt.time).toISOString()}`).replace(/[^0-9a-z]/gi, '-') : type;
 		try {
-			if(data.type == 'blog'){
+			if(type === 'blog'){
 				const results = await this.mongo.db.collection<Content>('content').countDocuments({slug: data.slug});
 				if(results > 0){
-					throw new BadRequestException('Slug already exists')
+					throw new BadRequestException('Content with a similar slug already exists')
 				}
 			}
 
+			const userExt = await this.mongo.db.collection<UserExt>('users').findOne({id: opt.user})
+
 			const entity: Content = {
 				id: await this.mongo.generateUniqueId('content', 12),
-				authorName: data.authorName,
-				authorId: data.authorId,
+				authorName: userExt.fullName,
+				authorId: opt.user,
 				created: opt.time,
 				lastUpdated: opt.time,
 				slug: data.slug,
-				type: data.type as Content['type'],
+				type: type,
 				headline: data.headline,
 				body: data.body,
 				tags: data.tags,
@@ -320,53 +323,48 @@ export class ContentService {
 	}
 
 	async createAbout(data: CreateContentDto, opt: ContentOpt){
-		data.type = 'about';
 		try {
 			const article = await this.mongo.db.collection<Content>('content').countDocuments({type: 'about'})
 			if(article > 0) { throw new BadRequestException('Action not allowed') };
-			return await this.createOne(data, opt);
+			return await this.createOne(data, opt, 'about');
 		} catch (err: any) {
 			throw new BadRequestException(err.message);
 		}
 	}
 
 	async createContributionsGuide(data: CreateContentDto, opt: ContentOpt){
-		data.type = 'contributions';
 		try {
 			const article = await this.mongo.db.collection<Content>('content').countDocuments({type: 'contributions'})
 			if(article > 0) { throw new BadRequestException('Action not allowed') };
-			return await this.createOne(data, opt);
+			return await this.createOne(data, opt, 'contributions');
 		} catch (err: any) {
 			throw new BadRequestException(err.message);
 		}
 	}
 
 	async createBlogArticle(data: CreateContentDto, opt: ContentOpt){
-		data.type = 'blog';
 		try {
-			return await this.createOne(data, opt);
+			return await this.createOne(data, opt, 'blog');
 		} catch (err: any) {
 			throw new BadRequestException(err.message);
 		}
 	}
 
 	async createPrivacyPolicy(data: CreateContentDto, opt: ContentOpt){
-		data.type = 'privacy';
 		try {
-			const article = await this.mongo.db.collection<Content>('content').countDocuments({type: data.type})
+			const article = await this.mongo.db.collection<Content>('content').countDocuments({type: 'privacy'})
 			if(article > 0) { throw new BadRequestException('Action not allowed') };
-			return await this.createOne(data, opt);
+			return await this.createOne(data, opt, 'privacy');
 		} catch (err: any) {
 			throw new BadRequestException(err.message);
 		}
 	}
 
 	async createTermsOfService(data: CreateContentDto, opt: ContentOpt){
-		data.type = 'tos';
 		try {
-			const article = await this.mongo.db.collection<Content>('content').countDocuments({type: data.type})
+			const article = await this.mongo.db.collection<Content>('content').countDocuments({type: 'tos'})
 			if(article > 0) { throw new BadRequestException('Action not allowed') };
-			return await this.createOne(data, opt);
+			return await this.createOne(data, opt, 'tos');
 		} catch (err: any) {
 			throw new BadRequestException(err.message);
 		}

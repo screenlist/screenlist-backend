@@ -28,6 +28,7 @@ import {
 	PhotoDto
 } from './films.dto';
 import { 
+	Film,
 	ImageOpt,
 	RatingOpt
 } from './films.types';
@@ -42,6 +43,7 @@ import {
 } from '../people/people.dto';
 import { PersonRoleOpt } from '../people/people.types';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { CollectionFields } from 'src/database/database.types';
 
 @Controller('films')
 @UseGuards(RolesGuard)
@@ -68,7 +70,7 @@ export class FilmsController {
 		return await this.filmsService.getTrendingFilms(size)
 	}
 
-	@Get('data/recently-added')
+	@Get('data/recent')
 	async getRecentlyAdded(@Query('limit') size: number){
 		return await this.filmsService.getRecentlyAdded(size)
 	}
@@ -100,8 +102,6 @@ export class FilmsController {
 	}	
 
 	@Post()
-	@UseGuards(EditGuard)
-	@EditLock('films')
 	@Roles('member')
 	async createOne(
 		@Body() createFilmDto: CreateFilmDto, 
@@ -130,10 +130,12 @@ export class FilmsController {
 	@Roles('member')
 	async updateOne(
 		@Param('id') id: string, 
-		@Body() updateFilmDto: UpdateFilmDto,
+		@Body('update') updateFilmDto: UpdateFilmDto,
+		@Body('remove') remove: CollectionFields<Film>,
 		@Headers('x-user-id') userId: string
 	){
-		return await this.filmsService.updateOne(updateFilmDto, userId, id)
+		console.log(remove)
+		return await this.filmsService.updateOne(updateFilmDto, userId, id, remove)
 	}
 
 	@Delete(':id')
@@ -336,6 +338,7 @@ export class FilmsController {
 		@Param('filmId') filmId: string,
 		@UploadedFile() poster: Express.Multer.File,
 		@Headers('x-user-id') userId: string,
+		@Body() body: any,
 		@Query('index') index: number
 	){
 		const imageOptions: ImageOpt = {
@@ -345,6 +348,7 @@ export class FilmsController {
 			parentKind: 'films',
 			index: index
 		}
+		console.log(body)
 		console.log(poster)
 		return await this.filmsService.uploadPoster(imageOptions, poster);
 	}

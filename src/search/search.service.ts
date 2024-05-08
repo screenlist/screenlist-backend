@@ -5,7 +5,7 @@ import Typesense from 'typesense'
 import { Collection } from 'src/database/database.types';
 import { WithId } from 'mongodb';
 import { Film, Photo } from 'src/films/films.types';
-import { CompanySchema, ContentSchema, FilmSchema, PersonSchema, UserSchema } from './search.types.';
+import { CompanySchema, ContentSchema, FilmSchema, PersonSchema, UserSchema } from './search.types';
 import { Company, Role } from 'src/companies/companies.types';
 import { Person } from 'src/people/people.types';
 import { Content } from 'src/content/content.types';
@@ -43,7 +43,7 @@ export class SearchService {
 				{ 'name': 'name',	'type': 'string',	'facet': false },
 				{ 'name': 'year', 'type': 'int32', 'facet': true, 'optional': true  },
 				{ 'name': 'genres',	'type': 'string[]',	'facet': true },
-				{ 'name': 'directors',	'type': 'string[]',	'facet': true },
+				{ 'name': 'directors',	'type': 'string[]',	'facet': true, 'optional': true },
 				{ 'name': 'type',	'type': 'string',	'facet': true },
 				{ 'name': 'format',	'type': 'string',	'facet': true },
 				{ 'name': 'productionStage',	'type': 'string',	'facet': true },
@@ -90,6 +90,7 @@ export class SearchService {
 				{ 'name': 'provinceOfOrigin',	'type': 'string',	'facet': true, 'optional': true  },
 				{ 'name': 'countryOfOrigin',	'type': 'string',	'facet': true, 'optional': true  },
 				{ 'name': 'deathDate',	'type': 'int64',	'facet': true, 'optional': true  },
+				{ 'name': 'dateMonthOfBirth',	'type': 'int64',	'facet': true, 'optional': true  },
 				{ 'name': 'created',	'type': 'int64',	'facet': true, 'optional': true  },
 				{ 'name': 'lastUpdated',	'type': 'int64',	'facet': true, 'optional': true  },
 				{ 'name': 'photoUrl',	'type': 'string',	'facet': false, 'index': false, 'optional': true }
@@ -250,7 +251,8 @@ export class SearchService {
 						deathDate: this.mongo.dateToBigInt(item.deathDate),
 						created: this.mongo.dateToBigInt(item.created),
 						lastUpdated: this.mongo.dateToBigInt(item.lastUpdated),
-						photoUrl: photo?.optimisedUrl
+						photoUrl: photo?.optimisedUrl,
+						dateMonthOfBirth: this.mongo.dateToBigInt(item.dateMonthOfBirth)
 					}
 				})
 			)
@@ -333,7 +335,9 @@ export class SearchService {
 			const companiesRes = await this.client.collections('companies').documents().import(companiesJSONlines, {action: 'upsert'});
 			const contentRes = await this.client.collections('content').documents().import(contentJSONlines, {action: 'upsert'});
 			const usersRes = await this.client.collections('users').documents().import(usersJSONlines, {action: 'upsert'});
+			// console.log(filmsResults.length, peopleResults.length, contentResults.length, contentResults.length, usersResults.length)
 			// console.log(filmsRes, peopleRes, companiesRes, contentRes, usersRes)
+			// console.log('Does it log')
 			return {status: 'success'}
 		} catch(err: any) {
 			console.log(err)
@@ -345,11 +349,12 @@ export class SearchService {
 		const	size = limit ? +limit : 500
 		const skip = ( (page ? +page : 1) - 1 ) * size
 		let documents: WithId<T>[] = []
-		const query = this.mongo.db.collection<T>(collection).find({}).sort({created: 1}).skip(skip).limit(size)
 		try {
-			const hasNext = await query.hasNext()
-			const results = await query.toArray();
-			documents = documents
+			const total = await this.mongo.db.collection<T>(collection).estimatedDocumentCount()
+			const totalPages = Math.ceil(total/size)
+			const hasNext = (page ? +page : 1) < totalPages
+			const results = await this.mongo.db.collection<T>(collection).find({}).sort({created: 1}).skip(skip).limit(size).toArray();
+			documents = results
 			
 			if(hasNext === true){ 
 				const nextPage = page ? ++page : 2;

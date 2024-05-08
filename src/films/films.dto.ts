@@ -8,7 +8,9 @@ import {
 	IsFQDN,
 	IsArray,
 	IsNumber,
-	IsDateString
+	IsDateString,
+	ArrayMinSize,
+	ArrayMaxSize
 } from 'class-validator';
 
 export class CreateFilmDto {
@@ -66,10 +68,14 @@ export class CreateFilmDto {
 
 	@IsNotEmpty()
 	@IsArray()
+	@ArrayMinSize(1)
+	@IsString({ each: true }) 
 	countries?: [string];
 
 	@IsNotEmpty()
 	@IsArray()
+	@ArrayMinSize(1)
+	@IsString({ each: true }) 
 	languages?: [string];
 
 	@IsOptional()
@@ -78,6 +84,9 @@ export class CreateFilmDto {
 
 	@IsNotEmpty()
 	@IsArray()
+	@ArrayMinSize(1)
+	@ArrayMaxSize(4)
+	@IsString({ each: true }) 
 	genres: [string];
 }
 
@@ -141,13 +150,15 @@ export class UpdateFilmDto {
 	initialPlatform?: string;
 
 	@IsOptional()
-	@IsNotEmpty()
 	@IsArray()
+	@ArrayMinSize(1)
+	@IsString({ each: true }) 
 	countries?: [string];
 
 	@IsOptional()
-	@IsNotEmpty()
 	@IsArray()
+	@ArrayMinSize(1)
+	@IsString({ each: true }) 
 	languages?: [string];
 
 	@IsOptional()
@@ -155,8 +166,10 @@ export class UpdateFilmDto {
 	additionalLanguages?: string;
 
 	@IsOptional()
-	@IsNotEmpty()
 	@IsArray()
+	@ArrayMinSize(1)
+	@ArrayMaxSize(4)
+	@IsString({ each: true }) 
 	genres?: [string];
 }
 
@@ -169,7 +182,7 @@ export class PhotoDto {
 	@IsString()
 	description: string;
 
-	@IsNotEmpty()
+	@IsOptional()
 	@IsString()
 	source: string | 'direct';
 }

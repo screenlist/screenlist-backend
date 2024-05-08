@@ -293,6 +293,9 @@ export class HistoryService {
 
 						for(const key in item){
 							if(roleFields.includes(key as any) && !document.hasOwnProperty(key)){
+								if(key === 'department'){
+									document[key] = this.mongo.formatTitle(item[key])
+								}
 								document[key] = item[key]
 							}
 						}
