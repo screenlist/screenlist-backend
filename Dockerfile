@@ -14,10 +14,10 @@ RUN npm install
 COPY . .
 
 # Build the application (if necessary)
-# RUN npm run build
+RUN npm run build
 
 # Expose the port the app runs on
-EXPOSE 8080
+EXPOSE 8090
 
 # Command to run the application
-CMD ["npm", "run", "start:dev"]
+CMD ["node", "dist/main"]
