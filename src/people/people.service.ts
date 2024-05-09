@@ -43,7 +43,6 @@ export class PeopleService {
 			})
 			const totalPages = Math.ceil(total/size)
 			const people = await query.toArray()
-
 			const data = await Promise.all(
 				people.map(async (item) => {
 					const photo = await this.mongo.db.collection<Photo>('photos').findOne({
@@ -52,7 +51,6 @@ export class PeopleService {
 						photoIndex: 0,
 						type: 'image'
 					})
-
 					return {
 						...item,
 						photo: photo ? {
