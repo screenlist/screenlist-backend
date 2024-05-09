@@ -100,7 +100,7 @@ export class PeopleService {
 				} : null
 			}
 
-			const partialRoles = await this.mongo.db.collection<Role>('roles').find({parentCollection: 'companies', parentId: id}).toArray()
+			const partialRoles = await this.mongo.db.collection<Role>('roles').find({parentCollection: 'people', parentId: id}).toArray()
 			const filmography = [];
 
 			await Promise.all(
@@ -148,6 +148,7 @@ export class PeopleService {
 				}
 			});
 
+			// console.log(filmography.length, partialRoles.length)
 			// console.log(details)
 			return {
 				details,
