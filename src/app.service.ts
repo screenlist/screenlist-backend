@@ -23,6 +23,7 @@ export class AppService {
 			await this.search.indexAll()
 			// await this.history.mega()
 			// await this.history.transferImages()
+			// await this.history.redistrubuteImagesAsIntended()
 		} catch(err: any){
 			console.log(err)
 		}
