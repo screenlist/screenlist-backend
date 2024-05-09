@@ -471,7 +471,7 @@ export class HistoryService {
 							created: new Date(item.created),
 							lastUpdated: new Date(item.lastUpdated),
 							parentId: person.xNewId,
-							parentCollection: 'films',
+							parentCollection: 'people',
 							photoIndex: +item.photoIndex,
 							originalDimensions: item.originalDimensions,
 							originalName: item.originalName,
@@ -522,7 +522,7 @@ export class HistoryService {
 							created: new Date(item.created),
 							lastUpdated: new Date(item.lastUpdated),
 							parentId: company.xNewId,
-							parentCollection: 'films',
+							parentCollection: 'companies',
 							photoIndex: +item.photoIndex,
 							originalDimensions: item.originalDimensions,
 							originalName: item.originalName,
@@ -553,6 +553,33 @@ export class HistoryService {
 			console.log('COMPANIES PHOTOS MOVED')
 			console.log('****************MIGRATION COMPLETE****************')
 
+		} catch(err: any){
+			console.log('-----------------'+err.message)
+		}
+	}
+
+	async redistrubuteImagesAsIntended(){
+		console.log('****************REDISTRIBUTION STARTING****************')
+		try {
+			const photos = await this.mongo.db.collection<Photo>('photos').find({type: 'image'}).toArray()
+			
+			await Promise.all(
+				photos.map(async item => {
+					const company = await this.mongo.db.collection<Company>('companies').findOne({id: item.parentId})
+					const person = await this.mongo.db.collection<Person>('people').findOne({id: item.parentId})
+
+					if(company){
+						console.log(item.originalName, 'is for a company')
+						item.parentCollection = 'companies'
+						await this.mongo.updateOne<Photo>(item, 'photos')
+					} else if(person){
+						console.log(item.originalName, 'is for a person')
+						item.parentCollection = 'people'
+						await this.mongo.updateOne<Photo>(item, 'photos')
+					}					
+				})
+			)
+			console.log('****************REDISTRIBUTION COMPLETE****************')
 		} catch(err: any){
 			console.log('-----------------'+err.message)
 		}

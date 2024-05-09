@@ -19,7 +19,10 @@ export class FrequencyGuard implements CanActivate {
 
 		if(!kind){ return true } else {
 			const id = path.split('/')[2];
-			await this.mongo.addHit(kind, id);
+			const real = await this.mongo.db.collection(kind).findOne({id: id})
+			if(real){
+				await this.mongo.addHit(kind, id);			
+			}
 			return true;
 		}
 	}

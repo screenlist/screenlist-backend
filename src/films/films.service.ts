@@ -1187,7 +1187,7 @@ export class FilmsService {
 
 					return {
 						...film,
-						posterUl: poster.optimisedUrl
+						posterUrl: poster.optimisedUrl
 					}
 				} catch {
 					throw new BadRequestException()
@@ -1258,9 +1258,9 @@ export class FilmsService {
 			});
 
 			const totalPairs: [string, number][] = Object.entries(occurrences);
-			const limitedSet = totalPairs.sort((a, b) => b[1] - a[1]).slice(0, limit ? limit+1 : 10);
-			// console.log(totalPairs.length, limitedSet.length)
-			const results = await Promise.all(limitedSet.map(async (pair) => {
+			// const limitedSet = totalPairs.sort((a, b) => b[1] - a[1]).slice(0, limit ? limit+1 : 10);
+	
+			const results = await Promise.all(totalPairs.map(async (pair) => {
 				const id = pair[0];
 
 				try {
@@ -1277,7 +1277,7 @@ export class FilmsService {
 							...film,
 							posterUrl: poster.optimisedUrl
 						}
-					} else if(film) {						
+					} else if(film) {				
 						return film
 					}
 				} catch(err) {
@@ -1288,9 +1288,10 @@ export class FilmsService {
 			// console.log(occurrences)
 			// console.log(totalPairs)
 			// console.log(limitedSet)
-			// console.log(results.length)
+			// console.log(results)
+			// console.log('_____________________________')
 			// console.log(results.filter((val) => typeof val === 'object'))
-			return results.filter((val) => typeof val === 'object');
+			return results.filter((val) => typeof val === 'object').slice(0, limit ? limit+1 : 10);
 		} catch(err: any){
 			throw new NotFoundException()
 		}
