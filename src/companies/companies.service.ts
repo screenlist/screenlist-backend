@@ -52,7 +52,7 @@ export class CompaniesService {
 					return {
 						...item,
 						photo: photo ? {
-							url: photo.optimisedDimensions,
+							url: photo.optimisedUrl,
 							index: photo.photoIndex,
 							credit: photo.attribution,
 							altText: photo.description
