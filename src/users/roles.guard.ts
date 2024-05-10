@@ -23,7 +23,7 @@ export class RolesGuard implements CanActivate {
 		const request =  ctx.switchToHttp().getRequest();
 		const path = request.url
 		const method = request.method
-		console.log(method, path)
+		// console.log(method, path)
 		// console.log(request.headers['authorization'])
 		
 		if(path === '/users/webhooks'){
@@ -69,7 +69,7 @@ export class RolesGuard implements CanActivate {
 			const emailVerified = user.emailAddresses.find((val) => val.id === user.primaryEmailAddressId).verification.status === 'verified' ? true : false
 
 			const match = this.authService.matchRoles(role, roleAllowed, emailVerified, path);
-			console.log('The match returned', match)
+			// console.log('The match returned', match)
 
 			const isEvaluatedPath = (/^\/films/).test(path) || (/^\/people/).test(path) || (/^\/companies/).test(path)
 			const isPostOrPatchOrDelete = method === 'POST' || method === 'PATCH' || method === 'DELETE';
@@ -77,22 +77,22 @@ export class RolesGuard implements CanActivate {
 
 			// Prevent low reputation members from creating new contributions or delete existing knowledge			
 			if( match === true && isPostOrDelete && role === 'member' && userExt.reputation < 100 ){
-				console.log('Inadequate Reputation')
+				// console.log('Inadequate Reputation')
 				return false
 			}
 
 			// This is spammer territory, it's contributor jail
-			if(match === true && isPostOrPatchOrDelete && role === 'member' && userExt.reputation < -100){ console.log('Jail'); return false }
+			if(match === true && isPostOrPatchOrDelete && role === 'member' && userExt.reputation < -100){ return false }
 
 			// Member contribution quota check before verdict
 			if(match === true && role === 'member' && isEvaluatedPath && isPostOrPatchOrDelete){
-				console.log('Over quota')
+				// console.log('Over quota')
 				return await this.mongo.validateEditsQuota(user.id)
 			}
 
 			return match
 		} catch (err: any){
-			console.log(err)
+			// console.log(err)
 			return false
 		}
 	}
