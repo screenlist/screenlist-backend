@@ -213,6 +213,6 @@ export class UsersController {
 
 	@Post('webhooks')
 	async processWebhooks(@Body() event: WebhookEvent){
-		return await this.processWebhooks(event)
+		return await this.usersService.handleWebhooks(event)
 	}
 }

@@ -23,33 +23,36 @@ export class RolesGuard implements CanActivate {
 		const request =  ctx.switchToHttp().getRequest();
 		const path = request.url
 		const method = request.method
-		// console.log(method, path)
-		// console.log(request.headers['authorization'])
-		
-		if(path === '/users/webhooks'){
-			const webhookSecret = this.config.get('CLERK_WEBHOOK_SECRET')
-			const payloadString = JSON.stringify(request.body)
-			const headers = request.headers;
-
-			const svixHeaders = {
-				"svix-id": headers["svix-id"]!,
-				"svix-timestamp": headers["svix-timestamp"]!,
-				"svix-signature": headers["svix-signature"]!,
-			};
-
-			const wh = new Webhook(webhookSecret).verify(payloadString, svixHeaders) as WebhookEvent;
-			if(wh) {
-				return true
-			} else {
-				return false
-			}
-		}
-
-		if(!roleAllowed){
-			return true;
-		}
+		console.log(method, path)
+		// console.log(request.headers['authorization'])		
 
 		try {
+
+			if(path === '/users/webhooks'){
+				const webhookSecret = this.config.get('CLERK_WEBHOOK_SECRET')
+				const payloadString = JSON.stringify(request.body)
+				const headers = request.headers;
+
+				const svixHeaders = {
+					"svix-id": headers["svix-id"]!,
+					"svix-timestamp": headers["svix-timestamp"]!,
+					"svix-signature": headers["svix-signature"]!,
+				};
+
+				const wh = new Webhook(webhookSecret).verify(payloadString, svixHeaders) as WebhookEvent;
+				// console.log(svixHeaders)
+				// console.log(wh)
+				if(wh) {
+					return true
+				} else {
+					return false
+				}
+			}
+
+			if(!roleAllowed){
+				return true;
+			}
+
 			const jwt = await this.authService.client.verifyToken(request.headers['authorization'].split(' ')[1])
 			const unixTimestamp = Math.floor(Date.now()/1000)
 			const clientHost = this.config.get('CLIENT_URL')
