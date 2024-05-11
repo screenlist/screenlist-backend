@@ -1243,54 +1243,40 @@ export class FilmsService {
 	async getTrendingFilms(limit?: number){
 		const sevenDaysAgo = new Date(Number(new Date)-(1000*60*60*24*7));
 		try{
-			const hits = await this.mongo.db.collection<Hit>('hits').find({time: {$gt: sevenDaysAgo}}).toArray();
-			const occurrences = {};
-			
-			// Iterate through the hits
-			hits.forEach(obj => {
-				const filmId = obj.identifier;				
-				// Increment the occurrence count for the film
-				if (occurrences.hasOwnProperty(filmId)) {
-					occurrences[filmId] += 1;
-				} else {
-					occurrences[filmId] = 1;
-				}
-			});
-
-			const totalPairs: [string, number][] = Object.entries(occurrences);
-			// const limitedSet = totalPairs.sort((a, b) => b[1] - a[1]).slice(0, limit ? limit+1 : 10);
+			const films = await this.mongo.db.collection<Hit>('hits').aggregate<Film>([
+				{ $match: { time: { $gt: sevenDaysAgo }, collection: 'films' } },
+				{ $group: { _id: "$identifier", count: { $sum: 1 } } },
+				{ $sort: { count: -1 } },
+				{ $limit: 80 },
+				{ $lookup: { from: 'films', localField: '_id', foreignField: 'id', as: 'details' } },
+				{ $match: { 'details': { $ne: [] } } },
+				{ $limit: limit ? limit : 10 },
+				{ $unwind: '$details' },
+				{ $replaceRoot: { newRoot: '$details' } }
+			]).toArray();
 	
-			const results = await Promise.all(totalPairs.map(async (pair) => {
-				const id = pair[0];
-
+			const results = await Promise.all(films.map(async (film) => {
 				try {
-					const film = await this.mongo.db.collection<Film>('films').findOne({id: id})
-					if(film && film.hasPoster === true){
+					if(film.hasPoster === true){
 						const poster = await this.mongo.db.collection<Photo>('photos').findOne({
 							parentCollection: 'films',
-							parentId: id,
+							parentId: film.id,
 							type: 'poster',
 							photoIndex: 0
 						})
 						
 						return {
 							...film,
-							posterUrl: poster.optimisedUrl
+							posterUrl: poster.optimisedUrl,
 						}
-					} else if(film) {				
+					} else {				
 						return film
 					}
 				} catch(err) {
 					throw new BadRequestException(err.message)
 				}
 			}))
-			// console.log(hits.length)
-			// console.log(occurrences)
-			// console.log(totalPairs)
-			// console.log(limitedSet)
-			// console.log(results)
-			// console.log('_____________________________')
-			// console.log(results.filter((val) => typeof val === 'object'))
+			
 			return results.filter((val) => typeof val === 'object').slice(0, limit ? limit+1 : 10);
 		} catch(err: any){
 			throw new NotFoundException()
