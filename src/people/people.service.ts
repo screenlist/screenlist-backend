@@ -451,7 +451,7 @@ export class PeopleService {
 			await this.storage.deletePhoto(photo.optimisedName);
 			await this.mongo.createHistory(historyObj);
 			await this.mongo.db.collection<Photo>('photos').deleteOne({
-				parentCollection: 'companies',
+				parentCollection: 'people',
 				parentId: opt.parentId,
 				photoIndex: opt.index,
 				type: 'image'
