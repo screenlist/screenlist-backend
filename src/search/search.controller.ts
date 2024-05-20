@@ -8,11 +8,15 @@ import {
 	Body,
 	Param,
 	Query,
-	Headers
+	Headers,
+	UseGuards
 } from '@nestjs/common';
+import { RolesGuard } from '../users/roles.guard';
+import { Roles } from '../users/roles.decorator';
 import { SearchService } from './search.service'
 
 @Controller('search')
+@UseGuards(RolesGuard)
 export class SearchController {
 	constructor(private search: SearchService){}
 	
@@ -21,39 +25,21 @@ export class SearchController {
 		return await this.search.getAllCollections()
 	}
 
-	@Get('create')
-	async testFunc0(){
+	@Post('create')
+	@Roles('admin')
+	async create(){
 		return await this.search.createCollections()
 	}
 
-	@Get('index')
-	async testFunc2(){
+	@Post('index')
+	@Roles('admin')
+	async index(){
 		return await this.search.indexAll()
 	}
 
-	@Get('delete')
-	async testFunc1(){
+	@Post('delete')
+	@Roles('admin')
+	async delete(){
 		return await this.search.deleteAllCollections()
 	}
-	
-	// @Get('quick')
-	// async quickSearch(
-	// 	@Query('film') film: string,
-	// 	@Query('series') series: string,
-	// 	@Query('company') company: string,
-	// 	@Query('person') person: string,
-	// 	@Query('platform') platform: string,
-	// ) {
-	// 	if(film){
-	// 		return await this.search.quickSearch('film', film)
-	// 	} else if (series){
-	// 		return await this.search.quickSearch('series', series)
-	// 	} else if(company){
-	// 		return await this.search.quickSearch('company', company)
-	// 	} else if(person){
-	// 		return await this.search.quickSearch('person', person)
-	// 	} else if(platform){
-	// 		return await this.search.quickSearch('platform', person)
-	// 	}
-	// }
 }
