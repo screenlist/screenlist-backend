@@ -10,7 +10,7 @@ import clerkClient, { User } from '@clerk/clerk-sdk-node';
  
 @Injectable()
 export class AuthService {
-	constructor(private config: ConfigService, private mongo: DatabaseService){}
+	constructor(private config: ConfigService){}
 
 	public client = clerkClient;
 
