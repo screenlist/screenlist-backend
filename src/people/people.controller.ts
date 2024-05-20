@@ -65,8 +65,8 @@ export class PeopleController {
 	@Get(':id')
 	@UseGuards(FrequencyGuard)
 	@Frequency('people')
-	async findOne(@Param('id') id: string){
-		return await this.peopleService.findOne(id);
+	async findOne(@Param('id') id: string, @Headers('x-user-id') userId: string,){
+		return await this.peopleService.findOne(id, userId);
 	}
 
 	@Patch(':id')
@@ -105,8 +105,7 @@ export class PeopleController {
 
 	@Get(':id/history')
 	async findHistory(
-		@Param('id') personId: string,
-		@Headers('x-page-cursor') cursor: string
+		@Param('id') personId: string
 	){
 		return await this.peopleService.findHistory(personId);
 	}
@@ -115,9 +114,10 @@ export class PeopleController {
 	@Patch(':id/settings/verify')
 	@Roles('member')
 	async verifyEdit(
-		@Param('id') id: string
+		@Param('id') id: string,
+		@Headers('x-user-id') userId: string
 	){
-		return await this.peopleService.verifyEdit(id);
+		return await this.peopleService.verifyEdit(id, userId);
 	}
 
 	@Patch(':id/settings/hide')
@@ -217,5 +217,11 @@ export class PeopleController {
 	@Roles('moderator')
 	async getUmoderated(){
 		return await this.peopleService.findAllUnverified()
+	}
+
+	@Get('data/hidden')
+	@Roles('moderator')
+	async getAllHidden(){
+		return await this.peopleService.findAllHidden()
 	}
 }

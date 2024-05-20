@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import {
 	CreatePersonDto,
@@ -11,7 +11,7 @@ import {
 	PersonOpt,
 	PersonRoleOpt
 } from './people.types';
-import { CollectionFields, HistoryOpt, HistoryX } from '../database/database.types';
+import { CollectionFields, EditsMetadata, HistoryOpt, HistoryX } from '../database/database.types';
 import { StorageService } from '../storage/storage.service';
 import { PhotoDto } from '../films/films.dto';
 import { Film, ImageOpt, Photo } from  '../films/films.types';
@@ -85,10 +85,29 @@ export class PeopleService {
 		}
 	}
 
-	async findOne(id: string) {
+	async findAllHidden() {
+		try{
+			let people = await this.mongo.db.collection<Person>('people').find({
+				isHidden: true
+			}).sort({'lastUpdated': 1}).toArray()
+
+			return people;
+		} catch {
+			throw new NotFoundException('Could not retrieve people');
+		}
+	}
+
+	async findOne(id: string, userId?: string) {
 		try {
 			const person = await this.mongo.db.collection<Person>('people').findOne({ id: id })
 			if(!person){throw new NotFoundException('Not found')}
+
+			// Never permit the less privileged access hidden people
+			if(person.isHidden && userId){
+				const userExt = await this.mongo.db.collection<UserExt>('users').findOne({id: userId})
+				if(userExt.role === 'member' || userExt.role === 'journalist'){ throw new ForbiddenException('This resource is strictly restricted') }
+			} else if(person.isHidden && !userId){ throw new ForbiddenException('This resource is strictly restricted') }
+
 			const photo = await this.mongo.db.collection<Photo>('photos').findOne({ parentId: id, photoIndex: 0, parentCollection: 'people', type: 'image'})
 			const details = {
 				...person,
@@ -161,7 +180,7 @@ export class PeopleService {
 
 	async findOneDetailsOnly(id: string){
 		try {
-			return this.mongo.db.collection<Person>('people').findOne({id: id})
+			return await this.mongo.db.collection<Person>('people').findOne({id: id})
 		} catch (err: any) {
 			throw new NotFoundException()
 		}
@@ -508,11 +527,11 @@ export class PeopleService {
 			if(data.title === 'Director'){
 				const directors = await this.mongo.db.collection<Role>('roles').find({
 					ownerCollection: 'films',
-					parentId: opt.parentId,
+					ownerId: film.id,
+					parentCollection: 'people',
 					role: 'Director'
 				}).toArray()
 				const directorNames = directors.map(val => val.parentName);
-
 				const searchRecord: Partial<FilmSchema> = {
 					directors: directorNames
 				}
@@ -570,7 +589,8 @@ export class PeopleService {
 			if(data.title === 'Director'){
 				const directors = await this.mongo.db.collection<Role>('roles').find({
 					ownerCollection: 'films',
-					parentId: opt.parentId,
+					ownerId: entity.ownerId,
+					parentCollection: 'people',
 					role: 'Director'
 				}).toArray()
 				const directorNames = directors.map(val => val.parentName);
@@ -622,7 +642,8 @@ export class PeopleService {
 			if(role.role === 'Director'){
 				const directors = await this.mongo.db.collection<Role>('roles').find({
 					ownerCollection: 'films',
-					parentId: opt.parentId,
+					ownerId: role.ownerId,
+					parentCollection: 'people',
 					role: 'Director'
 				}).toArray()
 				const directorNames = directors.map(val => val.parentName);
@@ -647,11 +668,12 @@ export class PeopleService {
 	}
 
 	// Settings methods
-	async verifyEdit(id: string){
-		const time = new Date();
+	async verifyEdit(id: string, userId: string){
+		
 		try {
 			const history = await this.justHistory(id)
 			const reputations = this.mongo.determineUserReputation(history);
+			const person = await this.mongo.db.collection<Person>('people').findOne({id: id})
 			await Promise.all(
 				reputations.map(async score => {
 					try {
@@ -662,11 +684,25 @@ export class PeopleService {
 				})
 			)
 
-			const entity = await this.mongo.updateOne({
-				id: id,
-				editVerified: true,
-				lastVerified: time
-			}, 'people');
+			const previousVerificationDate = person.lastVerified
+			const timeNow = new Date();
+
+			person.editVerified = true
+			person.lastUpdated = timeNow
+
+			const entity = await this.mongo.updateOne(person, 'people');
+
+			const edit: EditsMetadata = {
+				id: await this.mongo.generateUniqueId('edits', 16),
+				user: userId,
+				intervalBegins: previousVerificationDate,
+				intervalEnds: timeNow,
+				pageId: person.id,
+				pageType: 'people',
+				reputations: reputations
+			}
+
+			await this.mongo.insertOne(edit, 'edits')
 
 			return entity;
 		} catch (err: any){
@@ -704,6 +740,7 @@ export class PeopleService {
 				id: id,
 				isHidden: true
 			}, 'people')
+			await this.search.client.collections('people').documents(id).delete()
 			return {status: 'success'};
 		} catch(err: any){
 			throw new BadRequestException()
@@ -716,6 +753,28 @@ export class PeopleService {
 				id: id,
 				isHidden: false
 			}, 'people')
+
+			const person = await this.mongo.db.collection<Person>('people').findOne({ id: id })
+
+			const searchRecord: PersonSchema = {
+				id: person.id,
+				name: person.name,
+				occupation: person.occupation,
+				yearOfBirth: person.yearOfBirth,
+				cityOfOrigin: person.cityOfOrigin,
+				provinceOfOrigin: person.provinceOfOrigin,
+				gender: person.gender,
+				pronouns: person.pronouns,
+				description: person.description,
+				countryOfOrigin: person.countryOfOrigin,
+				nationality: person.nationality,
+				deathDate: this.mongo.dateToBigInt(person.deathDate),
+				created: this.mongo.dateToBigInt(person.created),
+				lastUpdated: this.mongo.dateToBigInt(person.lastUpdated),
+				dateMonthOfBirth: this.mongo.dateToBigInt(person.dateMonthOfBirth)
+			}
+			await this.search.client.collections('people').documents().create(searchRecord);
+
 			return {status: 'success'};
 		} catch(err: any){
 			throw new BadRequestException()
@@ -723,27 +782,25 @@ export class PeopleService {
 	}
 
 	// History
-	async justHistory(personId: string){
+	async justHistory(personId: string, intervalBegins?: Date, intervalEnds?: Date){
 		try {
 			const person = await this.mongo.db.collection<Person>('people').findOne({id: personId})
-			// const photo = await this.mongo.db.collection<Photo>('photos').findOne({
-			// 	photoIndex: 0,
-			// 	parentCollection: 'companies',
-			// 	parentId: personId,
-			// 	type: 'image'
-			// })
+			const lastestMod = person.hasOwnProperty('lastVerified') ? new Date(person.lastVerified) : new Date(person.created)
+
+			const begins: Date = intervalBegins ? intervalBegins : lastestMod
+			const ends: Date = intervalBegins ? intervalEnds : new Date()
 
 			const personHistory = await this.mongo.db.collection<HistoryX>('history').find({
 				xKind: 'people',
 				xIdentifier: personId,
-				xTimestamp: {$gt: person.lastVerified}
+				xTimestamp: {$gte: begins, $lte: ends}
 			}).sort({xTimestamp: -1}).toArray();
 
 			const photoHistory = await this.mongo.db.collection<HistoryX>('history').find({
 				xKind: 'photos',
 				wKind: 'people',
 				wIdentifier: personId,
-				xTimestamp: {$gt: person.lastVerified}
+				xTimestamp: {$gte: begins, $lte: ends}
 			}).sort({xTimestamp: -1}).toArray();
 			
 			const allHistories = [
@@ -753,6 +810,25 @@ export class PeopleService {
 
 			return allHistories
 		} catch (err: any) {
+			throw new NotFoundException(err.message)
+		}
+	}
+
+	async intervalHistory(verificationId: string){
+		try {
+			const metadata = await this.mongo.db.collection<EditsMetadata>('edits').findOne({id: verificationId})
+			const history = await this.justHistory(metadata.pageId, metadata.intervalBegins, metadata.intervalEnds)
+			const sortedHistory = await this.mongo.decodeHistory(history)
+			return sortedHistory
+		} catch(err: any){
+			throw new NotFoundException(err.message)
+		}
+	}
+
+	async getSnapShots(personId: string){
+		try {
+			return await this.mongo.db.collection<EditsMetadata>('edits').find({pageId: personId, pageType: 'people'}).limit(100).toArray()
+		} catch(err: any){
 			throw new NotFoundException(err.message)
 		}
 	}
