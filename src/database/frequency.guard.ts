@@ -40,7 +40,7 @@ export class FrequencyGuard implements CanActivate {
 				}
 				return true;
 			}
-		} catch(err: any){ console.log(err); true; }
+		} catch(err: any){ console.log(err); return true; }
 
 		
 	}
