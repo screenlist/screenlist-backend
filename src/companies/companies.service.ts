@@ -681,6 +681,10 @@ export class CompaniesService {
 				lastUpdated: this.mongo.dateToBigInt(company.lastUpdated)
 			}
 
+			const photo = await this.mongo.db.collection<Photo>('photos').findOne({parentCollection: 'companies', parentId: id, photoIndex: 0,  type: 'image'})
+
+			if(photo){ searchRecord.photoUrl = photo.optimisedUrl }
+
 			await this.search.client.collections('companies').documents().create(searchRecord);
 
 			return {status: 'success'};

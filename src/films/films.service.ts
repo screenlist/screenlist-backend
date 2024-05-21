@@ -1309,7 +1309,8 @@ export class FilmsService {
 			await this.search.client.collections('films').documents(id).delete()
 			return {status: 'success'};
 		} catch(err: any){
-			throw new BadRequestException()
+			// console.log(err)
+			throw new BadRequestException(err.message)
 		}
 	}
 
@@ -1346,11 +1347,22 @@ export class FilmsService {
 				listScore: film.listScore,
 				directors: directorNames
 			}
+
+			const poster = await this.mongo.db.collection<Photo>('photos').findOne({
+				parentCollection: 'films',
+				parentId: film.id,
+				type: 'poster',
+				photoIndex: 0
+			})
+
+			if(poster){ searchRecord.posterUrl = poster.optimisedUrl }
+
 			await this.search.client.collections('films').documents().create(searchRecord);
 
 			return {status: 'success'};
 		} catch(err: any){
-			throw new BadRequestException()
+			// console.log(err)
+			throw new BadRequestException(err.message)
 		}
 	}
 
@@ -1392,7 +1404,7 @@ export class FilmsService {
 			return {status: 'success'};
 		} catch(err: any){
 			// console.log(err)
-			throw new BadRequestException()
+			throw new BadRequestException(err.message)
 		}
 	}
 
@@ -1404,7 +1416,8 @@ export class FilmsService {
 			}, 'films')
 			return {status: 'success'};
 		} catch(err: any){
-			throw new BadRequestException()
+			// console.log(err)
+			throw new BadRequestException(err.message)
 		}
 	}
 
@@ -1416,7 +1429,8 @@ export class FilmsService {
 			}, 'films')
 			return {status: 'success'};
 		} catch(err: any){
-			throw new BadRequestException()
+			// console.log(err)
+			throw new BadRequestException(err.message)
 		}
 	}
 

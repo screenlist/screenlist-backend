@@ -773,6 +773,11 @@ export class PeopleService {
 				lastUpdated: this.mongo.dateToBigInt(person.lastUpdated),
 				dateMonthOfBirth: this.mongo.dateToBigInt(person.dateMonthOfBirth)
 			}
+
+			const photo = await this.mongo.db.collection<Photo>('photos').findOne({ parentId: id, photoIndex: 0, parentCollection: 'people', type: 'image'})
+
+			if(photo){ searchRecord.photoUrl = photo.optimisedUrl }
+			
 			await this.search.client.collections('people').documents().create(searchRecord);
 
 			return {status: 'success'};
