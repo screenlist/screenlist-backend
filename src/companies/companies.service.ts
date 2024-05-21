@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import {
 	CreateCompanyRoleDto,
@@ -14,7 +14,7 @@ import {
 } from './companies.types';
 import { PhotoDto } from '../films/films.dto';
 import { Film, ImageOpt, Photo } from  '../films/films.types';
-import { CollectionFields, HistoryOpt, HistoryX } from '../database/database.types';
+import { CollectionFields, EditsMetadata, HistoryOpt, HistoryX } from '../database/database.types';
 import { StorageService } from '../storage/storage.service';
 import { SearchService } from 'src/search/search.service';
 import { CompanySchema} from 'src/search/search.types';
@@ -83,10 +83,29 @@ export class CompaniesService {
 		}
 	}
 
-	async findOne(id: string) {
+	async findAllHidden() {
+		try{
+			let companies = await this.mongo.db.collection<Company>('companies').find({
+				isHidden: true,
+			}).sort({'lastUpdated': 1}).toArray()
+
+			return companies
+		} catch {
+			throw new NotFoundException('Could not retrieve companies');
+		}
+	}
+
+	async findOne(id: string, userId?: string) {
 
 		try {
 			const company = await this.mongo.db.collection<Company>('companies').findOne({ id: id })
+
+			// Never permit the less privileged access hidden companies
+			if(company.isHidden && userId){
+				const userExt = await this.mongo.db.collection<UserExt>('users').findOne({id: userId})
+				if(userExt.role === 'member' || userExt.role === 'journalist'){ throw new ForbiddenException('This resource is strictly restricted') }
+			} else if(company.isHidden && !userId){ throw new ForbiddenException('This resource is strictly restricted') }
+
 			const photo = await this.mongo.db.collection<Photo>('photos').findOne({parentCollection: 'companies', parentId: id, photoIndex: 0,  type: 'image'})
 			const details = { 
 				...company, 
@@ -123,7 +142,7 @@ export class CompaniesService {
 
 			const productions = []
 
-			roles.sort((a, b) => a.year - b.year).forEach((item) => {
+			roles.sort((a, b) => b.year - a.year).forEach((item) => {
 				const filmIndex = productions.findIndex((val) => val.ownerId === item.ownerId)
 				const capacity = [{
 					companyId: item.parentId,
@@ -581,11 +600,13 @@ export class CompaniesService {
 	}
 
 	// Settings methods
-	async verifyEdit(id: string){
-		const time = new Date();
+	async verifyEdit(id: string, userId: string){
+
 		try {
 			const history = await this.justHistory(id)
 			const reputations = this.mongo.determineUserReputation(history);
+			const company = await this.mongo.db.collection<Company>('companies').findOne({ id: id })
+
 			await Promise.all(
 				reputations.map(async score => {
 					try {
@@ -596,11 +617,25 @@ export class CompaniesService {
 				})
 			)
 
-			await this.mongo.updateOne({
-				id: id,
-				editVerified: true,
-				lastVerified: time
-			}, 'companies')
+			const timeNow = new Date();
+			const previousVerificationDate = company.lastVerified
+
+			company.editVerified = true
+			company.lastVerified = timeNow
+
+			await this.mongo.updateOne(company, 'companies')
+
+			const edit: EditsMetadata = {
+				id: await this.mongo.generateUniqueId('edits', 16),
+				user: userId,
+				intervalBegins: previousVerificationDate,
+				intervalEnds: timeNow,
+				pageId: company.id,
+				pageType: 'companies',
+				reputations: reputations
+			}
+
+			await this.mongo.insertOne(edit, 'edits')
 
 			return {status: 'success'};
 		} catch (err: any){
@@ -609,31 +644,56 @@ export class CompaniesService {
 		}
 	}
 
-	async hideFilm(id: string){
+	async hideCompany(id: string){
 		try {
 			await this.mongo.updateOne({
 				id: id,
 				isHidden: true
 			}, 'companies')
+
+			await this.search.client.collections('companies').documents(id).delete()
+
 			return {status: 'success'};
 		} catch(err: any){
 			throw new BadRequestException()
 		}
 	}
 
-	async unhideFilm(id: string){
+	async unhideCompany(id: string){
 		try {
 			await this.mongo.updateOne({
 				id: id,
 				isHidden: false
 			}, 'companies')
+
+			const company = await this.mongo.db.collection<Company>('companies').findOne({ id: id })
+
+			const searchRecord: CompanySchema = {
+				id: company.id,
+				name: company.name,
+				founder: company.founder,
+				director: company.director,
+				founded: company.founded,
+				description: company.description,
+				country: company.country,
+				city: company.city,
+				created: this.mongo.dateToBigInt(company.created),
+				lastUpdated: this.mongo.dateToBigInt(company.lastUpdated)
+			}
+
+			const photo = await this.mongo.db.collection<Photo>('photos').findOne({parentCollection: 'companies', parentId: id, photoIndex: 0,  type: 'image'})
+
+			if(photo){ searchRecord.photoUrl = photo.optimisedUrl }
+
+			await this.search.client.collections('companies').documents().create(searchRecord);
+
 			return {status: 'success'};
 		} catch(err: any){
 			throw new BadRequestException()
 		}
 	}
 
-	async lockFilmEdit(id: string){
+	async lockCompanyEdit(id: string){
 		try {
 			await this.mongo.updateOne({
 				id: id,
@@ -645,7 +705,7 @@ export class CompaniesService {
 		}
 	}
 
-	async unlockFilmEdit(id: string){
+	async unlockCompanyEdit(id: string){
 		try {
 			await this.mongo.updateOne({
 				id: id,
@@ -658,27 +718,25 @@ export class CompaniesService {
 	}
 
 	// History
-	async justHistory(companyId: string){
+	async justHistory(companyId: string, intervalBegins?: Date, intervalEnds?: Date){
 		try {
 			const company = await this.mongo.db.collection<Company>('companies').findOne({id: companyId})
-			// const logo = await this.mongo.db.collection<Photo>('photos').findOne({
-			// 	photoIndex: 0,
-			// 	parentCollection: 'companies',
-			// 	parentId: companyId,
-			// 	type: 'image'
-			// })
+			const lastestMod = company.hasOwnProperty('lastVerified') ? new Date(company.lastVerified) : new Date(company.created)
+
+			const begins: Date = intervalBegins ? intervalBegins : lastestMod
+			const ends: Date = intervalBegins ? intervalEnds : new Date()
 
 			const companyHistory = await this.mongo.db.collection<HistoryX>('history').find({
 				xKind: 'companies',
 				xIdentifier: companyId,
-				xTimestamp: {$gt: company.lastVerified}
+				xTimestamp: {$gte: begins, $lte: ends}
 			}).sort({xTimestamp: -1}).toArray();
 
 			const photoHistory = await this.mongo.db.collection<HistoryX>('history').find({
 				xKind: 'photos',
 				wKind: 'companies',
 				wIdentifier: companyId,
-				xTimestamp: {$gt: company.lastVerified} 
+				xTimestamp: {$gte: begins, $lte: ends} 
 			}).sort({xTimestamp: -1}).toArray();
 
 			const allHistories = [
@@ -688,6 +746,25 @@ export class CompaniesService {
 
 			return allHistories
 		} catch (err: any) {
+			throw new NotFoundException(err.message)
+		}
+	}
+
+	async intervalHistory(verificationId: string){
+		try {
+			const metadata = await this.mongo.db.collection<EditsMetadata>('edits').findOne({id: verificationId})
+			const history = await this.justHistory(metadata.pageId, metadata.intervalBegins, metadata.intervalEnds)
+			const sortedHistory = await this.mongo.decodeHistory(history)
+			return sortedHistory
+		} catch(err: any){
+			throw new NotFoundException(err.message)
+		}
+	}
+
+	async getSnapShots(filmId: string){
+		try {
+			return await this.mongo.db.collection<EditsMetadata>('edits').find({pageId: filmId, pageType: 'companies'}).limit(100).toArray()
+		} catch(err: any){
 			throw new NotFoundException(err.message)
 		}
 	}

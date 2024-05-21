@@ -63,8 +63,8 @@ export class CompaniesController {
 	@Get(':id')
 	@UseGuards(FrequencyGuard)
 	@Frequency('companies')
-	async findOne(@Param('id') id: string){
-		return await this.companiesService.findOne(id);
+	async findOne(@Param('id') id: string, @Headers('x-user-id') userId: string,){
+		return await this.companiesService.findOne(id, userId);
 	}
 
 	@Patch(':id')
@@ -113,41 +113,42 @@ export class CompaniesController {
 	@Patch(':id/settings/verify')
 	@Roles('moderator')
 	async verifyEdit(
-		@Param('id') id: string
+		@Param('id') id: string,
+		@Headers('x-user-id') userId: string
 	){
-		return await this.companiesService.verifyEdit(id);
+		return await this.companiesService.verifyEdit(id, userId);
 	}
 
 	@Patch(':id/settings/hide')
 	@Roles('moderator')
-	async hideFilm(
+	async hideCompany(
 		@Param('id') id: string
 	){
-		return await this.companiesService.hideFilm(id);
+		return await this.companiesService.hideCompany(id);
 	}
 
 	@Patch(':id/settings/unhide')
 	@Roles('moderator')
-	async unhideFilm(
+	async unhideCompany(
 		@Param('id') id: string
 	){
-		return await this.companiesService.unhideFilm(id);
+		return await this.companiesService.unhideCompany(id);
 	}
 
 	@Patch(':id/settings/lock')
 	@Roles('moderator')
-	async lockFilmEdit(
+	async lockCompanyEdit(
 		@Param('id') id: string
 	){
-		return await this.companiesService.lockFilmEdit(id);
+		return await this.companiesService.lockCompanyEdit(id);
 	}
 
 	@Patch(':id/settings/unlock')
 	@Roles('moderator')
-	async unlockFilmEdit(
+	async unlockCompanyEdit(
 		@Param('id') id: string
 	){
-		return await this.companiesService.unlockFilmEdit(id);
+		return await this.companiesService.unlockCompanyEdit(id);
 	}
 
 	// Photos routes
@@ -215,5 +216,11 @@ export class CompaniesController {
 	@Roles('moderator')
 	async getUnmoderated(){
 		return await this.companiesService.findAllUnverified()
+	}
+
+	@Get('data/hidden')
+	@Roles('moderator')
+	async getAllHidden(){
+		return await this.companiesService.findAllHidden()
 	}
 }

@@ -167,21 +167,14 @@ export class DatabaseService {
 			'hdName', 'sdName', 'sdUrl', 
 			'sdDimensions', 'sdSize', 'lqName',
 			'lqUrl', 'lqDimensions', 'lqSize', 
-			'source', 'sourceLink', 'hasPoster', 'id',
-			'parentCollection', 'ownerCollection', 'optimisedUrl',
-			'optimisedName', 'optimisedSize', 'optimisedDimensions'
+			'source', 'sourceLink', 'hasPoster', 
+			'id', 'parentCollection', 'ownerCollection', 
+			'optimisedUrl', 'optimisedName', 'optimisedSize', 
+			'optimisedDimensions', '_id', 'ownerName', 
+			'parentName', 'source', 'uploadedByUser'
 		]
 
-		const results: {
-			before: any;
-			after: any;
-			property: string;
-			message: 'update' |'create' | 'delete';
-			userUid: string;
-			time: Date;
-			id: string;
-			oid: string;
-		}[] = []
+		const results: DecodedHistory[] = []
 		// console.log('before', typeof before, action, obj.xKind, oid, time)
 		// console.log('after', typeof after, action, obj.xKind, oid, time)
 		if(action === 'update' && typeof before === 'object' && typeof after === 'object'){
@@ -262,16 +255,7 @@ export class DatabaseService {
 	}
 
 	async decodeHistory(arr: HistoryX[]){
-		const results: {
-			before: any;
-			after: any;
-			property: string;
-			message: 'update' |'create' | 'delete';
-			userUid: string;
-			time: Date;
-			id: string;
-			oid: string;
-		}[] = []
+		const results: DecodedHistory[] = []
 		try {			
 			for(let i = 0; i < arr.length; i++){
 				let actions = this.historyFiltration(arr[i]);
@@ -307,18 +291,24 @@ export class DatabaseService {
 		// This holds original document IDs that contain the property names 
 		// of the document's edited properties and the property names hold the edit version 
 		// history of themselves in an array.
+		/* 
+		 	modifications example
+			const modifications = {
+				'173fYY80s00399d': {
+					'name': DecodedHistory[],
+					'country': DecodedHistory[],
+					'nationality': DecodedHistory[]
+				},
+				'373fYY80s11325y': {
+					'name': DecodedHistory[],
+					'country': DecodedHistory[],
+					'nationality': DecodedHistory[]
+				}
+			}
+		*/
 		const modifications: {
 			[key: string]: {
-				[key: string]: {
-					before: any;
-					after: any;
-					property: string;
-					message: 'update' |'create' | 'delete';
-					userUid: string;
-					time: Date;
-					id: string;
-					oid: string;
-				}[]
+				[key: string]: DecodedHistory[]
 			}
 		} = {}
 
@@ -352,43 +342,66 @@ export class DatabaseService {
 			for (const propertyName in properties){
 				const modification = properties[propertyName]
 
-				if(modification.length - 1 < 1){
-					assignPoints(modification[0].userUid, 3)
-				}
+				// Points assignment for single edits
+				if(modification.length === 1){
 
-				for(let i = 0; i < modification.length - 1; i++){
-					const currentState = modification[i]
-					const nextState = modification[i+1]
+					const currentState = modification[0]
 
-					if(currentState.userUid !== nextState.userUid){
+					switch(currentState.message){
+						case 'create':
+							assignPoints(currentState.userUid, 3)
+							break;
+						case 'update':
+							assignPoints(currentState.userUid, 2)
+							break;
+						case 'delete':
+							assignPoints(currentState.userUid, 3)
+							break;
+					}
 
-						if( currentState.message === 'create' && nextState.message === 'update' ){
-							assignPoints(currentState.userUid, -3);
-							assignPoints(nextState.userUid, 1);
-						}
+				} else {
 
-						if( currentState.message === 'create' && nextState.message === 'delete' ){
-							assignPoints(currentState.userUid, -1);
-							assignPoints(nextState.userUid, -3);
-						}
+					for(let i = 0; i < modification.length - 1; i++){
+						const currentState = modification[i]
+						const nextState = modification[i+1]
 
-						if( currentState.message === 'update' && nextState.message === 'update' ){
-							assignPoints(currentState.userUid, -1);
-							assignPoints(nextState.userUid, 1);
-						}
+						//  A Visible State is the last edit, what the moderator approves
+						const isNextStateVisible =  i+2 === modification.length
 
-						if( currentState.message === 'update' && nextState.message === 'delete' ){
-							assignPoints(currentState.userUid, 0);
-							assignPoints(nextState.userUid, -4);
-						}
+						// Points assignment for multiple edits
+						if(currentState.userUid !== nextState.userUid){
 
-						if( currentState.message === 'delete' && nextState.message === 'create' ){
-							assignPoints(currentState.userUid, -4);
-							assignPoints(nextState.userUid, 3);
+							// In the arrays, index 0 and 2 are for currentState while index 1 and 3 are for nextState
+							// In both the first index is for non Visible State edit points
+							// The edit messages are chained like pointsMatrix[currentState.message][nextState.message]
+							const pointsMatrix = {
+								create: {
+									update: [-2, 1, -3, 3],
+									delete: [-1, 1, -3, 2]
+								},
+								update: {
+									update: [-1, 1, -1, 2],
+									delete: [-1, -3, -2, 2]
+								},
+								delete: {
+									create: [-2, 1, -4, 3]
+								}
+							}
+
+							const currentPoints: number[] = pointsMatrix[currentState.message]?.[nextState.message]
+
+							if (currentPoints) {
+                assignPoints(currentState.userUid, currentPoints[isNextStateVisible ? 2 : 0]);
+                assignPoints(nextState.userUid, currentPoints[isNextStateVisible ? 3 : 1]);
+            	}
+
 						}
 
 					}
+
 				}
+
+				
 
 			}
 
@@ -425,7 +438,7 @@ export class DatabaseService {
 	async addHit(kind: Collection, id: string){
 		try {
 			const hit: Hit = {
-				id: await this.generateUniqueId('hits', 36),
+				id: await this.generateUniqueId('hits', 64),
 				collection: kind,
 				identifier: id,
 				time: new Date

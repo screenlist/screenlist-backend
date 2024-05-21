@@ -34,6 +34,16 @@ export interface DecodedHistory {
 	oid: string;
 }
 
+export interface EditsMetadata {
+	id: string;
+	user: string;
+	intervalBegins: Date;
+	intervalEnds: Date;
+	pageType: 'films' | 'companies' | 'people';
+	pageId: string;
+	reputations: Array<[string, number]>;
+}
+
 export interface Hit {
 	id: string;
 	collection: Collection;
@@ -53,6 +63,6 @@ export type ImmutableFields = {
 	id: string
 }
 
-export type Collection = 'films' | 'photos' | 'companies' | 'content' | 'people' | 'roles' | 'users' | 'requests' | 'history' | 'ratings' | 'today' | 'hits';
+export type Collection = 'films' | 'photos' | 'companies' | 'content' | 'people' | 'roles' | 'users' | 'requests' | 'history' | 'ratings' | 'today' | 'hits' | 'edits';
 
 export type CollectionFields<T> = Array<keyof T>;

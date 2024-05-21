@@ -86,6 +86,12 @@ export class FilmsController {
 		return await this.filmsService.findAllUnverified()
 	}
 
+	@Get('data/hidden')
+	@Roles('moderator')
+	async getHidden(){
+		return await this.filmsService.findAllHidden()
+	}
+
 	@Get('data/unmoderated-reviews')
 	@Roles('moderator')
 	async getUnmoderatedReviews(){
@@ -115,12 +121,13 @@ export class FilmsController {
 	@Frequency('films')
 	async findOne(
 		@Param('id') id: string,
+		@Headers('x-user-id') userId: string,
 		@Query('minimal') style: boolean
 	){
 		if(style === true){
 			return await this.filmsService.findOneDetailsOnly(id)
 		} else {
-			return await this.filmsService.findOne(id)
+			return await this.filmsService.findOne(id, userId)
 		}
 	}
 
@@ -176,9 +183,10 @@ export class FilmsController {
 	@Patch(':id/settings/verify')
 	@Roles('moderator')
 	async verifyFilmEdit(
-		@Param('id') id: string
+		@Param('id') id: string,
+		@Headers('x-user-id') userId: string
 	){
-		return await this.filmsService.verifyFilmEdit(id);
+		return await this.filmsService.verifyFilmEdit(id, userId);
 	}
 
 	@Patch(':id/settings/lock')

@@ -3,11 +3,12 @@ import { AppService } from './app.service';
 import { RolesGuard } from './users/roles.guard';
 import { Roles } from './users/roles.decorator';
 import type { Response } from 'express';
+import { SearchService } from './search/search.service';
 
 @Controller()
 @UseGuards(RolesGuard)
 export class AppController {
-	constructor(private readonly appService: AppService) {}
+	constructor(private readonly appService: AppService, private search: SearchService) {}
 
 	@Get()
 	getHello(): string {
@@ -33,5 +34,23 @@ export class AppController {
 		} catch (err: any){
 			throw new BadRequestException(err.message)
 		}
+	}
+
+	@Post('searching/create')
+	@Roles('admin')
+	async create(){
+		return await this.search.createCollections()
+	}
+
+	@Post('searching/index')
+	@Roles('admin')
+	async index(){
+		return await this.search.indexAll()
+	}
+
+	@Post('searching/delete')
+	@Roles('admin')
+	async delete(){
+		return await this.search.deleteAllCollections()
 	}
 }

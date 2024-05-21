@@ -5,7 +5,7 @@ import { AuthModule } from '../auth/auth.module';
 import { SearchModule } from '../search/search.module';
 
 @Module({
-  imports: [Datastore],
+  imports: [Datastore, AuthModule],
   providers: [DatabaseService],
   exports: [DatabaseService]
 })

@@ -1,4 +1,4 @@
-import { Injectable, ParseFileOptions, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ParseFileOptions, BadRequestException, NotFoundException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { 
 	Film,
@@ -33,7 +33,7 @@ import {
 } from '../people/people.dto'
 import { PeopleService } from '../people/people.service'
 import { StorageService } from '../storage/storage.service';
-import { CollectionFields, HistoryOpt, HistoryX, Hit } from '../database/database.types';
+import { CollectionFields, EditsMetadata, HistoryOpt, HistoryX, Hit } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
 import { SearchService } from '../search/search.service';
 import { UserExt } from 'src/users/users.types';
@@ -110,10 +110,26 @@ export class FilmsService {
 		}
 	}
 
-	async findOne(id: string) {
+	async findAllHidden() {
+		try {
+			let films = await this.mongo.db.collection<Film>('films').find({isHidden: true}).sort({lastUpdated: 1}).toArray()			
+			return films
+		} catch (err: any) {
+			throw new NotFoundException('Encountered trouble while trying to retrieve');
+		}
+	}
+
+	async findOne(id: string, userId?: string) {
 		try {
 			// Run queries
 			const film = await this.mongo.db.collection<Film>('films').findOne({id: id});
+
+			// Never permit the less privileged access hidden films
+			if(film.isHidden && userId){
+				const userExt = await this.mongo.db.collection<UserExt>('users').findOne({id: userId})
+				if(userExt.role === 'member' || userExt.role === 'journalist'){ throw new ForbiddenException('This resource is strictly restricted') }
+			} else if(film.isHidden && !userId){ throw new ForbiddenException('This resource is strictly restricted') }
+
 			const poster = await this.mongo.db.collection<Photo>('photos').findOne({parentCollection: 'films', parentId: id, type: 'poster', photoIndex: 0})
 			// Check whether the film is public or deleted before continuing
 			if(!film){ throw new NotFoundException() }
@@ -1290,9 +1306,11 @@ export class FilmsService {
 				id: id,
 				isHidden: true
 			}, 'films')
+			await this.search.client.collections('films').documents(id).delete()
 			return {status: 'success'};
 		} catch(err: any){
-			throw new BadRequestException()
+			// console.log(err)
+			throw new BadRequestException(err.message)
 		}
 	}
 
@@ -1302,16 +1320,57 @@ export class FilmsService {
 				id: id,
 				isHidden: false
 			}, 'films')
+
+			const film = await this.mongo.db.collection<Film>('films').findOne({id: id})
+			const directors = await this.mongo.db.collection<Role>('roles').find({
+				ownerCollection: 'films',
+				ownerId: film.id,
+				parentCollection: 'people',
+				role: 'Director'
+			}).toArray()
+			const directorNames = directors.map(val => val.parentName);
+
+			const searchRecord: FilmSchema = {
+				id: film.id,
+				name: film.name,
+				year: film.year,
+				genres: film.genres,
+				type: film.type,
+				format: film.format,
+				productionStage: film.productionStage,
+				releaseDate: this.mongo.dateToBigInt(film.releaseDate),
+				initialPlatform: film.initialPlatform,
+				created: this.mongo.dateToBigInt(film.created),
+				lastUpdated: this.mongo.dateToBigInt(film.lastUpdated),
+				logline: film.logline,
+				listRatings: film.listRatings,
+				listScore: film.listScore,
+				directors: directorNames
+			}
+
+			const poster = await this.mongo.db.collection<Photo>('photos').findOne({
+				parentCollection: 'films',
+				parentId: film.id,
+				type: 'poster',
+				photoIndex: 0
+			})
+
+			if(poster){ searchRecord.posterUrl = poster.optimisedUrl }
+
+			await this.search.client.collections('films').documents().create(searchRecord);
+
 			return {status: 'success'};
 		} catch(err: any){
-			throw new BadRequestException()
+			// console.log(err)
+			throw new BadRequestException(err.message)
 		}
 	}
 
-	async verifyFilmEdit(id: string){
+	async verifyFilmEdit(id: string, user: string){
 		try {
 			const history = await this.justHistory(id);
 			const reputations = this.mongo.determineUserReputation(history);
+			const film = await this.mongo.db.collection<Film>('films').findOne({id: id})
 			await Promise.all(
 				reputations.map(async score => {
 					try {
@@ -1322,15 +1381,30 @@ export class FilmsService {
 				})
 			)
 
-			await this.mongo.updateOne({
-				id: id,
-				editVerified: true,
-				lastVerified: new Date()
-			}, 'films')
+			const timeNow = new Date()
+			const previousVerificationDate = film.lastVerified
+
+			film.editVerified = true
+			film.lastVerified = timeNow
+
+			await this.mongo.updateOne(film, 'films')
+
+			const edit: EditsMetadata = {
+				id: await this.mongo.generateUniqueId('edits', 16),
+				user: user,
+				intervalBegins: previousVerificationDate,
+				intervalEnds: timeNow,
+				pageId: film.id,
+				pageType: 'films',
+				reputations: reputations
+			}
+
+			await this.mongo.insertOne(edit, 'edits')
+
 			return {status: 'success'};
 		} catch(err: any){
 			// console.log(err)
-			throw new BadRequestException()
+			throw new BadRequestException(err.message)
 		}
 	}
 
@@ -1342,7 +1416,8 @@ export class FilmsService {
 			}, 'films')
 			return {status: 'success'};
 		} catch(err: any){
-			throw new BadRequestException()
+			// console.log(err)
+			throw new BadRequestException(err.message)
 		}
 	}
 
@@ -1354,34 +1429,38 @@ export class FilmsService {
 			}, 'films')
 			return {status: 'success'};
 		} catch(err: any){
-			throw new BadRequestException()
+			// console.log(err)
+			throw new BadRequestException(err.message)
 		}
 	}
 
 	// History method
-	async justHistory(filmId: string){
+	async justHistory(filmId: string, intervalBegins?: Date, intervalEnds?: Date){
 		try {
 			const film = await this.mongo.db.collection<Film>('films').findOne({id: filmId})
 			const lastestMod = film.hasOwnProperty('lastVerified') ? new Date(film.lastVerified) : new Date(film.created)
+
+			const begins: Date = intervalBegins ? intervalBegins : lastestMod
+			const ends: Date = intervalBegins ? intervalEnds : new Date()
 
 			const photosHistory = await this.mongo.db.collection<HistoryX>('history').find({
 				xKind: 'photos',
 				wKind: 'films',
 				wIdentifier: filmId,
-				xTimestamp: {$gte: lastestMod}
+				xTimestamp: {$gte: begins, $lte: ends}
 			}).sort({xTimestamp: -1}).toArray();
 
 			const rolesHistory = await this.mongo.db.collection<HistoryX>('history').find({
 				xKind: 'roles',
 				wKind: 'films',
 				wIdentifier: filmId,
-				xTimestamp: {$gte: lastestMod}
+				xTimestamp: {$gte: begins, $lte: ends}
 			}).sort({xTimestamp: -1}).toArray();
 
 			const filmHistory = await this.mongo.db.collection<HistoryX>('history').find({
 				xKind: 'films',
 				xIdentifier: filmId,
-				xTimestamp: {$gte: lastestMod}
+				xTimestamp: {$gte: begins, $lte: ends}
 			}).sort({xTimestamp: -1}).toArray();
 
 			const allHistories = [
@@ -1392,6 +1471,25 @@ export class FilmsService {
 
 			return allHistories
 		} catch (err: any) {
+			throw new NotFoundException(err.message)
+		}
+	}
+
+	async intervalHistory(verificationId: string){
+		try {
+			const metadata = await this.mongo.db.collection<EditsMetadata>('edits').findOne({id: verificationId})
+			const history = await this.justHistory(metadata.pageId, metadata.intervalBegins, metadata.intervalEnds)
+			const sortedHistory = await this.mongo.decodeHistory(history)
+			return sortedHistory
+		} catch(err: any){
+			throw new NotFoundException(err.message)
+		}
+	}
+
+	async getSnapShots(filmId: string){
+		try {
+			return await this.mongo.db.collection<EditsMetadata>('edits').find({pageId: filmId, pageType: 'films'}).limit(100).toArray()
+		} catch(err: any){
 			throw new NotFoundException(err.message)
 		}
 	}

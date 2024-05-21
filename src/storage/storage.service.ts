@@ -178,8 +178,11 @@ export class StorageService {
 
 			const originalName = poster.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow);
 			const optimisedName = poster.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('optmsd');
-			console.log(optimisedName, originalName)
+			// console.log(optimisedName, originalName)
 			try{
+				const meta = await sharp(poster.buffer).metadata();
+				if(meta.width < 500){ throw new BadRequestException('The resolution is too low.') }
+
 				const original = await this.fileUploader(0, 0, poster.buffer, poster.mimetype, originalName, true, false)
 				const optimised = await this.fileUploader(1280, 1920, poster.buffer, poster.mimetype, optimisedName, false, false);
 				return {
@@ -193,7 +196,7 @@ export class StorageService {
 					optimisedSize: optimised.size
 				}
 			} catch(err: any) {
-				console.log(err)
+				// console.log(err)
 				throw new BadRequestException(err?.message)
 			}
 		} else { 
@@ -210,8 +213,11 @@ export class StorageService {
 
 			const originalName = still.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow);
 			const optimisedName = still.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('optmsd');
-			console.log(optimisedName, originalName)
+			// console.log(optimisedName, originalName)
 			try{
+				const meta = await sharp(still.buffer).metadata();
+				if(meta.width < 600){ throw new BadRequestException('The resolution is too low.') }
+
 				const original = await this.fileUploader(0,0, still.buffer, still.mimetype, originalName, true, false);
 				const optimised = await this.fileUploader(1920, 1080, still.buffer, still.mimetype, optimisedName, false, false);
 				return {
@@ -241,6 +247,9 @@ export class StorageService {
 			const originalName = profile.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow);
 			const optimisedName = profile.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('optmsd');
 			try{
+				const meta = await sharp(profile.buffer).metadata();
+				if(meta.width < 500){ throw new BadRequestException('The resolution is too low.') }
+
 				const original = await this.fileUploader(0,0, profile.buffer, profile.mimetype, originalName, true, false);
 				const optimised = await this.fileUploader(1080, 1080, profile.buffer, profile.mimetype, optimisedName, false, false);
 				
@@ -272,6 +281,9 @@ export class StorageService {
 			const originalName = still.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow);
 			const optimisedName = still.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('optmsd');
 			try{
+				const meta = await sharp(still.buffer).metadata();
+				if(meta.width < 500){ throw new BadRequestException('The resolution is too low.') }
+
 				const original = await this.fileUploader(0,0, still.buffer, still.mimetype, originalName, true, false);
 				const optimised = await this.fileUploader(1920, 1080, still.buffer, still.mimetype, optimisedName, false, false);
 				return {
@@ -301,6 +313,8 @@ export class StorageService {
 			const originalName = photo.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow);
 			const optimisedName = photo.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('optmsd');
 			try{
+				const meta = await sharp(photo.buffer).metadata();
+				if(meta.width < 500){ throw new BadRequestException('The resolution is too low.') }
 
 				const original = await this.fileUploader(0,0, photo.buffer, photo.mimetype, originalName, true, false);
 				const optimised = await this.fileUploader(1280,720, photo.buffer, photo.mimetype, optimisedName, false, false);
@@ -332,6 +346,9 @@ export class StorageService {
 			const originalName = profile.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow);
 			const optimisedName = profile.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('optmsd');
 			try{
+				const meta = await sharp(profile.buffer).metadata();
+				if(meta.width < 400){ throw new BadRequestException('The resolution is too low.') }
+
 				const original = await this.fileUploader(0,0, profile.buffer, profile.mimetype, originalName, true, false);
 				const optimised = await this.fileUploader(1080, 1080, profile.buffer, profile.mimetype, optimisedName, false, true);
 				

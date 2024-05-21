@@ -8,8 +8,11 @@ import {
 	Body,
 	Param,
 	Query,
-	Headers
+	Headers,
+	UseGuards
 } from '@nestjs/common';
+import { RolesGuard } from '../users/roles.guard';
+import { Roles } from '../users/roles.decorator';
 import { SearchService } from './search.service'
 
 @Controller('search')
@@ -20,40 +23,4 @@ export class SearchController {
 	async searchFunction(){
 		return await this.search.getAllCollections()
 	}
-
-	@Get('create')
-	async testFunc0(){
-		return await this.search.createCollections()
-	}
-
-	@Get('index')
-	async testFunc2(){
-		return await this.search.indexAll()
-	}
-
-	@Get('delete')
-	async testFunc1(){
-		return await this.search.deleteAllCollections()
-	}
-	
-	// @Get('quick')
-	// async quickSearch(
-	// 	@Query('film') film: string,
-	// 	@Query('series') series: string,
-	// 	@Query('company') company: string,
-	// 	@Query('person') person: string,
-	// 	@Query('platform') platform: string,
-	// ) {
-	// 	if(film){
-	// 		return await this.search.quickSearch('film', film)
-	// 	} else if (series){
-	// 		return await this.search.quickSearch('series', series)
-	// 	} else if(company){
-	// 		return await this.search.quickSearch('company', company)
-	// 	} else if(person){
-	// 		return await this.search.quickSearch('person', person)
-	// 	} else if(platform){
-	// 		return await this.search.quickSearch('platform', person)
-	// 	}
-	// }
 }
