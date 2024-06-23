@@ -97,7 +97,7 @@ export class StorageService {
 					Bucket: this.bucket,
 					Body: data,
 					Key: name,
-					ContentType: format
+					ContentType: info.format
 				}
 
 				const command = new PutObjectCommand(file);
@@ -119,7 +119,7 @@ export class StorageService {
 					Bucket: this.bucket,
 					Body: data,
 					Key: name,
-					ContentType: format
+					ContentType: info.format
 				}
 
 				const command = new PutObjectCommand(file);
