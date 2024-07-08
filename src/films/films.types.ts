@@ -44,6 +44,10 @@ export interface Photo {
 	optimisedName: string;
 	optimisedDimensions: string;
 	optimisedSize: number;
+	downsizedUrl: string;
+	downsizedName: string;
+	downsizedDimensions: string;
+	downsizedSize: number;
 	uploadedByUser: string;
 	source?: string | 'direct';
 	attribution?: string;
