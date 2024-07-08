@@ -842,6 +842,7 @@ export class FilmsService {
 			console.log(poster.originalUrl)
 			await this.storage.deletePhoto(poster.originalName);
 			await this.storage.deletePhoto(poster.optimisedName);
+			await this.storage.deletePhoto(poster.downsizedName);
 			await this.mongo.createHistory(historyObj);
 			await this.mongo.db.collection<Photo>('photos').deleteOne({
 				parentCollection: 'films',
@@ -997,6 +998,7 @@ export class FilmsService {
 	
 			await this.storage.deletePhoto(still.originalName);
 			await this.storage.deletePhoto(still.optimisedName);
+			await this.storage.deletePhoto(still.downsizedName);
 			await this.mongo.createHistory(historyObj);
 			await this.mongo.db.collection<Photo>('photos').deleteOne({
 				parentCollection: 'films',

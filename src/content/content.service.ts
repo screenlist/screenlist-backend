@@ -294,6 +294,7 @@ export class ContentService {
 			}
 			await this.storage.deletePhoto(photo.originalName);
 			await this.storage.deletePhoto(photo.optimisedName);
+			await this.storage.deletePhoto(photo.downsizedName);
 			await this.mongo.createHistory(historyObj);
 			await this.mongo.db.collection<Photo>('photos').deleteOne({
 				parentCollection: 'content',
