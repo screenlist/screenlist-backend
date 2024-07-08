@@ -1,10 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { Storage, File, Bucket } from '@google-cloud/storage';
 import * as sharp from 'sharp';
-import * as path from 'path';
-import { UploadedFileDto } from './storage.dto'
 import { DeleteObjectCommand, GetObjectAclCommandInput, GetObjectCommand, PutObjectCommand, PutObjectCommandInput, S3Client } from '@aws-sdk/client-s3';
 
 @Injectable()
@@ -45,22 +41,24 @@ export class StorageService {
 		width: number, 
 		height: number, 
 		originalBuffer: Express.Multer.File['buffer'],
-		format: Express.Multer.File['mimetype'],
+		mimetype: Express.Multer.File['mimetype'],
 		name: string,
 		original: boolean,
 		logo: boolean
-		) {
+	) {
+
+		const format = mimetype.split('/')[1]
 		try {
 			if(original === true){
 				// For uploading original untouched photos.
 
-				const {data, info} = await sharp(originalBuffer).toFormat('webp').toBuffer({resolveWithObject: true});
+				const {data, info} = await sharp(originalBuffer).toBuffer({resolveWithObject: true});
 
 				const file: PutObjectCommandInput = {
 					Bucket: this.bucket,
 					Body: data,
 					Key: name,
-					ContentType: format
+					ContentType: mimetype
 				}
 
 				const command = new PutObjectCommand(file);
@@ -91,13 +89,13 @@ export class StorageService {
 					left: Math.floor((width - newWidth) / 2),
 					right: Math.ceil((width - newWidth) / 2),
 					background: { r: 0, g: 0, b: 0, alpha: 0 } // Transparent background
-				}).toFormat('webp').toBuffer({resolveWithObject: true});
+				}).toFormat('webp', {quality: 70}).toBuffer({resolveWithObject: true});
 
 				const file: PutObjectCommandInput = {
 					Bucket: this.bucket,
 					Body: data,
 					Key: name,
-					ContentType: info.format
+					ContentType: `image/${info.format}`
 				}
 
 				const command = new PutObjectCommand(file);
@@ -113,13 +111,15 @@ export class StorageService {
 			} else {
 				// For optimising all the other photos
 
-				const {data, info} = await sharp(originalBuffer).resize(width, height).toFormat('webp').toBuffer({resolveWithObject: true});
-
+				const {data, info} = await sharp(originalBuffer).resize(width, height).toFormat('webp', {
+					quality: 70
+				}).toBuffer({resolveWithObject: true});
+				console.log(format, info.format)
 				const file: PutObjectCommandInput = {
 					Bucket: this.bucket,
 					Body: data,
 					Key: name,
-					ContentType: info.format
+					ContentType: `image/${info.format}`
 				}
 
 				const command = new PutObjectCommand(file);
@@ -178,6 +178,7 @@ export class StorageService {
 
 			const originalName = poster.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow);
 			const optimisedName = poster.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('optmsd');
+			const downsizedName = poster.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('dwnszd');
 			// console.log(optimisedName, originalName)
 			try{
 				const meta = await sharp(poster.buffer).metadata();
@@ -185,6 +186,7 @@ export class StorageService {
 
 				const original = await this.fileUploader(0, 0, poster.buffer, poster.mimetype, originalName, true, false)
 				const optimised = await this.fileUploader(1280, 1920, poster.buffer, poster.mimetype, optimisedName, false, false);
+				const downsized = await this.fileUploader(400, 600, poster.buffer, poster.mimetype, downsizedName, false, false);
 				return {
 					originalUrl: original.url,
 					originalName: original.name,
@@ -193,7 +195,11 @@ export class StorageService {
 					optimisedUrl: optimised.url,
 					optimisedName: optimised.name,
 					optimisedDimensions: optimised.dimensions,
-					optimisedSize: optimised.size
+					optimisedSize: optimised.size,
+					downsizedUrl: downsized.url,
+					downsizedName: downsized.name,
+					downsizedDimensions: downsized.dimensions,
+					downsizedSize: downsized.size
 				}
 			} catch(err: any) {
 				// console.log(err)
@@ -213,6 +219,7 @@ export class StorageService {
 
 			const originalName = still.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow);
 			const optimisedName = still.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('optmsd');
+			const downsizedName = still.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('dwnszd');
 			// console.log(optimisedName, originalName)
 			try{
 				const meta = await sharp(still.buffer).metadata();
@@ -220,6 +227,7 @@ export class StorageService {
 
 				const original = await this.fileUploader(0,0, still.buffer, still.mimetype, originalName, true, false);
 				const optimised = await this.fileUploader(1920, 1080, still.buffer, still.mimetype, optimisedName, false, false);
+				const downsized = await this.fileUploader(400, 225, still.buffer, still.mimetype, downsizedName, false, false);
 				return {
 					originalUrl: original.url,
 					originalName: original.name,
@@ -228,7 +236,11 @@ export class StorageService {
 					optimisedUrl: optimised.url,
 					optimisedName: optimised.name,
 					optimisedDimensions: optimised.dimensions,
-					optimisedSize: optimised.size
+					optimisedSize: optimised.size,
+					downsizedUrl: downsized.url,
+					downsizedName: downsized.name,
+					downsizedDimensions: downsized.dimensions,
+					downsizedSize: downsized.size
 				}
 			} catch(err: any){
 				throw new BadRequestException(err?.message);
@@ -246,12 +258,14 @@ export class StorageService {
 
 			const originalName = profile.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow);
 			const optimisedName = profile.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('optmsd');
+			const downsizedName = profile.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('dwnszd');
 			try{
 				const meta = await sharp(profile.buffer).metadata();
 				if(meta.width < 500){ throw new BadRequestException('The resolution is too low.') }
 
 				const original = await this.fileUploader(0,0, profile.buffer, profile.mimetype, originalName, true, false);
 				const optimised = await this.fileUploader(1080, 1080, profile.buffer, profile.mimetype, optimisedName, false, false);
+				const downsized = await this.fileUploader(400, 400, profile.buffer, profile.mimetype, downsizedName, false, false);
 				
 				return {
 					originalUrl: original.url,
@@ -261,7 +275,11 @@ export class StorageService {
 					optimisedUrl: optimised.url,
 					optimisedName: optimised.name,
 					optimisedDimensions: optimised.dimensions,
-					optimisedSize: optimised.size
+					optimisedSize: optimised.size,
+					downsizedUrl: downsized.url,
+					downsizedName: downsized.name,
+					downsizedDimensions: downsized.dimensions,
+					downsizedSize: downsized.size
 				}
 			} catch(err: any){
 				throw new BadRequestException(err?.message);
@@ -294,7 +312,7 @@ export class StorageService {
 					optimisedUrl: optimised.url,
 					optimisedName: optimised.name,
 					optimisedDimensions: optimised.dimensions,
-					optimisedSize: optimised.size
+					optimisedSize: optimised.size,
 				}
 			} catch(err: any){
 				throw new BadRequestException(err?.message);
@@ -312,12 +330,14 @@ export class StorageService {
 
 			const originalName = photo.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow);
 			const optimisedName = photo.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('optmsd');
+			const downsizedName = photo.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('dwnszd');
 			try{
 				const meta = await sharp(photo.buffer).metadata();
 				if(meta.width < 500){ throw new BadRequestException('The resolution is too low.') }
 
 				const original = await this.fileUploader(0,0, photo.buffer, photo.mimetype, originalName, true, false);
 				const optimised = await this.fileUploader(1280,720, photo.buffer, photo.mimetype, optimisedName, false, false);
+				const downsized = await this.fileUploader(400, 225, photo.buffer, photo.mimetype, downsizedName, false, false);
 				
 				return {
 					originalUrl: original.url,
@@ -327,7 +347,11 @@ export class StorageService {
 					optimisedUrl: optimised.url,
 					optimisedName: optimised.name,
 					optimisedDimensions: optimised.dimensions,
-					optimisedSize: optimised.size
+					optimisedSize: optimised.size,
+					downsizedUrl: downsized.url,
+					downsizedName: downsized.name,
+					downsizedDimensions: downsized.dimensions,
+					downsizedSize: downsized.size
 				}
 			} catch(err: any){
 				throw new BadRequestException(err?.message);
@@ -345,12 +369,14 @@ export class StorageService {
 
 			const originalName = profile.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow);
 			const optimisedName = profile.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('optmsd');
+			const downsizedName = profile.originalname.replace(/[^0-9a-z]/gi, '-').concat(timeNow).concat('dwnszd');
 			try{
 				const meta = await sharp(profile.buffer).metadata();
 				if(meta.width < 400){ throw new BadRequestException('The resolution is too low.') }
 
 				const original = await this.fileUploader(0,0, profile.buffer, profile.mimetype, originalName, true, false);
 				const optimised = await this.fileUploader(1080, 1080, profile.buffer, profile.mimetype, optimisedName, false, true);
+				const downsized = await this.fileUploader(400, 400, profile.buffer, profile.mimetype, downsizedName, false, true);
 				
 				return {
 					originalUrl: original.url,
@@ -360,7 +386,11 @@ export class StorageService {
 					optimisedUrl: optimised.url,
 					optimisedName: optimised.name,
 					optimisedDimensions: optimised.dimensions,
-					optimisedSize: optimised.size
+					optimisedSize: optimised.size,
+					downsizedUrl: downsized.url,
+					downsizedName: downsized.name,
+					downsizedDimensions: downsized.dimensions,
+					downsizedSize: downsized.size
 				}
 			} catch(err: any){
 				console.log(err)
