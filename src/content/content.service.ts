@@ -21,7 +21,6 @@ export class ContentService {
 		private storage: StorageService,
 		private mongo: DatabaseService,
 		private search: SearchService,
-		private config: ConfigService
 	){}
 
 	async findOne(slug: string, type: 'blog'|'tos'|'about'|'contributions'|'privacy'){

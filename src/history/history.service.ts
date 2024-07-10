@@ -379,6 +379,10 @@ export class HistoryService {
 							optimisedName: item.hdName,
 							optimisedSize: item.hdSize,
 							optimisedUrl: item.hdUrl,
+							downsizedDimensions: item.hdDimensions,
+							downsizedName: item.hdName,
+							downsizedSize: item.hdSize,
+							downsizedUrl: item.hdUrl,
 							uploadedByUser: 'admin',
 							type: 'still'
 						}
@@ -430,6 +434,10 @@ export class HistoryService {
 							optimisedName: item.hdName,
 							optimisedSize: item.hdSize,
 							optimisedUrl: item.hdUrl,
+							downsizedDimensions: item.hdDimensions,
+							downsizedName: item.hdName,
+							downsizedSize: item.hdSize,
+							downsizedUrl: item.hdUrl,
 							uploadedByUser: 'admin',
 							type: 'poster'
 						}
@@ -481,6 +489,10 @@ export class HistoryService {
 							optimisedName: item.hdName,
 							optimisedSize: item.hdSize,
 							optimisedUrl: item.hdUrl,
+							downsizedDimensions: item.hdDimensions,
+							downsizedName: item.hdName,
+							downsizedSize: item.hdSize,
+							downsizedUrl: item.hdUrl,
 							uploadedByUser: 'admin',
 							type: 'image'
 						}
@@ -532,6 +544,10 @@ export class HistoryService {
 							optimisedName: item.hdName,
 							optimisedSize: item.hdSize,
 							optimisedUrl: item.hdUrl,
+							downsizedDimensions: item.hdDimensions,
+							downsizedName: item.hdName,
+							downsizedSize: item.hdSize,
+							downsizedUrl: item.hdUrl,
 							uploadedByUser: 'admin',
 							type: 'image'
 						}
