@@ -52,7 +52,7 @@ export class CompaniesService {
 					return {
 						...item,
 						photo: photo ? {
-							url: photo.optimisedUrl,
+							url: photo.downsizedUrl,
 							index: photo.photoIndex,
 							credit: photo.attribution,
 							altText: photo.description
@@ -130,7 +130,7 @@ export class CompaniesService {
 						return {
 							...item,
 							ownerName: owner.name,
-							posterUrl: poster?.optimisedUrl,
+							posterUrl: poster?.downsizedUrl,
 							year: owner.year,
 							urlPath: path
 						}
@@ -375,7 +375,7 @@ export class CompaniesService {
 			const history = await this.mongo.createHistory(historyObj);
 
 			const searchRecord: Partial<CompanySchema> = {
-				photoUrl: data.optimisedUrl
+				photoUrl: data.downsizedUrl
 			}
 			// await this.algolia.initIndex('companies').partialUpdateObject(searchRecord).wait();
 			await this.search.client.collections('companies').documents(opt.parentId).update(searchRecord);
@@ -684,7 +684,7 @@ export class CompaniesService {
 
 			const photo = await this.mongo.db.collection<Photo>('photos').findOne({parentCollection: 'companies', parentId: id, photoIndex: 0,  type: 'image'})
 
-			if(photo){ searchRecord.photoUrl = photo.optimisedUrl }
+			if(photo){ searchRecord.photoUrl = photo.downsizedUrl }
 
 			await this.search.client.collections('companies').documents().create(searchRecord);
 
