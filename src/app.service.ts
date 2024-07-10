@@ -26,6 +26,7 @@ export class AppService {
 			// await this.history.mega()
 			// await this.history.transferImages()
 			// await this.history.redistrubuteImagesAsIntended()
+			// await this.reOptimiseImages()
 		} catch(err: any){
 			console.log(err)
 		}
@@ -56,37 +57,177 @@ export class AppService {
 			const photos = await this.search.drillThrough<Photo>('photos')
 			console.log('******************BEGIN OPTIMISATION**********************')
 			for await (let photo of photos){
-				const originalWidth = ~photo.originalDimensions.split('x')[0]
-				const originalHeight = ~photo.originalDimensions.split('x')[1]
-				const optimisedWidth = ~photo.optimisedDimensions.split('x')[0]
-				const optimisedHeight = ~photo.optimisedDimensions.split('x')[1]
-				const downsizedWidth = 400
-				const downsizedHeight = (optimisedHeight/optimisedWidth)*downsizedWidth
+				const photoNumber = photos.indexOf(photo)							
 				try {
+					console.log(`+ Processing photo id ${photo.id} of ${photo.parentCollection}:`)	
+					const originalDimensions = [ Number(photo.originalDimensions.split('x')[0]), Number(photo.originalDimensions.split('x')[1]) ]
+					const optimisedDimensions = [ Number(photo.optimisedDimensions.split('x')[0]), Number(photo.optimisedDimensions.split('x')[1]) ]
+					const downsizedDimensions = [ 400, Math.round((optimisedDimensions[1]/optimisedDimensions[0])*400) ]
+					console.log('original dimensions', originalDimensions)
+					console.log('optimised dimesions', optimisedDimensions)
+					console.log('downsized dimensions', downsizedDimensions)
 					const masterName = photo.originalName
+					const optimisedName = photo.optimisedName
+					const downsizedName = photo.downsizedName ? photo.downsizedName : masterName+'dwnszd'
+
 					const masterObject = await this.storage.getPhoto(masterName)
-					if(photo.parentCollection === 'films' && photo.type === 'poster'){
+					if(photo.parentCollection !== 'companies'){
 
-						
+						// Original
+						if(photo.originalName){
+							await this.storage.deletePhoto(photo.originalName)
+						}
 
-					} else if(photo.parentCollection === 'films' && photo.type === 'still'){
+						const original = await this.storage.fileUploader(
+							originalDimensions[0], 
+							originalDimensions[1], 
+							masterObject.buffer, 
+							masterObject.type, 
+							masterName, 
+							true, 
+							false
+						)
 
-					} else if(photo.parentCollection === 'people'){
+						console.log(`>>> Photo id ${photo.id} of ${photo.parentCollection} - 30%`)
+
+						photo.originalName = original.name
+						photo.originalDimensions = original.dimensions
+						photo.originalSize = original.size
+						photo.originalUrl = original.url
+
+						// Optimised
+						if(photo.optimisedName){
+							await this.storage.deletePhoto(photo.optimisedName)
+						}
+
+						const optimised = await this.storage.fileUploader(
+							optimisedDimensions[0], 
+							optimisedDimensions[1], 
+							masterObject.buffer, 
+							masterObject.type, 
+							optimisedName, 
+							false, 
+							false
+						)
+
+						console.log(`>>> Photo id ${photo.id} of ${photo.parentCollection} - 60%`)
+
+						photo.optimisedName = optimised.name
+						photo.optimisedDimensions = optimised.dimensions
+						photo.optimisedSize = optimised.size
+						photo.optimisedUrl = optimised.url
+
+						// Downsized
+						if(photo.downsizedName){
+							await this.storage.deletePhoto(photo.downsizedName)
+						}
+
+						const downsized = await this.storage.fileUploader(
+							downsizedDimensions[0], 
+							downsizedDimensions[1], 
+							masterObject.buffer, 
+							masterObject.type, 
+							downsizedName, 
+							false, 
+							false
+						)
+
+						console.log(`>>> Photo id ${photo.id} of ${photo.parentCollection} - 90%`)
+
+						photo.downsizedName = downsized.name
+						photo.downsizedDimensions = downsized.dimensions
+						photo.downsizedSize = downsized.size
+						photo.downsizedUrl = downsized.url
+
+						await this.mongo.updateOne<Photo>(photo, 'photos')
+
+						console.log(`>>> Photo id ${photo.id} of ${photo.parentCollection} - 100%`)
 
 					} else if(photo.parentCollection === 'companies'){
 
-					} else if(photo.parentCollection === 'users'){
+						// Original
+						if(photo.originalName){
+							await this.storage.deletePhoto(photo.originalName)
+						}
 
-					} else if(photo.parentCollection === 'content'){
+						const original = await this.storage.fileUploader(
+							originalDimensions[0], 
+							originalDimensions[1], 
+							masterObject.buffer, 
+							masterObject.type, 
+							masterName, 
+							true, 
+							false
+						)
 
-					}
+						console.log(`>>> Photo id ${photo.id} of ${photo.parentCollection} - 30%`)
+
+						photo.originalName = original.name
+						photo.originalDimensions = original.dimensions
+						photo.originalSize = original.size
+						photo.originalUrl = original.url
+
+						// Optimised
+						if(photo.optimisedName){
+							await this.storage.deletePhoto(photo.optimisedName)
+						}
+
+						const optimised = await this.storage.fileUploader(
+							optimisedDimensions[0], 
+							optimisedDimensions[1], 
+							masterObject.buffer, 
+							masterObject.type, 
+							optimisedName, 
+							false, 
+							true
+						)
+
+						console.log(`>>> Photo id ${photo.id} of ${photo.parentCollection} - 60%`)
+
+						photo.optimisedName = optimised.name
+						photo.optimisedDimensions = optimised.dimensions
+						photo.optimisedSize = optimised.size
+						photo.optimisedUrl = optimised.url
+
+						// Downsized
+						if(photo.downsizedName){
+							await this.storage.deletePhoto(photo.downsizedName)
+						}
+
+						const downsized = await this.storage.fileUploader(
+							downsizedDimensions[0], 
+							downsizedDimensions[1], 
+							masterObject.buffer, 
+							masterObject.type, 
+							downsizedName, 
+							false, 
+							true
+						)
+
+						console.log(`>>> Photo id ${photo.id} of ${photo.parentCollection} - 90%`)
+
+						photo.downsizedName = downsized.name
+						photo.downsizedDimensions = downsized.dimensions
+						photo.downsizedSize = downsized.size
+						photo.downsizedUrl = downsized.url
+
+						await this.mongo.updateOne<Photo>(photo, 'photos')
+
+						console.log(`>>> Photo id ${photo.id} of ${photo.parentCollection} - 100%`)
+
+					} else { console.log(`Photo id ${photo.id} of ${photo.parentCollection} was NOT PROCESSED`) }
+
+					console.log(`**** ${photoNumber+1}/${photos.length} ---- ${Math.round(((photoNumber+1)/photos.length)*100)}% COMPLETE ****`)
 				} catch (err: any) {
-					console.log(`Error on image: ${photo.id}: ${err.message}`)
+					console.log(photo)
+					console.log(`>>> Error on image: ${photo.id} of ${photo.parentCollection}: ${err.message}`)
 					continue
 				}
 			}
+			console.log('******************OPTIMISATION COMPLETE**********************')
 		} catch (err: any) {
-			
+			console.log(`Function Error: ${err.message}`)
+			console.log('******************OPTIMISATION EXITED**********************')
 		}
 	}
 }

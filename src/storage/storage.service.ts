@@ -37,7 +37,7 @@ export class StorageService {
 		}
 	}
 
-	private async fileUploader(
+	async fileUploader(
 		width: number, 
 		height: number, 
 		originalBuffer: Express.Multer.File['buffer'],
