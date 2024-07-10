@@ -82,7 +82,7 @@ export class FilmsService {
 							photoIndex: 0
 						})
 						return {
-							posterUrl: poster.optimisedUrl,
+							posterUrl: poster.downsizedUrl,
 							...film
 						}
 					}
@@ -165,7 +165,7 @@ export class FilmsService {
 
 					return {
 						...item,
-						photoUrl: personPhoto?.optimisedUrl,
+						photoUrl: personPhoto?.downsizedUrl,
 						urlPath: path
 					}
 				})
@@ -182,7 +182,7 @@ export class FilmsService {
 					const path = `/films/${item.ownerId}/companies/${item.parentId}/roles/${item.id}`;
 					return {
 						...item,
-						photoUrl: companyPhoto?.optimisedUrl,
+						photoUrl: companyPhoto?.downsizedUrl,
 						urlPath: path
 					}
 				})
@@ -760,7 +760,7 @@ export class FilmsService {
 			await this.mongo.createHistory(historyObj);
 
 			const searchRecord: Partial<FilmSchema> = {
-				posterUrl: data.optimisedUrl
+				posterUrl: data.downsizedUrl
 			}
 			await this.search.client.collections('films').documents(opt.parentId).update(searchRecord);
 
@@ -842,6 +842,7 @@ export class FilmsService {
 			console.log(poster.originalUrl)
 			await this.storage.deletePhoto(poster.originalName);
 			await this.storage.deletePhoto(poster.optimisedName);
+			await this.storage.deletePhoto(poster.downsizedName);
 			await this.mongo.createHistory(historyObj);
 			await this.mongo.db.collection<Photo>('photos').deleteOne({
 				parentCollection: 'films',
@@ -997,6 +998,7 @@ export class FilmsService {
 	
 			await this.storage.deletePhoto(still.originalName);
 			await this.storage.deletePhoto(still.optimisedName);
+			await this.storage.deletePhoto(still.downsizedName);
 			await this.mongo.createHistory(historyObj);
 			await this.mongo.db.collection<Photo>('photos').deleteOne({
 				parentCollection: 'films',
@@ -1169,7 +1171,7 @@ export class FilmsService {
 
 					return {
 						...film,
-						posterUrl: poster.optimisedUrl
+						posterUrl: poster.downsizedUrl
 					}
 				} catch {
 					throw new BadRequestException()
@@ -1203,7 +1205,7 @@ export class FilmsService {
 
 					return {
 						...film,
-						posterUrl: poster.optimisedUrl
+						posterUrl: poster.downsizedUrl
 					}
 				} catch {
 					throw new BadRequestException()
@@ -1243,7 +1245,7 @@ export class FilmsService {
 
 					return {
 						...film,
-						posterUrl: poster.optimisedUrl
+						posterUrl: poster.downsizedUrl
 					}
 				} catch (err: any) {
 					throw new BadRequestException()
@@ -1283,7 +1285,7 @@ export class FilmsService {
 						
 						return {
 							...film,
-							posterUrl: poster.optimisedUrl,
+							posterUrl: poster.downsizedUrl
 						}
 					} else {				
 						return film
@@ -1355,7 +1357,7 @@ export class FilmsService {
 				photoIndex: 0
 			})
 
-			if(poster){ searchRecord.posterUrl = poster.optimisedUrl }
+			if(poster){ searchRecord.posterUrl = poster.downsizedUrl }
 
 			await this.search.client.collections('films').documents().create(searchRecord);
 

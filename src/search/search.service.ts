@@ -33,8 +33,6 @@ export class SearchService {
 		'connectionTimeoutSeconds': 2
 	})
 
-	async backUpData(){}
-
 	async createCollections(){
 		const filmSchema = {
 			'name': 'films',
@@ -216,7 +214,7 @@ export class SearchService {
 						initialPlatform: item.initialPlatform,
 						created: this.mongo.dateToBigInt(item.created),
 						lastUpdated: this.mongo.dateToBigInt(item.lastUpdated),
-						posterUrl: photo?.optimisedUrl,
+						posterUrl: photo?.downsizedUrl,
 						logline: item.logline,
 						directors: directorNames,
 						listRatings: item.listRatings,
@@ -251,7 +249,7 @@ export class SearchService {
 						deathDate: this.mongo.dateToBigInt(item.deathDate),
 						created: this.mongo.dateToBigInt(item.created),
 						lastUpdated: this.mongo.dateToBigInt(item.lastUpdated),
-						photoUrl: photo?.optimisedUrl,
+						photoUrl: photo?.downsizedUrl,
 						dateMonthOfBirth: this.mongo.dateToBigInt(item.dateMonthOfBirth)
 					}
 				})
@@ -279,7 +277,7 @@ export class SearchService {
 						city: item.city,
 						created: this.mongo.dateToBigInt(item.created),
 						lastUpdated: this.mongo.dateToBigInt(item.lastUpdated),
-						photoUrl: photo?.optimisedUrl
+						photoUrl: photo?.downsizedUrl
 					}
 				})
 			)
@@ -303,7 +301,7 @@ export class SearchService {
 						slug: item.slug,
 						created: this.mongo.dateToBigInt(item.created),
 						lastUpdated:this.mongo.dateToBigInt(item.lastUpdated),
-						photoUrl: photo?.optimisedUrl
+						photoUrl: photo?.downsizedUrl
 					}
 				})
 			)

@@ -15,12 +15,6 @@ export class AppController {
 		return this.appService.getHello();
 	}
 
-	@Post('refresh')
-	@Roles('member')
-	async refreshClient(@Body('path') path: string){
-		return await this.appService.refreshClient(path);
-	}
-
 	@Post('extract')
 	@Roles('member')
 	async getBlob(

@@ -54,7 +54,7 @@ export class PeopleService {
 					return {
 						...item,
 						photo: photo ? {
-							url: photo.optimisedUrl,
+							url: photo.downsizedUrl,
 							index: photo.photoIndex,
 							credit: photo.attribution,
 							altText: photo.description
@@ -112,7 +112,7 @@ export class PeopleService {
 			const details = {
 				...person,
 				photo: photo ? {
-					url: photo.optimisedUrl,
+					url: photo.downsizedUrl,
 					index: photo.photoIndex,
 					credit: photo.attribution,
 					altText: photo.description
@@ -141,7 +141,7 @@ export class PeopleService {
 								id: item.ownerId,
 								type: item.ownerCollection,
 								year: owner.year,
-								posterUrl: poster?.optimisedUrl,
+								posterUrl: poster?.downsizedUrl,
 								roles: [role]
 							}
 							filmography.push(parentObject)
@@ -387,7 +387,7 @@ export class PeopleService {
 				pKind: opt.parentKind
 			}
 			const searchRecord: Partial<PersonSchema> = {
-				photoUrl: data.optimisedUrl
+				photoUrl: data.downsizedUrl
 			}
 			await this.search.client.collections('people').documents(opt.parentId).update(searchRecord);
 			await this.mongo.createHistory(historyObj);
@@ -468,6 +468,7 @@ export class PeopleService {
 			}
 			await this.storage.deletePhoto(photo.originalName);
 			await this.storage.deletePhoto(photo.optimisedName);
+			await this.storage.deletePhoto(photo.downsizedName);
 			await this.mongo.createHistory(historyObj);
 			await this.mongo.db.collection<Photo>('photos').deleteOne({
 				parentCollection: 'people',
@@ -776,7 +777,7 @@ export class PeopleService {
 
 			const photo = await this.mongo.db.collection<Photo>('photos').findOne({ parentId: id, photoIndex: 0, parentCollection: 'people', type: 'image'})
 
-			if(photo){ searchRecord.photoUrl = photo.optimisedUrl }
+			if(photo){ searchRecord.photoUrl = photo.downsizedUrl }
 			
 			await this.search.client.collections('people').documents().create(searchRecord);
 
