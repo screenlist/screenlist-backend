@@ -1,4 +1,9 @@
-import { Injectable, ParseFileOptions, BadRequestException, NotFoundException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ForbiddenException
+} from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { 
 	Film,
@@ -33,7 +38,7 @@ import {
 } from '../people/people.dto'
 import { PeopleService } from '../people/people.service'
 import { StorageService } from '../storage/storage.service';
-import { CollectionFields, EditsMetadata, HistoryOpt, HistoryX, Hit } from '../database/database.types';
+import { CollectionFields, EditsMetadata, Freeze, HistoryOpt, HistoryX, Hit } from '../database/database.types';
 import { AuthService } from '../auth/auth.service';
 import { SearchService } from '../search/search.service';
 import { UserExt } from 'src/users/users.types';
@@ -290,6 +295,13 @@ export class FilmsService {
 			}
 			await this.search.client.collections('films').documents().create(searchRecord);
 
+			await Promise.all([
+				this.mongo.deleteFreeze('films-data-latest'),
+				this.mongo.deleteFreeze('films-data-recent'),
+				this.mongo.deleteFreeze('films-data-trending'),
+				this.mongo.deleteFreeze('films-data-upcoming'),
+			])
+
 			return entity
 		} catch(err: any){
 			throw new BadRequestException(err.message);
@@ -358,6 +370,13 @@ export class FilmsService {
 				logline: updated.logline,
 			}
 			await this.search.client.collections('films').documents(entity.id).update(searchRecord);
+
+			await Promise.all([
+				this.mongo.deleteFreeze('films-data-latest'),
+				this.mongo.deleteFreeze('films-data-recent'),
+				this.mongo.deleteFreeze('films-data-trending'),
+				this.mongo.deleteFreeze('films-data-upcoming'),
+			])
 
 			if(entity.name !== updated.name){
 				await this.mongo.db.collection<Role>('roles').updateMany({
@@ -461,9 +480,17 @@ export class FilmsService {
 				action: 'delete',
 				time: time,
 			}
-			// await this.db.algolia.initIndex('films').deleteObject(filmKey.id)
-			await this.search.client.collections('films').documents(film.id).delete();
 			await this.mongo.createHistory(historyObj);
+
+			await this.search.client.collections('films').documents(film.id).delete();
+
+			await Promise.all([
+				this.mongo.deleteFreeze('films-data-latest'),
+				this.mongo.deleteFreeze('films-data-recent'),
+				this.mongo.deleteFreeze('films-data-trending'),
+				this.mongo.deleteFreeze('films-data-upcoming'),
+			])
+			
 			await this.mongo.db.collection<Photo>('photos').deleteMany({
 				parentCollection: 'films',
 				parentId: id
@@ -764,6 +791,13 @@ export class FilmsService {
 			}
 			await this.search.client.collections('films').documents(opt.parentId).update(searchRecord);
 
+			await Promise.all([
+				this.mongo.deleteFreeze('films-data-latest'),
+				this.mongo.deleteFreeze('films-data-recent'),
+				this.mongo.deleteFreeze('films-data-trending'),
+				this.mongo.deleteFreeze('films-data-upcoming'),
+			])
+
 			return entity
 		} catch (err: any) {
 			console.log(err)
@@ -814,6 +848,14 @@ export class FilmsService {
 				pKind: opt.parentKind
 			}
 			await this.mongo.createHistory(historyObj);
+
+			await Promise.all([
+				this.mongo.deleteFreeze('films-data-latest'),
+				this.mongo.deleteFreeze('films-data-recent'),
+				this.mongo.deleteFreeze('films-data-trending'),
+				this.mongo.deleteFreeze('films-data-upcoming'),
+			])
+
 			return entity
 		} catch (err: any){
 			throw new BadRequestException(err.message);
@@ -862,6 +904,13 @@ export class FilmsService {
 				posterUrl: null
 			}
 			await this.search.client.collections('films').documents(opt.parentId).update(searchRecord);
+
+			await Promise.all([
+				this.mongo.deleteFreeze('films-data-latest'),
+				this.mongo.deleteFreeze('films-data-recent'),
+				this.mongo.deleteFreeze('films-data-trending'),
+				this.mongo.deleteFreeze('films-data-upcoming'),
+			])
 
 			return {'status': 'deleted'}
 		} catch(err: any) {
@@ -1154,30 +1203,53 @@ export class FilmsService {
 
 	async getRecentlyAdded(limit?: number){
 		try {
-			const films = await this.mongo.db.collection<Film>('films').find({
-				hasPoster: true,
-				isHidden: false,
-				editVerified: true
-			}).sort({created: -1}).limit(limit ? limit : 10).toArray();
+			const cache = await this.mongo.db.collection<Freeze>('freeze').findOne({id: 'films-data-recent', expiry: {$gt: new Date}})
 
-			const results = await Promise.all(films.map(async (film) => {
-				try {
-					const poster = await this.mongo.db.collection<Photo>('photos').findOne({
-						parentCollection: 'films',
-						parentId: film.id,
-						photoIndex: 0,
-						type: 'poster'
-					})
+			if(cache){
 
-					return {
-						...film,
-						posterUrl: poster.downsizedUrl
+				return JSON.parse(cache.body)
+
+			} else {
+
+				const films = await this.mongo.db.collection<Film>('films').find({
+					hasPoster: true,
+					isHidden: false,
+					editVerified: true
+				}).sort({created: -1}).limit(limit ? limit : 10).toArray();
+
+				const results = await Promise.all(films.map(async (film) => {
+					try {
+						const poster = await this.mongo.db.collection<Photo>('photos').findOne({
+							parentCollection: 'films',
+							parentId: film.id,
+							photoIndex: 0,
+							type: 'poster'
+						})
+
+						return {
+							...film,
+							posterUrl: poster.downsizedUrl
+						}
+					} catch {
+						throw new BadRequestException()
 					}
-				} catch {
-					throw new BadRequestException()
+				}))
+			
+				const newCache: Freeze = {
+					id: 'films-data-recent',
+					body: JSON.stringify(results),
+					expiry: new Date( Date.now() + (1000*60*60) )
 				}
-			}))
-			return results
+				await this.mongo.db.collection<Freeze>('freeze').updateOne(
+					{id: newCache.id},
+					{ $set: newCache },
+					{upsert: true}
+				)
+
+				return results
+
+			}
+
 		} catch(err: any){
 			throw new NotFoundException()
 		}
@@ -1186,32 +1258,54 @@ export class FilmsService {
 	async getLatestReleases(limit?: number){
 		const now = new Date()
 		try {
-			const films = await this.mongo.db.collection<Film>('films').find({
-				hasPoster: true,
-				isHidden: false,
-				productionStage: 'finished',
-				releaseDate: {$lte: now},
-				editVerified: true
-			}).sort({releaseDate: -1}).limit(limit ? limit : 10).toArray()
+			const cache = await this.mongo.db.collection<Freeze>('freeze').findOne({id: 'films-data-latest', expiry: {$gt: new Date}})
 
-			const results = await Promise.all(films.map(async (film) => {
-				try {
-					const poster = await this.mongo.db.collection<Photo>('photos').findOne({
-						parentCollection: 'films',
-						parentId: film.id,
-						photoIndex: 0,
-						type: 'poster'
-					})
+			if(cache){
 
-					return {
-						...film,
-						posterUrl: poster.downsizedUrl
+				return JSON.parse(cache.body)
+
+			} else {
+
+				const films = await this.mongo.db.collection<Film>('films').find({
+					hasPoster: true,
+					isHidden: false,
+					productionStage: 'finished',
+					releaseDate: {$lte: now},
+					editVerified: true
+				}).sort({releaseDate: -1}).limit(limit ? limit : 10).toArray()
+
+				const results = await Promise.all(films.map(async (film) => {
+					try {
+						const poster = await this.mongo.db.collection<Photo>('photos').findOne({
+							parentCollection: 'films',
+							parentId: film.id,
+							photoIndex: 0,
+							type: 'poster'
+						})
+
+						return {
+							...film,
+							posterUrl: poster.downsizedUrl
+						}
+					} catch {
+						throw new BadRequestException()
 					}
-				} catch {
-					throw new BadRequestException()
+				}))
+
+				const newCache: Freeze = {
+					id: 'films-data-latest',
+					body: JSON.stringify(results),
+					expiry: new Date( Date.now() + (1000*60*60) )
 				}
-			}))
-			return results
+				await this.mongo.db.collection<Freeze>('freeze').updateOne(
+					{id: newCache.id},
+					{ $set: newCache },
+					{upsert: true}
+				)
+
+				return results
+
+			}
 		} catch(err: any){
 			throw new NotFoundException()
 		}
@@ -1222,37 +1316,58 @@ export class FilmsService {
 		const thisYear = now.getFullYear();
 
 		try {
-			const films = await this.mongo.db.collection<Film>('films').find({
-				$and: [
-					{ hasPoster: true, isHidden: false, editVerified: true },
-					{
-						$or: [
-							{ releaseDate: {$gt: now} },
-							{ releaseDate: {$exists: false}, year: {$gte: thisYear}, productionStage: {$ne: 'finished'} }
-						]
-					}
-				]
-			}).sort({year: 1}).sort({releaseDate: 1}).limit(limit ? limit : 10).toArray()
+			const cache = await this.mongo.db.collection<Freeze>('freeze').findOne({id: 'films-data-upcoming', expiry: {$gt: new Date}})
 
-			const results = await Promise.all(films.map(async (film) => {
-				try {
-					const poster = await this.mongo.db.collection<Photo>('photos').findOne({
-						parentCollection: 'films',
-						parentId: film.id,
-						photoIndex: 0,
-						type: 'poster'
-					})
+			if(cache){
+			  console.log('Cached')
+				return JSON.parse(cache.body)
 
-					return {
-						...film,
-						posterUrl: poster.downsizedUrl
+			} else {
+
+				const films = await this.mongo.db.collection<Film>('films').find({
+					$and: [
+						{ hasPoster: true, isHidden: false, editVerified: true },
+						{
+							$or: [
+								{ releaseDate: {$gt: now} },
+								{ releaseDate: {$exists: false}, year: {$gte: thisYear}, productionStage: {$ne: 'finished'} }
+							]
+						}
+					]
+				}).sort({year: 1}).sort({releaseDate: 1}).limit(limit ? limit : 10).toArray()
+
+				const results = await Promise.all(films.map(async (film) => {
+					try {
+						const poster = await this.mongo.db.collection<Photo>('photos').findOne({
+							parentCollection: 'films',
+							parentId: film.id,
+							photoIndex: 0,
+							type: 'poster'
+						})
+
+						return {
+							...film,
+							posterUrl: poster.downsizedUrl
+						}
+					} catch (err: any) {
+						throw new BadRequestException()
 					}
-				} catch (err: any) {
-					throw new BadRequestException()
+				}))
+
+				const newCache: Freeze = {
+					id: 'films-data-upcoming',
+					body: JSON.stringify(results),
+					expiry: new Date( Date.now() + (1000*60*60) )
 				}
-			}))
+				await this.mongo.db.collection<Freeze>('freeze').updateOne(
+					{id: newCache.id},
+					{ $set: newCache },
+					{upsert: true}
+				)
+				console.log('Request')
+				return results;
 
-			return results;
+			}
 		} catch(err: any){
 			throw new NotFoundException()
 		}
@@ -1261,41 +1376,63 @@ export class FilmsService {
 	async getTrendingFilms(limit?: number){
 		const sevenDaysAgo = new Date(Number(new Date)-(1000*60*60*24*7));
 		try{
-			const films = await this.mongo.db.collection<Hit>('hits').aggregate<Film>([
-				{ $match: { time: { $gt: sevenDaysAgo }, collection: 'films' } },
-				{ $group: { _id: "$identifier", count: { $sum: 1 } } },
-				{ $sort: { count: -1 } },
-				{ $limit: 80 },
-				{ $lookup: { from: 'films', localField: '_id', foreignField: 'id', as: 'details' } },
-				{ $match: { 'details': { $ne: [] } } },
-				{ $limit: limit ? limit : 10 },
-				{ $unwind: '$details' },
-				{ $replaceRoot: { newRoot: '$details' } }
-			]).toArray();
-	
-			const results = await Promise.all(films.map(async (film) => {
-				try {
-					if(film.hasPoster === true){
-						const poster = await this.mongo.db.collection<Photo>('photos').findOne({
-							parentCollection: 'films',
-							parentId: film.id,
-							type: 'poster',
-							photoIndex: 0
-						})
-						
-						return {
-							...film,
-							posterUrl: poster.downsizedUrl
+
+			const cache = await this.mongo.db.collection<Freeze>('freeze').findOne({id: 'films-data-trending', expiry: {$gt: new Date}})
+
+			if(cache){
+
+				return JSON.parse(cache.body)
+
+			} else {
+
+				const films = await this.mongo.db.collection<Hit>('hits').aggregate<Film>([
+					{ $match: { time: { $gt: sevenDaysAgo }, collection: 'films' } },
+					{ $group: { _id: "$identifier", count: { $sum: 1 } } },
+					{ $sort: { count: -1 } },
+					{ $limit: 100 },
+					{ $lookup: { from: 'films', localField: '_id', foreignField: 'id', as: 'details' } },
+					{ $match: { 'details': { $ne: [] } } },
+					{ $limit: limit ? limit : 10 },
+					{ $unwind: '$details' },
+					{ $replaceRoot: { newRoot: '$details' } }
+				]).toArray();
+		
+				const results = await Promise.all(films.map(async (film) => {
+					try {
+						if(film.hasPoster === true){
+							const poster = await this.mongo.db.collection<Photo>('photos').findOne({
+								parentCollection: 'films',
+								parentId: film.id,
+								type: 'poster',
+								photoIndex: 0
+							})
+							
+							return {
+								...film,
+								posterUrl: poster.downsizedUrl
+							}
+						} else {				
+							return film
 						}
-					} else {				
-						return film
+					} catch(err) {
+						throw new BadRequestException(err.message)
 					}
-				} catch(err) {
-					throw new BadRequestException(err.message)
+				}))
+
+				const newCache: Freeze = {
+					id: 'films-data-trending',
+					body: JSON.stringify(results),
+					expiry: new Date( Date.now() + (1000*60*60) )
 				}
-			}))
-			
-			return results.filter((val) => typeof val === 'object').slice(0, limit ? limit+1 : 10);
+				await this.mongo.db.collection<Freeze>('freeze').updateOne(
+					{id: newCache.id},
+					{ $set: newCache },
+					{upsert: true}
+				)
+				
+				return results.filter((val) => typeof val === 'object').slice(0, limit ? limit+1 : 10);
+
+			}
 		} catch(err: any){
 			throw new NotFoundException()
 		}
@@ -1309,6 +1446,12 @@ export class FilmsService {
 				isHidden: true
 			}, 'films')
 			await this.search.client.collections('films').documents(id).delete()
+			await Promise.all([
+				this.mongo.deleteFreeze('films-data-latest'),
+				this.mongo.deleteFreeze('films-data-recent'),
+				this.mongo.deleteFreeze('films-data-trending'),
+				this.mongo.deleteFreeze('films-data-upcoming'),
+			])
 			return {status: 'success'};
 		} catch(err: any){
 			// console.log(err)
@@ -1360,6 +1503,12 @@ export class FilmsService {
 			if(poster){ searchRecord.posterUrl = poster.downsizedUrl }
 
 			await this.search.client.collections('films').documents().create(searchRecord);
+			await Promise.all([
+				this.mongo.deleteFreeze('films-data-latest'),
+				this.mongo.deleteFreeze('films-data-recent'),
+				this.mongo.deleteFreeze('films-data-trending'),
+				this.mongo.deleteFreeze('films-data-upcoming'),
+			])
 
 			return {status: 'success'};
 		} catch(err: any){
@@ -1402,6 +1551,13 @@ export class FilmsService {
 			}
 
 			await this.mongo.insertOne(edit, 'edits')
+
+			await Promise.all([
+				this.mongo.deleteFreeze('films-data-latest'),
+				this.mongo.deleteFreeze('films-data-recent'),
+				this.mongo.deleteFreeze('films-data-trending'),
+				this.mongo.deleteFreeze('films-data-upcoming'),
+			])
 
 			return {status: 'success'};
 		} catch(err: any){

@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { HistoryOpt, ImmutableFields, Collection, CollectionFields, HistoryX, Hit, DecodedHistory } from './database.types';
+import { HistoryOpt, ImmutableFields, Collection, CollectionFields, HistoryX, Hit, DecodedHistory, Freeze } from './database.types';
 import {
 	Rating,
 } from '../films/films.types';
@@ -121,6 +121,14 @@ export class DatabaseService {
 
 	dateToBigInt(date: Date){
 		return Math.floor(Number(new Date(date))/1000);
+	}
+
+	async deleteFreeze(id: string){
+		try {
+			return await this.db.collection<Freeze>('freeze').deleteOne({id})
+		} catch(err: any){
+			throw new BadRequestException(err)
+		}
 	}
 
 
