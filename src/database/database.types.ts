@@ -51,6 +51,12 @@ export interface Hit {
 	time: Date
 }
 
+export interface Freeze {
+	id: string;
+	body: string;
+	expiry: Date;
+}
+
 export interface CursorTypes {
 	films?: string,
 	companies?: string,
@@ -63,6 +69,6 @@ export type ImmutableFields = {
 	id: string
 }
 
-export type Collection = 'films' | 'photos' | 'companies' | 'content' | 'people' | 'roles' | 'users' | 'requests' | 'history' | 'ratings' | 'today' | 'hits' | 'edits';
+export type Collection = 'films' | 'photos' | 'companies' | 'content' | 'people' | 'roles' | 'users' | 'requests' | 'history' | 'ratings' | 'today' | 'hits' | 'edits' | 'freeze';
 
 export type CollectionFields<T> = Array<keyof T>;
