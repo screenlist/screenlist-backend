@@ -9,7 +9,8 @@ import {
 	IsNumber,
 	IsBoolean,
 	IsArray,
-	ArrayMinSize
+	ArrayMinSize,
+	IsDateString
 } from 'class-validator';
 
 export class CreatePersonDto {
@@ -44,7 +45,7 @@ export class CreatePersonDto {
 	dateMonthOfBirth?: Date;
 
 	@IsOptional()
-	@IsDate()
+	@IsDateString()
 	deathDate?: Date;
 
 	@IsOptional()
@@ -114,7 +115,7 @@ export class UpdatePersonDto {
 	dateMonthOfBirth?: Date;
 
 	@IsOptional()
-	@IsDate()
+	@IsDateString()
 	deathDate?: Date;
 
 	@IsOptional()

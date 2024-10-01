@@ -188,6 +188,8 @@ export class PeopleService {
 
 	async createOne(data: CreatePersonDto, opt: PersonOpt){
 
+		if(data.deathDate){ data.deathDate  = new Date(data.deathDate)}
+
 		try {
 			const entity: Person = {
 				id: await this.mongo.generateUniqueId('people', 12),
@@ -239,6 +241,8 @@ export class PeopleService {
 
 	async updateOne(data: UpdatePersonDto, opt: PersonOpt, remove?: CollectionFields<Person>){
 		if(!Array.isArray(remove)){ throw new BadRequestException('Provide an array for properties to remove') }
+
+		if(data.deathDate){ data.deathDate  = new Date(data.deathDate)}
 
 		try {
 			const entity = await this.mongo.db.collection<Person>('people').findOne({id: opt.personId})
