@@ -1207,15 +1207,15 @@ export class FilmsService {
 
 			if(cache){
 
-				return JSON.parse(cache.body)
+				return JSON.parse(cache.body).slice(0, limit ? limit+1 : 10)
 
 			} else {
-
+				console.log('serve live')
 				const films = await this.mongo.db.collection<Film>('films').find({
 					hasPoster: true,
 					isHidden: false,
 					editVerified: true
-				}).sort({created: -1}).limit(limit ? limit : 10).toArray();
+				}).sort({created: -1}).limit(80).toArray();
 
 				const results = await Promise.all(films.map(async (film) => {
 					try {
@@ -1246,7 +1246,7 @@ export class FilmsService {
 					{upsert: true}
 				)
 
-				return results
+				return results.slice(0, limit ? limit+1 : 10)
 
 			}
 
@@ -1262,7 +1262,7 @@ export class FilmsService {
 
 			if(cache){
 
-				return JSON.parse(cache.body)
+				return JSON.parse(cache.body).slice(0, limit ? limit+1 : 10)
 
 			} else {
 
@@ -1272,7 +1272,7 @@ export class FilmsService {
 					productionStage: 'finished',
 					releaseDate: {$lte: now},
 					editVerified: true
-				}).sort({releaseDate: -1}).limit(limit ? limit : 10).toArray()
+				}).sort({releaseDate: -1}).limit(80).toArray()
 
 				const results = await Promise.all(films.map(async (film) => {
 					try {
@@ -1303,7 +1303,7 @@ export class FilmsService {
 					{upsert: true}
 				)
 
-				return results
+				return results.slice(0, limit ? limit+1 : 10)
 
 			}
 		} catch(err: any){
@@ -1319,8 +1319,8 @@ export class FilmsService {
 			const cache = await this.mongo.db.collection<Freeze>('freeze').findOne({id: 'films-data-upcoming', expiry: {$gt: new Date}})
 
 			if(cache){
-			  console.log('Cached')
-				return JSON.parse(cache.body)
+				
+				return JSON.parse(cache.body).slice(0, limit ? limit+1 : 10)
 
 			} else {
 
@@ -1334,7 +1334,7 @@ export class FilmsService {
 							]
 						}
 					]
-				}).sort({year: 1}).sort({releaseDate: 1}).limit(limit ? limit : 10).toArray()
+				}).sort({year: 1}).sort({releaseDate: 1}).limit(80).toArray()
 
 				const results = await Promise.all(films.map(async (film) => {
 					try {
@@ -1365,7 +1365,7 @@ export class FilmsService {
 					{upsert: true}
 				)
 				console.log('Request')
-				return results;
+				return results.slice(0, limit ? limit+1 : 10);
 
 			}
 		} catch(err: any){
@@ -1381,7 +1381,7 @@ export class FilmsService {
 
 			if(cache){
 
-				return JSON.parse(cache.body)
+				return JSON.parse(cache.body).slice(0, limit ? limit+1 : 10)
 
 			} else {
 
@@ -1392,7 +1392,7 @@ export class FilmsService {
 					{ $limit: 100 },
 					{ $lookup: { from: 'films', localField: '_id', foreignField: 'id', as: 'details' } },
 					{ $match: { 'details': { $ne: [] } } },
-					{ $limit: limit ? limit : 10 },
+					{ $limit: 80 },
 					{ $unwind: '$details' },
 					{ $replaceRoot: { newRoot: '$details' } }
 				]).toArray();
