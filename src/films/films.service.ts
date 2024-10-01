@@ -1210,7 +1210,7 @@ export class FilmsService {
 				return JSON.parse(cache.body).slice(0, limit ? limit+1 : 10)
 
 			} else {
-				console.log('serve live')
+				
 				const films = await this.mongo.db.collection<Film>('films').find({
 					hasPoster: true,
 					isHidden: false,
@@ -1319,7 +1319,7 @@ export class FilmsService {
 			const cache = await this.mongo.db.collection<Freeze>('freeze').findOne({id: 'films-data-upcoming', expiry: {$gt: new Date}})
 
 			if(cache){
-				
+
 				return JSON.parse(cache.body).slice(0, limit ? limit+1 : 10)
 
 			} else {
