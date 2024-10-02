@@ -55,7 +55,7 @@ export class DatabaseService {
 	}
 
 	public async generateUniqueId(collection: Collection, length: number): Promise<string> {
-		const uid = this.generateId()+this.generateRandomString(length);
+		const uid = this.generateRandomString(length);
 		try {
 			const exist = await this.db.collection(collection).countDocuments({ id: uid });
 
