@@ -249,6 +249,10 @@ export class FilmsService {
 		if(film.releaseDate){
 			film.releaseDate = new Date(film.releaseDate);
 		}
+
+		if(film.premiereDate){
+			film.premiereDate = new Date(film.premiereDate)
+		}
 		
 		try {
 			const entity: Film = {
@@ -312,6 +316,10 @@ export class FilmsService {
 		const time = new Date()
 		if(film.releaseDate){
 			film.releaseDate = new Date(film.releaseDate);
+		}
+
+		if(film.premiereDate){
+			film.premiereDate = new Date(film.premiereDate)
 		}
 
 		if(!Array.isArray(remove)){ throw new BadRequestException('Provide an array for properties to remove') }
