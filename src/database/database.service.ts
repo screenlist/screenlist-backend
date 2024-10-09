@@ -43,19 +43,19 @@ export class DatabaseService {
 	}
 
 	private generateRandomString(length: number) {
-		const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+		const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 		let randomString = '';
-		const bytes = randomBytes(length)
+		const randomValues = randomBytes(length)
 
-		for (const byte of bytes) {
-			randomString += charset.charAt(byte % charset.length)
+		for (let i = 0; i < length; i++) {
+			randomString += charset[randomValues[i] % charset.length];
 		}
 
 		return randomString;
 	}
 
 	public async generateUniqueId(collection: Collection, length: number): Promise<string> {
-		const uid = this.generateId()+this.generateRandomString(length);
+		const uid = this.generateRandomString(length);
 		try {
 			const exist = await this.db.collection(collection).countDocuments({ id: uid });
 
@@ -300,7 +300,7 @@ export class DatabaseService {
 		// of the document's edited properties and the property names hold the edit version 
 		// history of themselves in an array.
 		/* 
-		 	modifications example
+			modifications example
 			const modifications = {
 				'173fYY80s00399d': {
 					'name': DecodedHistory[],
@@ -399,9 +399,9 @@ export class DatabaseService {
 							const currentPoints: number[] = pointsMatrix[currentState.message]?.[nextState.message]
 
 							if (currentPoints) {
-                assignPoints(currentState.userUid, currentPoints[isNextStateVisible ? 2 : 0]);
-                assignPoints(nextState.userUid, currentPoints[isNextStateVisible ? 3 : 1]);
-            	}
+								assignPoints(currentState.userUid, currentPoints[isNextStateVisible ? 2 : 0]);
+								assignPoints(nextState.userUid, currentPoints[isNextStateVisible ? 3 : 1]);
+							}
 
 						}
 

@@ -14,6 +14,8 @@ export interface Film {
 	logline: string;
 	plotSummary?: string;
 	releaseDate?: Date;
+	premiereDate?: Date;
+	releasePlatform?: string;
 	initialPlatform?: string;
 	countries?: [string];
 	languages?: [string];

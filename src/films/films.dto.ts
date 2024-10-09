@@ -63,6 +63,14 @@ export class CreateFilmDto {
 	releaseDate?: Date;
 
 	@IsOptional()
+	@IsDateString()
+	premiereDate?: Date;
+
+	@IsOptional()
+	@IsString()
+	releasePlatform?: string;
+
+	@IsOptional()
 	@IsString()
 	initialPlatform?: string;
 
@@ -144,6 +152,14 @@ export class UpdateFilmDto {
 	@IsOptional()
 	@IsDateString()
 	releaseDate?: Date;
+
+	@IsOptional()
+	@IsDateString()
+	premiereDate?: Date;
+
+	@IsOptional()
+	@IsString()
+	releasePlatform?: string;
 
 	@IsOptional()
 	@IsString()
