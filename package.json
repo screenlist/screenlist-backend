@@ -24,7 +24,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.521.0",
     "@aws-sdk/client-ses": "^3.409.0",
-    "@clerk/clerk-sdk-node": "^4.13.9",
+    "@clerk/backend": "^1.23.11",
     "@google-cloud/datastore": "^7.0.0",
     "@google-cloud/storage": "^6.4.2",
     "@nestjs/common": "^10.0.0",
