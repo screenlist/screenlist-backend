@@ -4,6 +4,7 @@ import { DatabaseService } from './database.service'
 import { AuthService } from 'src/auth/auth.service';
 import { Collection } from './database.types';
 import { ConfigService } from '@nestjs/config';
+import { verifyToken } from '@clerk/backend';
 import { UserExt } from 'src/users/users.types';
 
 @Injectable()
@@ -24,7 +25,10 @@ export class FrequencyGuard implements CanActivate {
 
 		try {
 			if(request.headers['authorization']){
-				const jwt = await this.authService.client.verifyToken(request.headers['authorization'].split(' ')[1])
+				const jwt = await verifyToken(request.headers['authorization'].split(' ')[1], {
+					secretKey: this.config.get("CLERK_SECRET_KEY"),
+					authorizedParties: [this.config.get("CLIENT_URL")]
+				})
 				const unixTimestamp = Math.floor(Date.now()/1000)
 				const clientHost = this.config.get('CLIENT_URL')
 				if( unixTimestamp < jwt.exp && jwt.nbf < unixTimestamp && jwt.azp === clientHost){ 
