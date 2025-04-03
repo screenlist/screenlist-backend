@@ -18,7 +18,7 @@ import {
 	CreateRequestDto,
 } from '../users/users.dto';
 import { UsersService } from './users.service';
-import { WebhookEvent } from '@clerk/clerk-sdk-node';
+import { WebhookEvent } from '@clerk/backend';
 
 @Controller('users')
 @UseGuards(RolesGuard)
@@ -101,7 +101,6 @@ export class UsersController {
 	@Get('admin/journalists/requests')
 	@Roles('admin')
 	async findJournalistRequests(){
-		console.log('findJournalistRequests')
 		return await this.usersService.findAllJournalistRequests();
 	}
 

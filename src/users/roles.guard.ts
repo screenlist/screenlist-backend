@@ -1,6 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core'
-import { WebhookEvent } from '@clerk/clerk-sdk-node';
+import { WebhookEvent, verifyToken } from '@clerk/backend';
 import { Webhook } from 'svix';
 import { AuthService } from '../auth/auth.service'
 import { DatabaseService } from 'src/database/database.service'; 
@@ -53,7 +53,10 @@ export class RolesGuard implements CanActivate {
 				return true;
 			}
 
-			const jwt = await this.authService.client.verifyToken(request.headers['authorization'].split(' ')[1])
+			const jwt = await verifyToken(request.headers['authorization'].split(' ')[1], {
+				secretKey: this.config.get("CLERK_SECRET_KEY"),
+				authorizedParties: [this.config.get("CLIENT_URL")]
+			})
 			const unixTimestamp = Math.floor(Date.now()/1000)
 			const clientHost = this.config.get('CLIENT_URL')
 			// console.log(unixTimestamp > jwt.exp)
@@ -64,8 +67,11 @@ export class RolesGuard implements CanActivate {
 			if( unixTimestamp > jwt.exp || jwt.nbf > unixTimestamp || jwt.azp !== clientHost){ return false }
 
 			const user = 	await this.authService.client.users.getUser(jwt.sub)
+
+			// console.log(user)
 			
 			const userExt = await this.mongo.db.collection<UserExt>('users').findOne({id: user.id})
+			// console.log(userExt)
 			request.headers['x-user-id'] = user.id
 			
 			const role = userExt.role

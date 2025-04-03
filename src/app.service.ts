@@ -7,6 +7,10 @@ import { SearchService } from './search/search.service';
 import { HistoryService } from './history/history.service';
 import { StorageService } from './storage/storage.service';
 import { Photo } from './films/films.types';
+import { AuthService } from './auth/auth.service';
+import { UserExt } from './users/users.types';
+import { User } from '@clerk/backend';
+import { UsersService } from './users/users.service';
 
 @Injectable()
 export class AppService {
@@ -14,7 +18,9 @@ export class AppService {
 		private mongo: DatabaseService,
 		private search: SearchService,
 		private history: HistoryService,
-		private storage: StorageService
+		private storage: StorageService,
+		private auth: AuthService,
+		private users: UsersService
 	) {
 		this.onStartUp()
 	}
@@ -27,6 +33,7 @@ export class AppService {
 			// await this.history.transferImages()
 			// await this.history.redistrubuteImagesAsIntended()
 			// await this.reOptimiseImages()
+			await this.databaseRecovery()
 		} catch(err: any){
 			console.log(err)
 		}
@@ -229,5 +236,56 @@ export class AppService {
 			console.log(`Function Error: ${err.message}`)
 			console.log('******************OPTIMISATION EXITED**********************')
 		}
+	}
+
+	async databaseRecovery() {
+		console.log('****USER RECOVERY BEGINS****')
+		try {
+			const totalDBUsers = await this.mongo.db.collection<UserExt>('users').countDocuments()
+			const totalAuthUsers = await this.auth.client.users.getCount()
+
+			if(totalAuthUsers !== totalDBUsers) {
+
+				const getAuthUsers = async () => {
+					const size = 400
+					const retrieved: User[] = []
+
+					while(totalAuthUsers > retrieved.length){
+						try {
+							const getUsers = (await this.auth.client.users.getUserList({limit: size, offset: retrieved.length})).data
+							retrieved.push(...getUsers)
+						} catch (err) {
+							console.log(err.message)
+							continue
+						}
+					}
+
+					return retrieved.sort((a, b) => a.createdAt - b.createdAt)
+				}
+
+				const authUsers = await getAuthUsers()
+				 
+				await Promise.all(
+					authUsers.map(async (user, index) => {
+						try {
+							const doesUserExist = (await this.mongo.db.collection<UserExt>('users').countDocuments({id: user.id})) > 0
+							const role = totalDBUsers === 0 && index === 0 ? 'admin' : 'member'
+							if(doesUserExist === false){ 
+								await this.users.createUser(user.id, role) 
+								console.log(`${user.fullName} - ${user.id} was processed`)
+							}
+							console.log(`${user.fullName} - ${user.id} already exists`)
+						} catch(err) {
+							console.log(`Could not process user ${user.fullName} - ${user.id}: ${err.message}`)
+						}
+					})
+				)
+
+			}
+			
+		} catch (err) {
+			throw new BadRequestException(err.message)
+		}
+		console.log('****USER RECOVERY ENDS****')
 	}
 }

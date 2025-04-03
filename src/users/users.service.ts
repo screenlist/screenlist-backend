@@ -23,7 +23,7 @@ import { ConfigService } from '@nestjs/config';
 import { SearchService } from 'src/search/search.service';
 import fetch from 'cross-fetch';
 import { Company } from 'src/companies/companies.types';
-import { WebhookEvent } from '@clerk/clerk-sdk-node';
+import { WebhookEvent } from '@clerk/backend';
 import { UserSchema } from 'src/search/search.types';
 
 @Injectable()

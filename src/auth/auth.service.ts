@@ -1,18 +1,12 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import * as admin from 'firebase-admin';
-import * as path from 'path';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { UserOpt } from '../users/users.types';
-import { HistoryOpt } from '../database/database.types';
-import { SESClient, SendRawEmailCommand } from "@aws-sdk/client-ses";
-import { DatabaseService } from 'src/database/database.service';
-import clerkClient, { User } from '@clerk/clerk-sdk-node';
+import { User, createClerkClient } from '@clerk/backend';
  
 @Injectable()
 export class AuthService {
 	constructor(private config: ConfigService){}
 
-	public client = clerkClient;
+	public client = createClerkClient({secretKey: this.config.get('CLERK_SECRET_KEY')})
 
 	// async verifyRequest(idToken: string){
 	// 	try {
