@@ -1,5 +1,5 @@
 # Specify the base image
-FROM node:16-alpine
+FROM node:22
 
 # Set the working directory in the Docker container
 WORKDIR /usr/src/app
