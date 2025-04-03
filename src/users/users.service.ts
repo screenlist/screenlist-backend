@@ -23,7 +23,7 @@ import { ConfigService } from '@nestjs/config';
 import { SearchService } from 'src/search/search.service';
 import fetch from 'cross-fetch';
 import { Company } from 'src/companies/companies.types';
-import { WebhookEvent } from '@clerk/clerk-sdk-node';
+import { WebhookEvent } from '@clerk/express';
 import { UserSchema } from 'src/search/search.types';
 
 @Injectable()
@@ -78,7 +78,7 @@ export class UsersService {
 	async createUser(id: string, role: UserRoles){
 		const time = new Date()
 		try {
-			const user = await this.auth.client.users.getUser(id)
+			const user = await this.auth.client.clerkClient.users.getUser(id)
 			const extendedUser: UserExt = {
 				id: user.id,
 				username: user.username,
@@ -131,7 +131,7 @@ export class UsersService {
 
 			if(entity.username !== opt.userName){ throw new ForbiddenException("Action not allowed") }
 
-			const user = await this.auth.client.users.getUser(entity.id)
+			const user = await this.auth.client.clerkClient.users.getUser(entity.id)
 
 			// Modify existing data
 			for (const key in data) {
@@ -355,7 +355,7 @@ export class UsersService {
 							authorUid: item.id,
 							created: {$gt: aYearAgo}
 						})
-						const user = await this.auth.client.users.getUser(item.id)
+						const user = await this.auth.client.clerkClient.users.getUser(item.id)
 						return {
 							...item,
 							reviewsAllTime: allTime,
@@ -448,7 +448,7 @@ export class UsersService {
 				criticScore: 0
 			}, 'users')
 
-			const user = await this.auth.client.users.getUser(request.requestSubject)
+			const user = await this.auth.client.clerkClient.users.getUser(request.requestSubject)
 
 			await fetch('https://api.brevo.com/v3/smtp/email', {
 				method: 'POST',
@@ -512,7 +512,7 @@ export class UsersService {
 
 			const results = await Promise.all(
 				requests.map(async (request) => {
-					const user = await this.auth.client.users.getUser(request.requestSubject)
+					const user = await this.auth.client.clerkClient.users.getUser(request.requestSubject)
 					const userExtended = await this.mongo.db.collection<UserExt>('users').findOne({id: request.requestSubject})
 					
 					return {

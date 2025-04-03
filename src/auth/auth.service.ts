@@ -1,12 +1,11 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import * as admin from 'firebase-admin';
 import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
 import { UserOpt } from '../users/users.types';
 import { HistoryOpt } from '../database/database.types';
 import { SESClient, SendRawEmailCommand } from "@aws-sdk/client-ses";
 import { DatabaseService } from 'src/database/database.service';
-import clerkClient, { User } from '@clerk/clerk-sdk-node';
+import clerkClient, { User } from '@clerk/express';
  
 @Injectable()
 export class AuthService {

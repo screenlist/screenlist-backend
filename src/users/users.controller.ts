@@ -18,7 +18,7 @@ import {
 	CreateRequestDto,
 } from '../users/users.dto';
 import { UsersService } from './users.service';
-import { WebhookEvent } from '@clerk/clerk-sdk-node';
+import { WebhookEvent } from '@clerk/express';
 
 @Controller('users')
 @UseGuards(RolesGuard)

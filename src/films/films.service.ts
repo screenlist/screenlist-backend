@@ -525,7 +525,7 @@ export class FilmsService {
 				results.map(async (item) => {
 					try {
 						const user = await this.mongo.db.collection<UserExt>('users').findOne({id: item.authorUid})
-						const forUserPhoto = await this.authService.client.users.getUser(item.authorUid)
+						const forUserPhoto = await this.authService.client.clerkClient.users.getUser(item.authorUid)
 						return {
 							...item,
 							publication: user.publication,

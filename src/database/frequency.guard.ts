@@ -24,7 +24,9 @@ export class FrequencyGuard implements CanActivate {
 
 		try {
 			if(request.headers['authorization']){
-				const jwt = await this.authService.client.verifyToken(request.headers['authorization'].split(' ')[1])
+				const jwt = await this.authService.client.verifyToken(request.headers['authorization'].split(' ')[1], {
+					secretKey: await this.config.get('CLERK_SECRET_KEY')
+				})
 				const unixTimestamp = Math.floor(Date.now()/1000)
 				const clientHost = this.config.get('CLIENT_URL')
 				if( unixTimestamp < jwt.exp && jwt.nbf < unixTimestamp && jwt.azp === clientHost){ 
