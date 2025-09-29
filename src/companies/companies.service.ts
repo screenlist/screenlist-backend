@@ -52,7 +52,7 @@ export class CompaniesService {
 					return {
 						...item,
 						photo: photo ? {
-							url: photo.downsizedUrl,
+							url: this.mongo.replaceHost(photo.downsizedUrl),
 							index: photo.photoIndex,
 							credit: photo.attribution,
 							altText: photo.description
@@ -110,7 +110,7 @@ export class CompaniesService {
 			const details = { 
 				...company, 
 				photo: photo ? {
-					url: photo.optimisedUrl,
+					url: this.mongo.replaceHost(photo.optimisedUrl),
 					index: photo.photoIndex,
 					credit: photo.attribution,
 					altText: photo.description
@@ -130,7 +130,7 @@ export class CompaniesService {
 						return {
 							...item,
 							ownerName: owner.name,
-							posterUrl: poster?.downsizedUrl,
+							posterUrl: this.mongo.replaceHost(poster?.downsizedUrl),
 							year: owner.year,
 							urlPath: path
 						}

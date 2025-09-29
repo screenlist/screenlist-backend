@@ -54,7 +54,7 @@ export class PeopleService {
 					return {
 						...item,
 						photo: photo ? {
-							url: photo.downsizedUrl,
+							url: this.mongo.replaceHost(photo.downsizedUrl),
 							index: photo.photoIndex,
 							credit: photo.attribution,
 							altText: photo.description
@@ -112,7 +112,7 @@ export class PeopleService {
 			const details = {
 				...person,
 				photo: photo ? {
-					url: photo.downsizedUrl,
+					url: this.mongo.replaceHost(photo.downsizedUrl),
 					index: photo.photoIndex,
 					credit: photo.attribution,
 					altText: photo.description
@@ -141,7 +141,7 @@ export class PeopleService {
 								id: item.ownerId,
 								type: item.ownerCollection,
 								year: owner.year,
-								posterUrl: poster?.downsizedUrl,
+								posterUrl: this.mongo.replaceHost(poster?.downsizedUrl),
 								roles: [role]
 							}
 							filmography.push(parentObject)
@@ -150,7 +150,7 @@ export class PeopleService {
 						return {
 							...item,
 							ownerName: owner.name,
-							posterUrl: poster?.optimisedUrl,
+							posterUrl: this.mongo.replaceHost(poster?.optimisedUrl),
 							year: owner.year
 						}
 					} catch (err: any) {
