@@ -79,6 +79,11 @@ export class DatabaseService {
 		}
 	}
 
+	public replaceHost(url: string){
+		const host = this.config.get('HOST_URL')
+		return url.replace(/^https?:\/\/[^\/]+/, host)
+	}
+
 	public async updateOne<T extends ImmutableFields>(data: T, collection: Collection, unset?: CollectionFields<T>){
 		let filteredUnsetValues: (keyof T)[];
 		if(unset){ filteredUnsetValues = unset.filter(val => val !== 'id') }

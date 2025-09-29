@@ -87,7 +87,7 @@ export class FilmsService {
 							photoIndex: 0
 						})
 						return {
-							posterUrl: poster.downsizedUrl,
+							posterUrl: this.mongo.replaceHost(poster.downsizedUrl),
 							...film
 						}
 					}
@@ -152,7 +152,7 @@ export class FilmsService {
 			const stills = stillsResults.map((item) => {
 				return {
 					index: item.photoIndex,
-					url: item.optimisedUrl,
+					url: this.mongo.replaceHost(item.optimisedUrl),
 					credit: item.attribution,
 					altText: item.description
 				}
@@ -170,7 +170,7 @@ export class FilmsService {
 
 					return {
 						...item,
-						photoUrl: personPhoto?.downsizedUrl,
+						photoUrl: this.mongo.replaceHost(personPhoto?.downsizedUrl),
 						urlPath: path
 					}
 				})
@@ -187,7 +187,7 @@ export class FilmsService {
 					const path = `/films/${item.ownerId}/companies/${item.parentId}/roles/${item.id}`;
 					return {
 						...item,
-						photoUrl: companyPhoto?.downsizedUrl,
+						photoUrl: this.mongo.replaceHost(companyPhoto?.downsizedUrl),
 						urlPath: path
 					}
 				})
@@ -206,7 +206,7 @@ export class FilmsService {
 			const details = {
 				...film,
 				poster: poster ? {
-					url: poster.optimisedUrl,
+					url: this.mongo.replaceHost(poster.optimisedUrl),
 					index: poster.photoIndex,
 					credit: poster.attribution,
 					altText: poster.description
@@ -1236,7 +1236,7 @@ export class FilmsService {
 
 						return {
 							...film,
-							posterUrl: poster.downsizedUrl
+							posterUrl: this.mongo.replaceHost(poster.downsizedUrl)
 						}
 					} catch {
 						throw new BadRequestException()
@@ -1293,7 +1293,7 @@ export class FilmsService {
 
 						return {
 							...film,
-							posterUrl: poster.downsizedUrl
+							posterUrl: this.mongo.replaceHost(poster.downsizedUrl)
 						}
 					} catch {
 						throw new BadRequestException()
@@ -1355,7 +1355,7 @@ export class FilmsService {
 
 						return {
 							...film,
-							posterUrl: poster.downsizedUrl
+							posterUrl: this.mongo.replaceHost(poster.downsizedUrl)
 						}
 					} catch (err: any) {
 						throw new BadRequestException()
@@ -1417,7 +1417,7 @@ export class FilmsService {
 							
 							return {
 								...film,
-								posterUrl: poster.downsizedUrl
+								posterUrl: this.mongo.replaceHost(poster.downsizedUrl)
 							}
 						} else {				
 							return film

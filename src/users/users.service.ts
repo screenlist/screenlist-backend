@@ -217,7 +217,7 @@ export class UsersService {
 							...film,
 							poster: poster
 							? {
-									url: poster.optimisedUrl,
+									url: this.mongo.replaceHost(poster.optimisedUrl),
 									id: poster.id,
 									credit: poster.attribution,
 									altText: poster.description,
@@ -245,7 +245,7 @@ export class UsersService {
 							...company,
 							photo: photo
 							? {
-									url: photo.optimisedUrl,
+									url: this.mongo.replaceHost(photo.optimisedUrl),
 									id: photo.id,
 									credit: photo.attribution,
 									altText: photo.description,
@@ -273,7 +273,7 @@ export class UsersService {
 							...person,
 							photo: photo
 							? {
-									url: photo.optimisedUrl,
+									url: this.mongo.replaceHost(photo.optimisedUrl),
 									id: photo.id,
 									credit: photo.attribution,
 									altText: photo.description,
