@@ -23,4 +23,13 @@ export class SearchController {
 	async searchFunction(){
 		return await this.search.getAllCollections()
 	}
+
+	@Get('create')
+	async createCollections(){ return await this.search.createCollections() }
+
+	@Get('index')
+	async indexAll(){ return await this.search.indexAll() }
+
+	@Get('delete')
+	async deleteCollection(){ return await this.search.deleteAllCollections() }
 }
