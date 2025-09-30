@@ -229,7 +229,7 @@ export class FilmsService {
 				reviews: reviews
 			}
 		} catch(err: any){
-			// console.log(err)
+			console.log(err)
 			throw new NotFoundException("Could not retrieve film");
 		}
 	}
