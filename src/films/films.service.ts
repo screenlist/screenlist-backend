@@ -1300,6 +1300,8 @@ export class FilmsService {
 					}
 				}))
 
+				console.log(results)
+
 				const newCache: Freeze = {
 					id: 'films-data-latest',
 					body: JSON.stringify(results),
