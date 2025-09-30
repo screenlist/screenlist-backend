@@ -1236,10 +1236,10 @@ export class FilmsService {
 
 						return {
 							...film,
-							posterUrl: this.mongo.replaceHost(poster.downsizedUrl)
+							posterUrl: poster ? this.mongo.replaceHost(poster.downsizedUrl) : null
 						}
 					} catch {
-						throw new BadRequestException()
+						return film
 					}
 				}))
 			
@@ -1293,14 +1293,12 @@ export class FilmsService {
 
 						return {
 							...film,
-							posterUrl: this.mongo.replaceHost(poster.downsizedUrl)
+							posterUrl: poster ? this.mongo.replaceHost(poster.downsizedUrl) : null
 						}
 					} catch {
-						throw new BadRequestException()
+						return film
 					}
 				}))
-
-				console.log(results)
 
 				const newCache: Freeze = {
 					id: 'films-data-latest',
@@ -1317,7 +1315,6 @@ export class FilmsService {
 
 			}
 		} catch(err: any){
-			console.log(err)
 			throw new NotFoundException()
 		}
 	}
@@ -1358,10 +1355,10 @@ export class FilmsService {
 
 						return {
 							...film,
-							posterUrl: this.mongo.replaceHost(poster.downsizedUrl)
+							posterUrl: poster ? this.mongo.replaceHost(poster.downsizedUrl) : null
 						}
 					} catch (err: any) {
-						throw new BadRequestException()
+						return film
 					}
 				}))
 
@@ -1420,7 +1417,7 @@ export class FilmsService {
 							
 							return {
 								...film,
-								posterUrl: this.mongo.replaceHost(poster.downsizedUrl)
+								posterUrl: poster ? this.mongo.replaceHost(poster.downsizedUrl) : null
 							}
 						} else {				
 							return film
