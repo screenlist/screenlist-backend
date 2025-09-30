@@ -233,7 +233,7 @@ export class SearchService {
 						type: 'image',
 						photoIndex: 0
 					})
-
+					console.log(photo)
 					return {
 						id: item.id,
 						name: item.name,
