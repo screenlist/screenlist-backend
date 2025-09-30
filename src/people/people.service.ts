@@ -141,7 +141,7 @@ export class PeopleService {
 								id: item.ownerId,
 								type: item.ownerCollection,
 								year: owner.year,
-								posterUrl: this.mongo.replaceHost(poster?.downsizedUrl),
+								posterUrl: poster ? this.mongo.replaceHost(poster?.downsizedUrl) : null,
 								roles: [role]
 							}
 							filmography.push(parentObject)
@@ -150,7 +150,7 @@ export class PeopleService {
 						return {
 							...item,
 							ownerName: owner.name,
-							posterUrl: this.mongo.replaceHost(poster?.optimisedUrl),
+							posterUrl: poster ? this.mongo.replaceHost(poster?.optimisedUrl) : null,
 							year: owner.year
 						}
 					} catch (err: any) {
