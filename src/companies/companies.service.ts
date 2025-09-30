@@ -130,7 +130,7 @@ export class CompaniesService {
 						return {
 							...item,
 							ownerName: owner.name,
-							posterUrl: this.mongo.replaceHost(poster?.downsizedUrl),
+							posterUrl: poster ? this.mongo.replaceHost(poster?.downsizedUrl) : null,
 							year: owner.year,
 							urlPath: path
 						}

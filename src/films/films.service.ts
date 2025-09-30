@@ -170,7 +170,7 @@ export class FilmsService {
 
 					return {
 						...item,
-						photoUrl: this.mongo.replaceHost(personPhoto?.downsizedUrl),
+						photoUrl: personPhoto ? this.mongo.replaceHost(personPhoto?.downsizedUrl) : null,
 						urlPath: path
 					}
 				})
@@ -187,7 +187,7 @@ export class FilmsService {
 					const path = `/films/${item.ownerId}/companies/${item.parentId}/roles/${item.id}`;
 					return {
 						...item,
-						photoUrl: this.mongo.replaceHost(companyPhoto?.downsizedUrl),
+						photoUrl: companyPhoto ? this.mongo.replaceHost(companyPhoto?.downsizedUrl) : null,
 						urlPath: path
 					}
 				})
@@ -229,7 +229,7 @@ export class FilmsService {
 				reviews: reviews
 			}
 		} catch(err: any){
-			console.log(err)
+			// console.log(err)
 			throw new NotFoundException("Could not retrieve film");
 		}
 	}
