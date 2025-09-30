@@ -214,7 +214,7 @@ export class SearchService {
 						initialPlatform: item.initialPlatform,
 						created: this.mongo.dateToBigInt(item.created),
 						lastUpdated: this.mongo.dateToBigInt(item.lastUpdated),
-						posterUrl: photo ? this.mongo.replaceHost(photo?.downsizedUrl) : null,
+						posterUrl: photo ? this.mongo.replaceHost(photo.downsizedUrl) : null,
 						logline: item.logline,
 						directors: directorNames,
 						listRatings: item.listRatings,
@@ -249,7 +249,7 @@ export class SearchService {
 						deathDate: this.mongo.dateToBigInt(item.deathDate),
 						created: this.mongo.dateToBigInt(item.created),
 						lastUpdated: this.mongo.dateToBigInt(item.lastUpdated),
-						photoUrl: photo ? this.mongo.replaceHost(photo?.downsizedUrl) : null,
+						photoUrl: photo ? this.mongo.replaceHost(photo.downsizedUrl) : null,
 						dateMonthOfBirth: this.mongo.dateToBigInt(item.dateMonthOfBirth)
 					}
 				})
@@ -277,7 +277,7 @@ export class SearchService {
 						city: item.city,
 						created: this.mongo.dateToBigInt(item.created),
 						lastUpdated: this.mongo.dateToBigInt(item.lastUpdated),
-						photoUrl: photo ? this.mongo.replaceHost(photo?.downsizedUrl) : null
+						photoUrl: photo ? this.mongo.replaceHost(photo.downsizedUrl) : null
 					}
 				})
 			)
@@ -301,7 +301,7 @@ export class SearchService {
 						slug: item.slug,
 						created: this.mongo.dateToBigInt(item.created),
 						lastUpdated:this.mongo.dateToBigInt(item.lastUpdated),
-						photoUrl: photo ? this.mongo.replaceHost(photo?.downsizedUrl) : null
+						photoUrl: photo ? this.mongo.replaceHost(photo.downsizedUrl) : null
 					}
 				})
 			)
