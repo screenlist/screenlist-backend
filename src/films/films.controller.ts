@@ -54,12 +54,6 @@ export class FilmsController {
 	){}
 
 	// Data methods
-	@Get('data/film-of-the-day')
-	@Roles('admin')
-	async getFilmOfTheDay(){
-		return await this.filmsService.getFilmOfTheDay();
-	}
-
 	@Get('data/latest')
 	async getLatestFilms(@Query('limit') size: number){
 		return await this.filmsService.getLatestReleases(size)

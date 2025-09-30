@@ -1315,6 +1315,7 @@ export class FilmsService {
 
 			}
 		} catch(err: any){
+			console.log(err)
 			throw new NotFoundException()
 		}
 	}
