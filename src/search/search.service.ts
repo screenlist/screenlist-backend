@@ -201,7 +201,7 @@ export class SearchService {
 					}).toArray()
 
 					const directorNames = directors.map(val => val.parentName)
-
+					console.log(photo)
 					return {
 						id: item.id,
 						name: item.name,
@@ -233,7 +233,7 @@ export class SearchService {
 						type: 'image',
 						photoIndex: 0
 					})
-					console.log(photo)
+					
 					return {
 						id: item.id,
 						name: item.name,
